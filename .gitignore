@@ -35,3 +35,6 @@ next-env.d.ts
 
 # Guard: temp dir used when absorbing a nested repo
 .git-absorb-tmp/
+
+# Backup run log
+backups/backup.log
