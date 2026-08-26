@@ -1,7 +1,13 @@
 import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { sitePages, agencies, profiles, builderMessages } from "@/lib/db/schema";
+import {
+  sitePages,
+  agencies,
+  profiles,
+  builderMessages,
+  siteInstallations,
+} from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
 import { extractHeroContent } from "@/lib/builder-content";
 import { resolveSitePaths } from "@/lib/site-paths";
@@ -39,6 +45,14 @@ export default async function BuilderPage({
   if (requestedPath !== builderPath) {
     redirect(`${builderPath}${query}`);
   }
+
+  // Whether a WordPress install already exists decides if "View site" and
+  // "WP Admin" are shown on load. Without this they only appeared after an
+  // export in the same session, so returning to an exported site showed
+  // nothing.
+  const installation = await db.query.siteInstallations.findFirst({
+    where: eq(siteInstallations.siteId, site.id),
+  });
 
   const [allPages, storedMessages] = await Promise.all([
     db.select().from(sitePages).where(eq(sitePages.siteId, site.id)).orderBy(sitePages.createdAt),
@@ -98,6 +112,7 @@ export default async function BuilderPage({
         text: m.text,
         steps: m.steps ?? [],
       }))}
+      initialWpUrl={installation?.status === "ready" ? (installation.url ?? null) : null}
       builderPath={builderPath}
       backPath={backPath}
       backLabel={backLabel}

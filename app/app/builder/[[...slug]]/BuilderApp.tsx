@@ -73,6 +73,7 @@ export function BuilderApp({
   smbId,
   initialPages,
   initialMessages,
+  initialWpUrl,
   builderPath,
   backPath,
   backLabel,
@@ -85,6 +86,7 @@ export function BuilderApp({
   smbId: string;
   initialPages: PageSummary[];
   initialMessages: StoredMessage[];
+  initialWpUrl: string | null;
   builderPath: string;
   backPath: string;
   backLabel: string;
@@ -119,7 +121,8 @@ export function BuilderApp({
   const [pinned, setPinned] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState<"export" | "publish" | "wpadmin" | null>(null);
-  const [wpUrl, setWpUrl] = useState<string | null>(null);
+  /** Seeded from the server so an already-exported site shows its links on load. */
+  const [wpUrl, setWpUrl] = useState<string | null>(initialWpUrl);
   const [pages, setPages] = useState<PageSummary[]>(initialPages);
   /** Which page generation writes to. Everything used to assume "home". */
   const [activeSlug, setActiveSlug] = useState("home");
