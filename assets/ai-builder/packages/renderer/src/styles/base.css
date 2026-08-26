@@ -1,0 +1,82 @@
+/* ============================================================
+   PIPEPRO — sections.css
+   Exported from the AI Builder. This file carries the layout.
+   Page content is native Gutenberg blocks; every class below is
+   emitted by those blocks.
+
+   CASCADE STRATEGY
+   ----------------
+   WordPress ships two kinds of CSS:
+
+     1. wp-includes/css/dist/block-library/style.min.css
+        Real class selectors (.wp-block-image, .wp-block-button__link).
+        functions.php re-imports this into @layer plugins so it sits
+        BELOW everything here.
+
+     2. Inline global styles printed in <head> at render time
+        (layout rules, block gap, root padding). These are unlayered
+        and cannot be re-imported — but WordPress wraps them in
+        :where(), which gives them zero specificity.
+
+   So this file stays UNLAYERED on purpose. Unlayered CSS outranks
+   layered CSS, which handles (1). Wrapping this file in @layer theme
+   would lose to (2) and break when a page is re-saved in the editor.
+
+   For (2), every selector is prefixed with .yp-page, giving two
+   classes of specificity. WordPress's heaviest layout rules are
+   `body .is-layout-flex { gap: 24px }` at (0,1,1); a prefixed rule
+   at (0,2,0) beats them without a single !important. That prefixing
+   is mechanical — tools/scope-css.mjs applies it at build time.
+
+   COLOR TOKENS
+   ------------
+   Each token reads from the theme.json preset first, so editing the
+   palette in Appearance → Editor → Styles restyles the whole site.
+   The literal is the fallback if the preset is ever removed.
+   ============================================================ */
+
+@layer plugins;
+
+:root {
+  --primary:     var(--wp--preset--color--primary,     #f54900);
+  --primary-fg:  var(--wp--preset--color--primary-fg,  #fafafa);
+  --ink:         var(--wp--preset--color--ink,         #131922);
+  --ink-2:       var(--wp--preset--color--ink-2,       #4e5661);
+  --muted:       var(--wp--preset--color--muted,       #757b83);
+  --surface:     var(--wp--preset--color--surface,     #ffffff);
+  --surface-2:   var(--wp--preset--color--surface-2,   #f4f6f8);
+  --line:        var(--wp--preset--color--line,        #dbdee3);
+
+  --radius: 10px;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Never inherit box-sizing from the host. WordPress sets border-box on
+   blocks; a bare host does not. Relying on either makes every width
+   differ by twice the horizontal padding. */
+.yp-hero,
+.yp-hero *,
+.yp-hero *::before,
+.yp-hero *::after { box-sizing: border-box; }
+
+/* Block-gap reset.
+   WordPress stamps `margin-block-start: 24px` on every non-first child of a
+   group the moment a page is re-saved in the editor. Any element that does
+   not declare its own margin would silently inherit that. This zeroes it at
+   (0,2,0) — high enough to beat WordPress, and deliberately placed BEFORE
+   the component rules so a section can still set an intentional margin and
+   win on source order. */
+.yp-page .yp-hero,
+.yp-page .yp-hero * { margin-block-start: 0; margin-block-end: 0; }
+
+body.yp-page {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+

@@ -32,3 +32,6 @@ next-env.d.ts
 
 # Vercel
 .vercel
+
+# Guard: temp dir used when absorbing a nested repo
+.git-absorb-tmp/

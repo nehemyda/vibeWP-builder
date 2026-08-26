@@ -1,0 +1,4 @@
+node_modules/
+.fidelity/
+*.zip
+.DS_Store

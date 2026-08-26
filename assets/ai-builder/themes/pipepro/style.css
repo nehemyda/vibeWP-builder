@@ -1,0 +1,20 @@
+/*
+Theme Name:  PIPEPRO
+Theme URI:   https://example.com/pipepro
+Author:      Exported from the AI Builder
+Description: A standard WordPress theme exported from the AI Builder. Page content is native Gutenberg blocks; layout is carried by assets/sections.css. No dependency on the platform that generated it — this theme runs on any WordPress host and every section is editable in the block editor.
+Version:     1.0.0
+Requires at least: 6.5
+Tested up to: 6.7
+Requires PHP: 7.4
+License:     GPL-2.0-or-later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: pipepro
+Tags:        blocks, one-column, block-patterns, full-site-editing
+*/
+
+/*
+  This file exists for the WordPress theme header only.
+  All real styles live in assets/sections.css, which is enqueued
+  from functions.php inside @layer theme.
+*/

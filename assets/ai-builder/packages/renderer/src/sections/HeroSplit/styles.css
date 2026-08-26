@@ -1,0 +1,257 @@
+/* ============================================================
+   HeroSplit
+   ============================================================ */
+
+.yp-hero {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 4.5rem 2rem 3rem;
+}
+
+.yp-hero__grid {
+  display: grid;
+  grid-template-columns: 1.08fr 0.92fr;
+  gap: 3.5rem;
+  align-items: center;
+}
+
+/* ---- left column ---- */
+
+.yp-hero__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.4rem;
+}
+
+.yp-hero__eyebrow {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+  color: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.yp-hero__eyebrow::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+  flex: none;
+}
+
+.yp-hero__heading {
+  margin: 0;
+  font-size: clamp(2.6rem, 4.6vw, 3.9rem);
+  line-height: 1.03;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.yp-hero__body {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 1.06rem;
+  color: var(--ink-2);
+}
+
+.yp-hero__features {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem 1.6rem;
+  width: 100%;
+}
+
+.yp-hero__features > li {
+  position: relative;
+  padding-left: 1.7rem;
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+.yp-hero__features > li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.28em;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--primary);
+  background: linear-gradient(
+    to bottom right,
+    transparent 46%, var(--primary) 46%, var(--primary) 54%, transparent 54%
+  );
+}
+
+/* ---- buttons ----
+   WordPress puts its own classes on the <a> and only lets a block
+   author name the wrapper, so the anchor is targeted by position. */
+
+.yp-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin: 0.4rem 0 0;
+}
+
+.yp-hero__actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.95rem 1.6rem;
+  border-radius: var(--radius);
+  font-size: 0.97rem;
+  font-weight: 600;
+  text-decoration: none;
+  line-height: 1;
+}
+
+.yp-btn--primary a {
+  background: var(--primary);
+  color: var(--primary-fg);
+  border: 1.5px solid var(--primary);
+}
+
+.yp-btn--outline a {
+  background: transparent;
+  color: var(--ink);
+  border: 1.5px solid var(--line);
+}
+
+/* ---- right column: media with an overlapping badge ---- */
+
+.yp-hero__media {
+  position: relative;
+  margin: 0;
+}
+
+.yp-hero__frame {
+  margin: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--surface-2);
+  aspect-ratio: 4 / 5;
+}
+
+.yp-hero__frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.yp-hero__badge {
+  position: absolute;
+  left: -2.2rem;
+  bottom: 2.4rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.9rem 1.15rem;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 28px -10px rgb(19 25 34 / 0.28);
+  max-width: 17rem;
+}
+
+.yp-hero__badge-mark {
+  flex: none;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 9px;
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  display: grid;
+  place-items: center;
+  color: var(--primary);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.yp-hero__badge-mark p { margin: 0; }
+
+.yp-hero__badge-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.yp-hero__badge-title {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.yp-hero__badge-sub {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+/* ---- stats rail ---- */
+
+.yp-hero__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  margin-top: 3.5rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--line);
+}
+
+.yp-hero__stat {
+  padding-left: 1.15rem;
+  border-left: 3px solid var(--primary);
+}
+
+.yp-hero__stat-label {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.yp-hero__stat-value {
+  margin: 0 0 0.2rem;
+  font-family: var(--font-mono);
+  font-size: 1.85rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.yp-hero__stat-note {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* ---- responsive ---- */
+
+@media (max-width: 880px) {
+  .yp-hero__grid { grid-template-columns: 1fr; gap: 2.5rem; }
+  .yp-hero__badge { left: 1rem; }
+  .yp-hero__stats { grid-template-columns: 1fr; gap: 1.4rem; }
+}

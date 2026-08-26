@@ -1,0 +1,77 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/theme.json",
+	"version": 3,
+	"settings": {
+		"appearanceTools": true,
+		"useRootPaddingAwareAlignments": false,
+		"layout": {
+			"contentSize": "1160px",
+			"wideSize": "1400px"
+		},
+		"color": {
+			"custom": true,
+			"customDuotone": false,
+			"defaultDuotone": false,
+			"defaultGradients": false,
+			"defaultPalette": false,
+			"palette": [
+				{ "slug": "primary",    "color": "#f54900", "name": "Primary" },
+				{ "slug": "primary-fg", "color": "#fafafa", "name": "Primary text" },
+				{ "slug": "ink",        "color": "#131922", "name": "Ink" },
+				{ "slug": "ink-2",      "color": "#4e5661", "name": "Ink secondary" },
+				{ "slug": "muted",      "color": "#757b83", "name": "Muted" },
+				{ "slug": "surface",    "color": "#ffffff", "name": "Surface" },
+				{ "slug": "surface-2",  "color": "#f4f6f8", "name": "Surface raised" },
+				{ "slug": "line",       "color": "#dbdee3", "name": "Line" }
+			]
+		},
+		"typography": {
+			"customFontSize": true,
+			"lineHeight": true,
+			"dropCap": false,
+			"fontFamilies": [
+				{
+					"slug": "sans",
+					"name": "System sans",
+					"fontFamily": "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+				},
+				{
+					"slug": "mono",
+					"name": "System mono",
+					"fontFamily": "ui-monospace, SFMono-Regular, Menlo, monospace"
+				}
+			],
+			"fontSizes": [
+				{ "slug": "small",   "size": "0.88rem", "name": "Small" },
+				{ "slug": "medium",  "size": "1rem",    "name": "Medium" },
+				{ "slug": "large",   "size": "1.06rem", "name": "Large" },
+				{ "slug": "x-large", "size": "1.85rem", "name": "Extra large" }
+			]
+		},
+		"spacing": {
+			"blockGap": true,
+			"padding": true,
+			"margin": true,
+			"units": [ "px", "rem", "em", "%", "vw", "vh" ]
+		},
+		"border": { "radius": true, "color": true, "style": true, "width": true }
+	},
+	"styles": {
+		"color": {
+			"background": "var(--wp--preset--color--surface)",
+			"text": "var(--wp--preset--color--ink)"
+		},
+		"typography": {
+			"fontFamily": "var(--wp--preset--font-family--sans)",
+			"fontSize": "1rem",
+			"lineHeight": "1.6"
+		},
+		"elements": {
+			"link": { "color": { "text": "var(--wp--preset--color--primary)" } }
+		}
+	},
+	"templateParts": [
+		{ "name": "header", "title": "Header", "area": "header" },
+		{ "name": "footer", "title": "Footer", "area": "footer" }
+	]
+}

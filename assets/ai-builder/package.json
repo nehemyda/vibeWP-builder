@@ -1,0 +1,28 @@
+{
+  "name": "ai-builder",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI WordPress builder — section library, Gutenberg exporter, and export fidelity harness.",
+  "scripts": {
+    "build:css": "node tools/build-css.mjs pipepro HeroSplit",
+    "test": "npm run build:css && npm run test:fidelity",
+    "test:fidelity": "tsx tools/fidelity.tsx",
+    "test:section": "tsx tools/fidelity.tsx",
+    "theme:zip": "cd themes && zip -qr ../pipepro-theme.zip pipepro && echo 'wrote pipepro-theme.zip'"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "playwright": "1.56.0",
+    "sharp": "^0.34.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
