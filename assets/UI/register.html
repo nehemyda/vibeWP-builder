@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Register Mockup</title>
+<style>
+  :root {
+    --ink: #16181c;
+    --muted: #6b7280;
+    --line: #e6e3df;
+    --surface: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+    background: #faf8f5;
+  }
+
+  .mesh {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 900px 700px at 88% 95%, rgba(255, 45, 149, 0.5), transparent 60%),
+      radial-gradient(ellipse 1000px 800px at 12% 90%, rgba(255, 100, 60, 0.3), transparent 60%),
+      radial-gradient(ellipse 1100px 900px at 45% 50%, rgba(80, 110, 255, 0.4), transparent 60%),
+      radial-gradient(ellipse 1200px 700px at 50% -10%, rgba(250, 248, 245, 1), transparent 55%),
+      #faf8f5;
+    filter: blur(2px);
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.6rem 3rem;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-weight: 800;
+    font-size: 1.15rem;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+    color: inherit;
+  }
+  .brand-mark {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #ff7a45, #ff2d95 60%, #5b6bff);
+    flex: none;
+  }
+  .nav-actions { font-size: 0.92rem; color: var(--muted); }
+  .nav-actions a { color: var(--ink); font-weight: 600; text-decoration: none; }
+
+  .center {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.5rem 6rem;
+  }
+
+  .card {
+    width: min(440px, 100%);
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 22px;
+    box-shadow: 0 30px 60px -20px rgba(20, 20, 30, 0.18);
+    padding: 2.6rem 2.4rem 2.2rem;
+  }
+
+  .card h1 {
+    margin: 0 0 0.5rem;
+    font-size: 1.9rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    text-align: center;
+  }
+
+  .card .sub {
+    margin: 0 0 2rem;
+    font-size: 0.95rem;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .oauth-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    margin-bottom: 1.6rem;
+  }
+  .oauth-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: #fff;
+    font-size: 0.94rem;
+    font-weight: 600;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .oauth-icon { width: 18px; height: 18px; flex: none; }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    margin: 0 0 1.6rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+  .divider::before, .divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+
+  label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin: 0 0 0.4rem;
+  }
+  .field { margin-bottom: 1.1rem; }
+  .field-row { display: flex; gap: 0.8rem; }
+  .field-row .field { flex: 1; }
+  input[type="email"], input[type="password"], input[type="text"] {
+    width: 100%;
+    padding: 0.78rem 0.95rem;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: #fff;
+    font-size: 0.95rem;
+    font-family: inherit;
+  }
+  input:focus { outline: 2px solid #5b6bff; outline-offset: 1px; }
+
+  .hint {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin: 0.4rem 0 0;
+  }
+
+  .terms {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    font-size: 0.83rem;
+    color: var(--muted);
+    margin: 0.2rem 0 1.4rem;
+    line-height: 1.4;
+  }
+  .terms input { margin-top: 0.2rem; }
+  .terms a { color: var(--ink); font-weight: 600; text-decoration: none; }
+
+  .btn-primary {
+    width: 100%;
+    padding: 0.9rem 1rem;
+    border-radius: 12px;
+    border: none;
+    background: #16181c;
+    color: #fff;
+    font-size: 0.98rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .footer-link {
+    margin-top: 1.6rem;
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  .footer-link a { color: var(--ink); font-weight: 700; text-decoration: none; }
+
+  @media (max-width: 640px) {
+    nav { padding: 1.2rem 1.3rem; }
+    .card { padding: 2.2rem 1.6rem 1.8rem; }
+    .field-row { flex-direction: column; gap: 0; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="mesh"></div>
+
+  <div class="page">
+    <nav>
+      <a class="brand" href="#"><span class="brand-mark"></span>VibeWP</a>
+      <div class="nav-actions">Already have an account? <a href="login.html">Log in</a></div>
+    </nav>
+
+    <div class="center">
+      <div class="card">
+        <h1>Create your account</h1>
+        <p class="sub">Start building exportable WordPress sites in minutes.</p>
+
+        <div class="oauth-row">
+          <button class="oauth-btn">
+            <svg class="oauth-icon" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.87 2.7-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.98v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.66 9c0-.59.1-1.16.29-1.7V4.97H.98A9 9 0 0 0 0 9c0 1.45.35 2.83.98 4.03l2.97-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .98 4.97l2.97 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg>
+            Continue with Google
+          </button>
+          <button class="oauth-btn">
+            <svg class="oauth-icon" viewBox="0 0 24 24"><path fill="#181717" d="M12 .3a12 12 0 0 0-3.79 23.4c.6.11.82-.26.82-.58v-2.02c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.3 3.5 1 .11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 12 .3z"/></svg>
+            Continue with GitHub
+          </button>
+        </div>
+
+        <div class="divider">or sign up with email</div>
+
+        <form>
+          <div class="field-row">
+            <div class="field">
+              <label for="name">Full name</label>
+              <input type="text" id="name" placeholder="Jordan Lee">
+            </div>
+            <div class="field">
+              <label for="company">Agency name</label>
+              <input type="text" id="company" placeholder="Acme Web Co.">
+            </div>
+          </div>
+          <div class="field">
+            <label for="email">Work email</label>
+            <input type="email" id="email" placeholder="you@agency.com">
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="••••••••">
+            <p class="hint">At least 8 characters, with a number and a symbol.</p>
+          </div>
+
+          <label class="terms">
+            <input type="checkbox">
+            I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>
+          </label>
+
+          <button type="submit" class="btn-primary">Create account</button>
+        </form>
+
+        <div class="footer-link">Already building with us? <a href="login.html">Log in</a></div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

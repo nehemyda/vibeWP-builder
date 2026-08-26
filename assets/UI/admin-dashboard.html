@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Master Admin Dashboard Mockup</title>
+<link rel="stylesheet" href="shell.css">
+<style>
+  .provider-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; margin: 0.6rem 0 0.4rem; }
+  .provider-bar span:nth-child(1) { background: #5b6bff; }
+  .provider-bar span:nth-child(2) { background: #ff7a45; }
+  .provider-bar span:nth-child(3) { background: #17875a; }
+  .legend { display: flex; gap: 1.1rem; font-size: 0.78rem; color: var(--muted); flex-wrap: wrap; }
+  .legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; margin-right: 0.35rem; }
+  .two-col { display: grid; grid-template-columns: 2fr 1fr; gap: 1.2rem; align-items: start; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="sidebar">
+    <div class="brand"><span class="brand-mark"></span>VibeWP</div>
+    <div class="nav-group">
+      <div class="nav-label">Platform</div>
+      <a class="nav-item active"><span class="ic">◆</span> Overview</a>
+      <a class="nav-item"><span class="ic">🏢</span> Agencies</a>
+      <a class="nav-item"><span class="ic">🌐</span> All sites</a>
+      <a class="nav-item"><span class="ic">👥</span> Users</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label">System</div>
+      <a class="nav-item"><span class="ic">🤖</span> AI providers</a>
+      <a class="nav-item"><span class="ic">💳</span> Billing &amp; plans</a>
+      <a class="nav-item"><span class="ic">📊</span> Usage &amp; cost</a>
+      <a class="nav-item"><span class="ic">⚙</span> Settings</a>
+    </div>
+    <div class="sidebar-foot">
+      <div class="avatar"></div>
+      <div class="who"><div class="name">Nehemiah C.</div><div class="role">Super admin</div></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1>Platform overview</h1>
+        <p class="sub">Across every agency and SMB site on VibeWP</p>
+      </div>
+      <div class="top-actions">
+        <input class="search" placeholder="Search agencies, sites, users…">
+        <a class="btn">Export report</a>
+        <a class="btn btn-primary">+ New agency</a>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="label">Active agencies</div>
+          <div class="value">248</div>
+          <div class="delta up">↑ 12 this month</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Live sites</div>
+          <div class="value">6,412</div>
+          <div class="delta up">↑ 340 this month</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Platform MRR</div>
+          <div class="value">$184.2k</div>
+          <div class="delta up">↑ 4.8%</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">AI spend (MTD)</div>
+          <div class="value">$9,340</div>
+          <div class="delta warn">↑ above forecast</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Agencies</h2>
+            <a class="btn" style="padding:0.4rem 0.8rem;font-size:0.8rem;">View all</a>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Agency</th><th>Plan</th><th>Sites</th><th>Seats</th><th>MRR</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><div class="row-name">Northbound Digital</div><div class="row-sub">joined Jan 2025</div></td>
+                <td>Scale</td><td>212</td><td>18 / 20</td><td>$4,200</td>
+                <td><span class="pill live">Active</span></td>
+              </tr>
+              <tr>
+                <td><div class="row-name">Caldwell Web Studio</div><div class="row-sub">joined Mar 2025</div></td>
+                <td>Growth</td><td>64</td><td>6 / 10</td><td>$1,180</td>
+                <td><span class="pill live">Active</span></td>
+              </tr>
+              <tr>
+                <td><div class="row-name">Northgate Media Co.</div><div class="row-sub">joined Jun 2026</div></td>
+                <td>Starter</td><td>9</td><td>2 / 5</td><td>$210</td>
+                <td><span class="pill trial">Trial</span></td>
+              </tr>
+              <tr>
+                <td><div class="row-name">Springfield Sites</div><div class="row-sub">joined Feb 2024</div></td>
+                <td>Scale</td><td>301</td><td>25 / 25</td><td>$6,050</td>
+                <td><span class="pill live">Active</span></td>
+              </tr>
+              <tr>
+                <td><div class="row-name">Pixel & Pine LLC</div><div class="row-sub">joined Jul 2026</div></td>
+                <td>Growth</td><td>17</td><td>3 / 10</td><td>$390</td>
+                <td><span class="pill draft">Past due</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel" style="padding: 1.2rem 1.3rem;">
+          <h2 style="margin:0 0 0.2rem;font-size:1rem;">AI provider mix</h2>
+          <p style="margin:0 0 0.2rem;font-size:0.8rem;color:var(--muted);">Generation calls, last 30 days</p>
+          <div class="provider-bar">
+            <span style="width:54%"></span><span style="width:31%"></span><span style="width:15%"></span>
+          </div>
+          <div class="legend">
+            <span><span class="dot" style="background:#5b6bff"></span>Gemini 54%</span>
+            <span><span class="dot" style="background:#ff7a45"></span>Claude 31%</span>
+            <span><span class="dot" style="background:#17875a"></span>OpenAI 15%</span>
+          </div>
+          <div style="margin-top:1.4rem;border-top:1px solid var(--line);padding-top:1rem;">
+            <div class="stat-card" style="border:none;padding:0;">
+              <div class="label">System uptime (30d)</div>
+              <div class="value" style="font-size:1.4rem;">99.97%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

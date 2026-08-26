@@ -1,0 +1,56 @@
+.wrap {
+  position: relative;
+}
+.input {
+  padding: 0.55rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  font-size: 0.85rem;
+  color: var(--ink);
+  width: 260px;
+}
+.dropdown {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px -10px rgba(20, 20, 30, 0.25);
+  overflow: hidden;
+  z-index: 50;
+}
+.item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.65rem 0.9rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-bottom: 1px solid var(--line);
+}
+.item:last-child {
+  border-bottom: none;
+}
+.item:hover,
+.itemActive {
+  background: var(--bg);
+}
+.itemLabel {
+  font-weight: 700;
+  font-size: 0.87rem;
+  color: var(--ink);
+}
+.itemSub {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.empty {
+  padding: 0.9rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}

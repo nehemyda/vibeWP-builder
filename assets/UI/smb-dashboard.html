@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SMB Dashboard Mockup</title>
+<link rel="stylesheet" href="shell.css">
+<style>
+  .hero-card {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 1.6rem;
+    padding: 1.4rem;
+  }
+  .site-preview {
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: linear-gradient(160deg, #f4f2ee, #e7e3dc);
+    aspect-ratio: 4/3;
+  }
+  .upgrade-card {
+    background: linear-gradient(135deg, #16181c, #2a2d35);
+    color: #fff;
+    border-radius: 14px;
+    padding: 1.3rem;
+  }
+  .upgrade-card .btn-primary { background: #fff; color: #16181c; border-color: #fff; }
+  .mini-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="sidebar">
+    <div class="brand"><span class="brand-mark"></span>VibeWP</div>
+    <div class="nav-group">
+      <div class="nav-label">My site</div>
+      <a class="nav-item active"><span class="ic">◆</span> Overview</a>
+      <a class="nav-item"><span class="ic">✏</span> Edit site</a>
+      <a class="nav-item"><span class="ic">📈</span> Visitors</a>
+      <a class="nav-item"><span class="ic">✉</span> Leads &amp; forms</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label">Account</div>
+      <a class="nav-item"><span class="ic">💳</span> Billing</a>
+      <a class="nav-item"><span class="ic">⚙</span> Settings</a>
+    </div>
+    <div class="sidebar-foot">
+      <div class="avatar"></div>
+      <div class="who"><div class="name">Jordan Lee</div><div class="role">PIPEPRO Plumbing</div></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1>Welcome back, Jordan</h1>
+        <p class="sub">Here's how your site is doing</p>
+      </div>
+      <div class="top-actions">
+        <a class="btn">View live site ↗</a>
+        <a class="btn btn-primary">Edit my site</a>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="panel hero-card" style="margin-bottom:1.2rem;">
+        <div class="site-preview"></div>
+        <div>
+          <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.4rem;">
+            <h2 style="margin:0;font-size:1.2rem;">pipepro.com</h2>
+            <span class="pill live">Live</span>
+          </div>
+          <p style="margin:0;color:var(--muted);font-size:0.92rem;max-width:48ch;">
+            Your site was published 14 days ago and is running on your own WordPress hosting — fully exportable, no lock-in.
+          </p>
+          <div class="mini-stats">
+            <div class="stat-card">
+              <div class="label">Visitors (30d)</div>
+              <div class="value" style="font-size:1.4rem;">2,140</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Form submissions</div>
+              <div class="value" style="font-size:1.4rem;">37</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Avg. load time</div>
+              <div class="value" style="font-size:1.4rem;">0.8s</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="two-col" style="display:grid;grid-template-columns:2fr 1fr;gap:1.2rem;">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Recent leads</h2>
+            <a class="btn" style="padding:0.4rem 0.8rem;font-size:0.8rem;">View all</a>
+          </div>
+          <table>
+            <thead><tr><th>Name</th><th>Message</th><th>Received</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><div class="row-name">Alicia Ferns</div></td>
+                <td class="row-sub">Need an emergency drain inspection…</td>
+                <td>3 hours ago</td>
+              </tr>
+              <tr>
+                <td><div class="row-name">Marcus Boyd</div></td>
+                <td class="row-sub">Quote request for water heater install</td>
+                <td>Yesterday</td>
+              </tr>
+              <tr>
+                <td><div class="row-name">Dana Whitfield</div></td>
+                <td class="row-sub">Following up on last week's estimate</td>
+                <td>2 days ago</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="upgrade-card">
+          <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;opacity:0.7;">Growth plan</div>
+          <h3 style="margin:0.4rem 0 0.5rem;font-size:1.1rem;">Add a booking page</h3>
+          <p style="margin:0 0 1rem;font-size:0.87rem;opacity:0.85;line-height:1.5;">
+            Let customers schedule appointments directly from your site. Included free on Growth.
+          </p>
+          <a class="btn btn-primary" style="width:100%;justify-content:center;">Upgrade plan</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,287 @@
+.mesh {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 900px 700px at 12% 95%, rgba(255, 45, 149, 0.5), transparent 60%),
+    radial-gradient(ellipse 1000px 800px at 88% 90%, rgba(255, 100, 60, 0.3), transparent 60%),
+    radial-gradient(ellipse 1100px 900px at 55% 50%, rgba(80, 110, 255, 0.4), transparent 60%),
+    radial-gradient(ellipse 1200px 700px at 50% -10%, rgba(250, 248, 245, 1), transparent 55%),
+    #faf8f5;
+  filter: blur(2px);
+}
+
+.page {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #faf8f5;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.6rem 3rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.brandMark {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #ff7a45, #ff2d95 60%, #5b6bff);
+  flex: none;
+}
+
+.navActions {
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.navActions a {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem 6rem;
+}
+
+.card {
+  width: min(440px, 100%);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 30px 60px -20px rgba(20, 20, 30, 0.18);
+  padding: 2.6rem 2.4rem 2.2rem;
+}
+
+.card h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.9rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+.sub {
+  margin: 0 0 2rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.oauthRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin-bottom: 1.6rem;
+}
+
+.oauthBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.oauthBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.oauthIcon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 0 0 1.6rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.field {
+  margin-bottom: 1.1rem;
+}
+
+.field label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+}
+
+.fieldRow {
+  display: flex;
+  gap: 0.8rem;
+}
+
+.fieldRow .field {
+  flex: 1;
+}
+
+.field input {
+  width: 100%;
+  padding: 0.78rem 0.95rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.field input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0.4rem 0 0;
+}
+
+.terms {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.83rem;
+  color: var(--muted);
+  margin: 0.2rem 0 1.4rem;
+  line-height: 1.4;
+}
+
+.terms input {
+  margin-top: 0.2rem;
+}
+
+.terms a {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.rowBetween {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin: -0.4rem 0 1.4rem;
+}
+
+.rowBetween a {
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.remember {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+}
+
+.btnPrimary {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  border: none;
+  background: var(--ink);
+  color: #fff;
+  font-size: 0.98rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btnPrimary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.footerLink {
+  margin-top: 1.6rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.footerLink a {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.errorBanner {
+  background: #fdeceb;
+  color: #b3261e;
+  border: 1px solid #f6c6c2;
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.85rem;
+  margin-bottom: 1.2rem;
+}
+
+.infoBanner {
+  background: #eef0ff;
+  color: #3341a8;
+  border: 1px solid #d6daff;
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.85rem;
+  margin-bottom: 1.2rem;
+}
+
+@media (max-width: 640px) {
+  .nav {
+    padding: 1.2rem 1.3rem;
+  }
+  .card {
+    padding: 2.2rem 1.6rem 1.8rem;
+  }
+  .fieldRow {
+    flex-direction: column;
+    gap: 0;
+  }
+}

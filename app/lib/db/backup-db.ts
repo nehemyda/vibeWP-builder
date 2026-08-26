@@ -1,0 +1,149 @@
+/**
+ * Dumps every public table to ../backups/ as JSON (authoritative) and as a
+ * data-only .sql of INSERTs (restorable on top of a freshly migrated schema).
+ *
+ * Schema itself is NOT dumped — it's already reproducible from schema.ts plus
+ * the migrate-batch*.ts scripts, so this only captures the rows.
+ *
+ * Secrets living in the database (API keys, SMTP password) are REDACTED —
+ * this file is meant to be committed, and credentials must never be. They
+ * have to be re-entered through the admin UI after a restore.
+ *
+ * Run with: npx tsx lib/db/backup-db.ts
+ */
+import { config } from "dotenv";
+config({ path: ".env.local" });
+
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import postgres from "postgres";
+
+/** Columns holding live credentials — never written to disk. */
+const REDACTED: Record<string, string[]> = {
+  ai_provider_settings: ["gemini_api_key", "openai_api_key", "claude_api_key"],
+  smtp_settings: ["password"],
+};
+
+const REDACTED_MARKER = "__REDACTED__";
+
+/**
+ * Parents before children, so the .sql can be replayed top to bottom without
+ * tripping foreign keys. Any table not listed here is appended at the end.
+ */
+const RESTORE_ORDER = [
+  "profiles",
+  "agencies",
+  "agency_members",
+  "sites",
+  "site_members",
+  "site_pages",
+  "leads",
+  "business_profiles",
+  "permissions",
+  "role_permissions",
+  "plans",
+  "agency_plan_prices",
+  "sections",
+  "activity_log",
+  "ai_provider_settings",
+  "platform_settings",
+  "smtp_settings",
+];
+
+function sqlLiteral(value: unknown): string {
+  if (value === null || value === undefined) return "NULL";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "NULL";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (value instanceof Date) return `'${value.toISOString()}'`;
+  if (typeof value === "object") return `'${JSON.stringify(value).replace(/'/g, "''")}'::jsonb`;
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function ident(name: string): string {
+  return `"${name.replace(/"/g, '""')}"`;
+}
+
+async function main() {
+  const sql = postgres(process.env.DATABASE_URL ?? "", { prepare: false });
+
+  const tableRows = await sql<{ tablename: string }[]>`
+    SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename
+  `;
+  const present = tableRows.map((r) => r.tablename);
+  const ordered = [
+    ...RESTORE_ORDER.filter((t) => present.includes(t)),
+    ...present.filter((t) => !RESTORE_ORDER.includes(t)),
+  ];
+
+  const takenAt = new Date().toISOString();
+  const dump: Record<string, unknown[]> = {};
+  const redactedHits: string[] = [];
+  const lines: string[] = [
+    "-- VibeWP data-only backup.",
+    `-- Taken: ${takenAt}`,
+    "-- Restore onto a freshly migrated schema (schema.ts + migrate-batch*.ts).",
+    "-- Credentials are redacted — re-enter them via the admin UI after restoring.",
+    "",
+    "BEGIN;",
+    "",
+  ];
+
+  for (const table of ordered) {
+    const rows = await sql.unsafe<Record<string, unknown>[]>(
+      `SELECT * FROM public.${ident(table)}`,
+    );
+
+    const redactCols = REDACTED[table] ?? [];
+    const cleaned = rows.map((row) => {
+      const copy: Record<string, unknown> = { ...row };
+      for (const col of redactCols) {
+        if (copy[col] !== null && copy[col] !== undefined) {
+          copy[col] = REDACTED_MARKER;
+          redactedHits.push(`${table}.${col}`);
+        }
+      }
+      return copy;
+    });
+
+    dump[table] = cleaned;
+
+    lines.push(`-- ${table} (${cleaned.length} rows)`);
+    if (cleaned.length === 0) {
+      lines.push("");
+      continue;
+    }
+    const cols = Object.keys(cleaned[0]);
+    for (const row of cleaned) {
+      const values = cols.map((c) => sqlLiteral(row[c])).join(", ");
+      lines.push(
+        `INSERT INTO public.${ident(table)} (${cols.map(ident).join(", ")}) VALUES (${values}) ON CONFLICT DO NOTHING;`,
+      );
+    }
+    lines.push("");
+  }
+
+  lines.push("COMMIT;", "");
+
+  const outDir = join(process.cwd(), "..", "backups");
+  mkdirSync(outDir, { recursive: true });
+
+  writeFileSync(
+    join(outDir, "db-data.json"),
+    JSON.stringify({ takenAt, tables: dump }, null, 2) + "\n",
+  );
+  writeFileSync(join(outDir, "db-data.sql"), lines.join("\n"));
+
+  const total = Object.values(dump).reduce((n, rows) => n + rows.length, 0);
+  console.log(`Backed up ${ordered.length} tables, ${total} rows -> backups/`);
+  if (redactedHits.length > 0) {
+    console.log(`Redacted ${redactedHits.length} credential value(s): ${[...new Set(redactedHits)].join(", ")}`);
+  }
+
+  await sql.end();
+  process.exit(0);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

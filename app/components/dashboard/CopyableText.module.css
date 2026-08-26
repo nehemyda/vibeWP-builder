@@ -1,0 +1,19 @@
+.copyable {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.copyable:hover {
+  opacity: 0.75;
+}
+.icon {
+  font-size: 0.78rem;
+  color: var(--faint);
+  flex: none;
+}
+.copied {
+  color: var(--good);
+}

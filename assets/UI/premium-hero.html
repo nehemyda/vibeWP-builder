@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Premium Hero Mockup</title>
+<style>
+  :root {
+    --ink: #16181c;
+    --muted: #6b7280;
+    --line: #e6e3df;
+    --surface: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+    background: #faf8f5;
+  }
+
+  /* ---- ambient gradient mesh, the only color on the page ---- */
+  .mesh {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 900px 700px at 18% 92%, rgba(255, 45, 149, 0.55), transparent 60%),
+      radial-gradient(ellipse 1000px 800px at 82% 88%, rgba(255, 100, 60, 0.35), transparent 60%),
+      radial-gradient(ellipse 1100px 900px at 50% 55%, rgba(80, 110, 255, 0.45), transparent 60%),
+      radial-gradient(ellipse 1200px 700px at 50% -10%, rgba(250, 248, 245, 1), transparent 55%),
+      #faf8f5;
+    filter: blur(2px);
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---- nav ---- */
+  nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.6rem 3rem;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-weight: 800;
+    font-size: 1.15rem;
+    letter-spacing: -0.01em;
+  }
+  .brand-mark {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #ff7a45, #ff2d95 60%, #5b6bff);
+    flex: none;
+  }
+  .nav-links {
+    display: flex;
+    gap: 2.2rem;
+    font-size: 0.95rem;
+    color: var(--ink);
+  }
+  .nav-links a { color: inherit; text-decoration: none; opacity: 0.85; }
+  .nav-actions { display: flex; align-items: center; gap: 0.9rem; }
+  .btn-ghost {
+    font-size: 0.95rem;
+    color: var(--ink);
+    text-decoration: none;
+    padding: 0.6rem 0.4rem;
+  }
+  .btn-solid {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #fff;
+    background: #16181c;
+    padding: 0.7rem 1.3rem;
+    border-radius: 999px;
+    text-decoration: none;
+  }
+
+  /* ---- hero ---- */
+  .hero {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 4rem 2rem 6rem;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    background: rgba(255,255,255,0.6);
+    border: 1px solid rgba(0,0,0,0.06);
+    padding: 0.4rem 0.9rem;
+    border-radius: 999px;
+    margin-bottom: 1.8rem;
+    backdrop-filter: blur(6px);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(2.8rem, 6vw, 5.2rem);
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 1.02;
+    max-width: 18ch;
+    text-wrap: balance;
+  }
+
+  .sub {
+    margin: 1.4rem 0 0;
+    font-size: 1.15rem;
+    color: var(--muted);
+    max-width: 40ch;
+    line-height: 1.5;
+  }
+
+  /* ---- prompt-style CTA ---- */
+  .prompt {
+    margin-top: 2.8rem;
+    width: min(640px, 90vw);
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 22px;
+    box-shadow: 0 30px 60px -20px rgba(20, 20, 30, 0.18);
+    padding: 1.3rem 1.4rem 1rem;
+    text-align: left;
+  }
+  .prompt-text {
+    font-size: 1.02rem;
+    color: #9a9a9f;
+  }
+  .prompt-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 1rem;
+  }
+  .prompt-left { display: flex; align-items: center; gap: 0.7rem; }
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    background: #f1efec;
+    display: grid;
+    place-items: center;
+    font-size: 1.1rem;
+    color: var(--ink);
+  }
+  .mode-pill {
+    font-size: 0.85rem;
+    color: var(--ink);
+    background: #f1efec;
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    font-weight: 500;
+  }
+
+  .trust {
+    margin-top: 3rem;
+    font-size: 0.82rem;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+  }
+
+  @media (max-width: 640px) {
+    nav { padding: 1.2rem 1.3rem; }
+    .nav-links { display: none; }
+    h1 { font-size: 2.4rem; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="mesh"></div>
+
+  <div class="page">
+    <nav>
+      <div class="brand"><span class="brand-mark"></span>VibeWP</div>
+      <div class="nav-links">
+        <a href="#">Solutions</a>
+        <a href="#">Templates</a>
+        <a href="#">Agencies</a>
+        <a href="#">Pricing</a>
+      </div>
+      <div class="nav-actions">
+        <a class="btn-ghost" href="#">Log in</a>
+        <a class="btn-solid" href="#">Get started</a>
+      </div>
+    </nav>
+
+    <div class="hero">
+      <div class="eyebrow">✦ Now generating exportable WordPress sites</div>
+      <h1>Build something ownable</h1>
+      <p class="sub">Real WordPress sites your clients can edit forever — never a locked-in export.</p>
+
+      <div class="prompt">
+        <div class="prompt-text">Ask VibeWP to build a site for my&hellip;</div>
+        <div class="prompt-row">
+          <div class="prompt-left">
+            <div class="icon-btn">+</div>
+          </div>
+          <div class="prompt-left">
+            <div class="mode-pill">Build ▾</div>
+            <div class="icon-btn">🎙</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="trust">Exports to real WordPress · No lock-in · Editable in Gutenberg</div>
+    </div>
+  </div>
+
+</body>
+</html>

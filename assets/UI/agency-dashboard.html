@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agency Dashboard Mockup</title>
+<link rel="stylesheet" href="shell.css">
+<style>
+  .site-thumb {
+    width: 46px; height: 34px; border-radius: 8px; flex: none;
+    background: linear-gradient(135deg, #f4f2ee, #e7e3dc);
+    border: 1px solid var(--line);
+  }
+  .name-cell { display: flex; align-items: center; gap: 0.75rem; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="sidebar">
+    <div class="brand"><span class="brand-mark"></span>VibeWP</div>
+    <div class="nav-group">
+      <div class="nav-label">Northbound Digital</div>
+      <a class="nav-item active"><span class="ic">◆</span> Client sites</a>
+      <a class="nav-item"><span class="ic">👥</span> Team</a>
+      <a class="nav-item"><span class="ic">🎨</span> Section library</a>
+      <a class="nav-item"><span class="ic">💳</span> Billing</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label">Account</div>
+      <a class="nav-item"><span class="ic">⚙</span> Settings</a>
+      <a class="nav-item"><span class="ic">🔑</span> API keys</a>
+    </div>
+    <div class="sidebar-foot">
+      <div class="avatar"></div>
+      <div class="who"><div class="name">Nehemiah C.</div><div class="role">Agency owner</div></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1>Client sites</h1>
+        <p class="sub">18 of 20 seats used on the Scale plan</p>
+      </div>
+      <div class="top-actions">
+        <input class="search" placeholder="Search client sites…">
+        <a class="btn btn-primary">+ New site</a>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="label">Client sites</div>
+          <div class="value">212</div>
+          <div class="delta up">↑ 9 this month</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Published this month</div>
+          <div class="value">31</div>
+          <div class="delta up">↑ 6 vs last month</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Team seats</div>
+          <div class="value">18 / 20</div>
+          <div class="delta warn">2 remaining</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Plan</div>
+          <div class="value" style="font-size:1.3rem;">Scale</div>
+          <div class="delta">renews Sep 12</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Recent sites</h2>
+          <a class="btn" style="padding:0.4rem 0.8rem;font-size:0.8rem;">View all 212</a>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Site</th><th>Client</th><th>Status</th><th>Last edited</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div class="name-cell"><div class="site-thumb"></div><div><div class="row-name">PIPEPRO Plumbing</div><div class="row-sub">pipepro.com</div></div></div></td>
+              <td>PIPEPRO Inc.</td>
+              <td><span class="pill live">Live</span></td>
+              <td>2 hours ago</td>
+              <td><a class="btn" style="padding:0.4rem 0.8rem;font-size:0.8rem;">Open in builder</a></td>
+            </tr>
+            <tr>
+              <td><div class="name-cell"><div class="site-thumb"></div><div><div class="row-name">Caldwell &amp; Rose Law</div><div class="row-sub">caldwellrose.com</div></div></div></td>
+              <td>Caldwell &amp; Rose LLP</td>
+              <td><span class="pill live">Live</span></td>
+              <td>Yesterday</td>
+              <td><a class="btn" style="padding:0.4rem 0.8rem;font-size:0.8rem;">Open in builder</a></td>
+            </tr>
+            <tr>
+              <td><div class="name-cell"><div class="site-thumb"></div><div><div class="row-name">Northgate Dental</div><div class="row-sub">northgatedental.com</div></div></div></td>
+              <td>Northgate Family Dental</td>
+              <td><span class="pill draft">Draft</span></td>
+              <td>3 days ago</td>
+              <td><a class="btn" style="padding:0.4rem 0.8rem;font-size:0.8rem;">Open in builder</a></td>
+            </tr>
+            <tr>
+              <td><div class="name-cell"><div class="site-thumb"></div><div><div class="row-name">Riverside Auto Detail</div><div class="row-sub">riversideautodetail.com</div></div></div></td>
+              <td>Riverside Auto Detailing</td>
+              <td><span class="pill live">Live</span></td>
+              <td>5 days ago</td>
+              <td><a class="btn" style="padding:0.4rem 0.8rem;font-size:0.8rem;">Open in builder</a></td>
+            </tr>
+            <tr>
+              <td><div class="name-cell"><div class="site-thumb"></div><div><div class="row-name">Maple &amp; Co. Bakery</div><div class="row-sub">not yet published</div></div></div></td>
+              <td>Maple & Co.</td>
+              <td><span class="pill draft">Draft</span></td>
+              <td>1 week ago</td>
+              <td><a class="btn" style="padding:0.4rem 0.8rem;font-size:0.8rem;">Open in builder</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

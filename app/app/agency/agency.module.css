@@ -1,0 +1,20 @@
+.siteThumb {
+  width: 46px;
+  height: 34px;
+  border-radius: 8px;
+  flex: none;
+  background: linear-gradient(135deg, #f4f2ee, #e7e3dc);
+  border: 1px solid var(--line);
+}
+.nameCell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.planValue {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0.35rem 0 0.2rem;
+}

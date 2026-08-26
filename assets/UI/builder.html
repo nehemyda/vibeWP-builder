@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Builder Mockup</title>
+<style>
+  :root {
+    --ink: #16181c; --muted: #6b7280; --faint: #9aa0aa;
+    --line: #e7e5e1; --surface: #ffffff; --bg: #f7f6f3;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+  }
+  .builder { display: flex; flex-direction: column; height: 100vh; }
+
+  /* ---- top bar ---- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 1.2rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+    flex: none;
+  }
+  .brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 800; font-size: 0.98rem; }
+  .brand-mark { width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(135deg, #ff7a45, #ff2d95 60%, #5b6bff); }
+  .top-mid { display: flex; align-items: center; gap: 0.6rem; font-size: 0.87rem; color: var(--muted); }
+  .top-mid input { border: none; background: transparent; font-size: 0.87rem; font-weight: 700; color: var(--ink); width: 160px; }
+  .viewport-toggle { display: flex; gap: 0.2rem; background: var(--bg); border-radius: 10px; padding: 0.2rem; }
+  .viewport-toggle button {
+    border: none; background: transparent; padding: 0.4rem 0.6rem; border-radius: 8px;
+    font-size: 0.85rem; cursor: pointer; color: var(--muted);
+  }
+  .viewport-toggle button.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .top-actions { display: flex; align-items: center; gap: 0.6rem; }
+  .btn {
+    font-size: 0.85rem; font-weight: 600; padding: 0.5rem 0.95rem; border-radius: 9px;
+    border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer;
+  }
+  .btn-primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+  /* ---- three panes ---- */
+  .panes { flex: 1; display: flex; min-height: 0; }
+
+  /* chat / prompt pane */
+  .chat-pane {
+    width: 340px; flex: none; border-right: 1px solid var(--line);
+    background: var(--surface); display: flex; flex-direction: column;
+  }
+  .chat-scroll { flex: 1; overflow-y: auto; padding: 1.1rem; display: flex; flex-direction: column; gap: 0.9rem; }
+  .msg { font-size: 0.87rem; line-height: 1.5; }
+  .msg.user { align-self: flex-end; background: var(--bg); border-radius: 12px 12px 2px 12px; padding: 0.7rem 0.9rem; max-width: 85%; }
+  .msg.ai { display: flex; gap: 0.6rem; max-width: 95%; }
+  .msg.ai .avatar { width: 22px; height: 22px; border-radius: 7px; background: linear-gradient(135deg, #ff7a45, #ff2d95 60%, #5b6bff); flex: none; margin-top: 0.1rem; }
+  .msg.ai .bubble { background: var(--bg); border-radius: 2px 12px 12px 12px; padding: 0.7rem 0.9rem; }
+  .msg .step {
+    font-size: 0.78rem; color: var(--muted); display: flex; align-items: center; gap: 0.4rem; margin-top: 0.35rem;
+  }
+  .step .dot { width: 6px; height: 6px; border-radius: 999px; background: #17875a; }
+  .chat-input {
+    border-top: 1px solid var(--line); padding: 0.9rem;
+  }
+  .chat-input .box {
+    border: 1px solid var(--line); border-radius: 12px; padding: 0.7rem 0.8rem;
+    font-size: 0.87rem; color: var(--faint); background: var(--bg);
+  }
+
+  /* canvas pane */
+  .canvas-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #efece7; }
+  .canvas-scroll { flex: 1; overflow: auto; display: flex; justify-content: center; padding: 2rem 1.5rem; }
+  .canvas-frame {
+    width: 100%; max-width: 1040px; background: #fff; border-radius: 10px;
+    box-shadow: 0 10px 40px -12px rgba(20,20,30,0.18); overflow: hidden; height: fit-content;
+  }
+
+  /* mini preview site inside canvas, echoing HeroSplit */
+  .pv-nav { display: flex; align-items: center; justify-content: space-between; padding: 1rem 2rem; border-bottom: 1px solid #eee; }
+  .pv-brand { font-weight: 800; font-size: 0.95rem; }
+  .pv-links { display: flex; gap: 1.4rem; font-size: 0.82rem; color: #555; }
+  .pv-hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 2rem; align-items: center; padding: 2.6rem 2.2rem; }
+  .pv-eyebrow { display: inline-block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #f54900; background: #fdeee6; padding: 0.3rem 0.7rem; border-radius: 999px; margin-bottom: 0.9rem; }
+  .pv-hero h1 { margin: 0 0 0.7rem; font-size: 1.9rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.08; }
+  .pv-hero p { margin: 0 0 1rem; font-size: 0.85rem; color: #666; max-width: 40ch; }
+  .pv-actions { display: flex; gap: 0.6rem; }
+  .pv-btn { font-size: 0.8rem; font-weight: 700; padding: 0.55rem 1rem; border-radius: 8px; }
+  .pv-btn.primary { background: #f54900; color: #fff; }
+  .pv-btn.outline { border: 1px solid #ddd; color: #222; }
+  .pv-media { position: relative; }
+  .pv-frame { border-radius: 10px; background: linear-gradient(160deg,#f4f2ee,#e7e3dc); aspect-ratio: 4/3.4; }
+  .pv-badge { position: absolute; left: -0.8rem; bottom: 1rem; background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.72rem; box-shadow: 0 8px 20px -8px rgba(0,0,0,0.2); font-weight: 700; }
+  .pv-selected { outline: 2px solid #5b6bff; outline-offset: -2px; position: relative; }
+  .pv-selected::before {
+    content: "HeroSplit"; position: absolute; top: -1.5rem; left: 0;
+    background: #5b6bff; color: #fff; font-size: 0.68rem; font-weight: 700;
+    padding: 0.15rem 0.5rem; border-radius: 5px 5px 0 0;
+  }
+
+  /* right pane: sections / properties */
+  .props-pane { width: 300px; flex: none; border-left: 1px solid var(--line); background: var(--surface); overflow-y: auto; }
+  .props-tabs { display: flex; border-bottom: 1px solid var(--line); }
+  .props-tabs button { flex: 1; border: none; background: transparent; padding: 0.8rem; font-size: 0.82rem; font-weight: 700; color: var(--faint); cursor: pointer; }
+  .props-tabs button.active { color: var(--ink); border-bottom: 2px solid var(--ink); }
+  .props-body { padding: 1.1rem; }
+  .field-label { font-size: 0.76rem; font-weight: 700; color: var(--muted); margin: 0 0 0.3rem; }
+  .field-box { border: 1px solid var(--line); border-radius: 9px; padding: 0.55rem 0.7rem; font-size: 0.83rem; margin-bottom: 0.9rem; background: var(--bg); }
+  .swatches { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+  .swatch { width: 26px; height: 26px; border-radius: 999px; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); }
+</style>
+</head>
+<body>
+<div class="builder">
+
+  <div class="topbar">
+    <div class="brand"><span class="brand-mark"></span>VibeWP</div>
+    <div class="top-mid">
+      <input value="PIPEPRO Plumbing — Homepage">
+      <span>· saved 12s ago</span>
+    </div>
+    <div class="viewport-toggle">
+      <button class="active">🖥 Desktop</button>
+      <button>📱 Mobile</button>
+    </div>
+    <div class="top-actions">
+      <a class="btn">Preview ↗</a>
+      <a class="btn">Export to WordPress</a>
+      <a class="btn btn-primary">Publish</a>
+    </div>
+  </div>
+
+  <div class="panes">
+
+    <div class="chat-pane">
+      <div class="chat-scroll">
+        <div class="msg user">Add a stats rail under the hero with our response time and licensing info.</div>
+        <div class="msg ai">
+          <div class="avatar"></div>
+          <div class="bubble">
+            Added a 3-column stats rail to the HeroSplit section using your existing brand tokens.
+            <div class="step"><span class="dot"></span> Selected section: HeroSplit</div>
+            <div class="step"><span class="dot"></span> Filled schema — 3 stats, 1 badge</div>
+            <div class="step"><span class="dot"></span> Rendered — fidelity check passed</div>
+          </div>
+        </div>
+        <div class="msg user">Make the headline a bit shorter and punchier.</div>
+        <div class="msg ai">
+          <div class="avatar"></div>
+          <div class="bubble">Updated the heading to "Rapid Emergency Repairs & Precision Plumbing." Want me to try another variant?</div>
+        </div>
+      </div>
+      <div class="chat-input">
+        <div class="box">Ask VibeWP to change something…</div>
+      </div>
+    </div>
+
+    <div class="canvas-pane">
+      <div class="canvas-scroll">
+        <div class="canvas-frame">
+          <div class="pv-nav">
+            <div class="pv-brand">PIPEPRO</div>
+            <div class="pv-links"><span>Services</span><span>About</span><span>Contact</span></div>
+          </div>
+
+          <div class="pv-hero pv-selected">
+            <div>
+              <span class="pv-eyebrow">24/7 live dispatch</span>
+              <h1>Rapid Emergency Repairs &amp; Precision Plumbing</h1>
+              <p>Licensed master technicians with transparent upfront pricing and guaranteed code compliance.</p>
+              <div class="pv-actions">
+                <span class="pv-btn primary">Call (555) 123-4567</span>
+                <span class="pv-btn outline">Request Quote</span>
+              </div>
+            </div>
+            <div class="pv-media">
+              <div class="pv-frame"></div>
+              <div class="pv-badge">✓ Licensed &amp; Insured</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="props-pane">
+      <div class="props-tabs">
+        <button class="active">Properties</button>
+        <button>Sections</button>
+        <button>Design</button>
+      </div>
+      <div class="props-body">
+        <div class="field-label">Section</div>
+        <div class="field-box">HeroSplit</div>
+
+        <div class="field-label">Eyebrow</div>
+        <div class="field-box">24/7 live dispatch</div>
+
+        <div class="field-label">Heading</div>
+        <div class="field-box">Rapid Emergency Repairs &amp; Precision Plumbing</div>
+
+        <div class="field-label">Body</div>
+        <div class="field-box" style="height:3.4rem;">Licensed master technicians with transparent upfront pricing…</div>
+
+        <div class="field-label">Brand color</div>
+        <div class="swatches">
+          <div class="swatch" style="background:#f54900;"></div>
+          <div class="swatch" style="background:#2c4a6e;"></div>
+          <div class="swatch" style="background:#0f8a7e;"></div>
+          <div class="swatch" style="background:#111;"></div>
+        </div>
+
+        <div class="field-label">Badge</div>
+        <div class="field-box">✓ Licensed &amp; Insured</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
