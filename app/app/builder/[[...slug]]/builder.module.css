@@ -10,6 +10,8 @@
   height: 100%;
   flex: 1;
   min-height: 0;
+  /* The builder owns its viewport: panes scroll internally, the page never does. */
+  overflow: hidden;
   background: var(--bg);
 }
 
@@ -139,6 +141,14 @@
   width: 380px;
   max-width: 100%;
   flex: none;
+  /*
+   * Without this the pane inherits min-height:auto, refuses to shrink below
+   * the transcript, and pushes the whole document taller — so a long
+   * conversation scrolled the PAGE instead of the chat, taking the composer
+   * off-screen with it.
+   */
+  min-height: 0;
+  overflow: hidden;
   border-left: 1px solid var(--line);
   background: var(--surface);
   display: flex;
@@ -254,6 +264,16 @@
   flex-direction: column;
   gap: 0.9rem;
 }
+/*
+ * Messages keep their natural height. As flex children of a scrolling
+ * column they would otherwise shrink to fit, squashing the text instead of
+ * letting the transcript scroll.
+ */
+.msgUser,
+.msgAi {
+  flex: none;
+}
+
 .msgUser {
   align-self: flex-end;
   background: var(--bg);

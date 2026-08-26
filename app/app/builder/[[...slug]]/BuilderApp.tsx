@@ -396,7 +396,10 @@ export function BuilderApp({
   }
 
   return (
-    <div className={styles.builder}>
+    /* The unhashed class is deliberate: globals.css uses it to pin the
+       document to the viewport for this screen only, so the panes scroll
+       internally instead of the page scrolling. */
+    <div className={`${styles.builder} vibewp-fullscreen`}>
       <div className={styles.topbar}>
         <div className={styles.brand}>
           <span className={styles.brandMark} />

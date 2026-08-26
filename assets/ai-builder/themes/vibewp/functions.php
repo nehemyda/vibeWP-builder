@@ -15,6 +15,52 @@ if ( ! defined( 'ABSPATH' ) ) {
 define( 'VIBEWP_VERSION', '1.0.0' );
 
 /**
+ * Generates the block-editor copy of sections.css.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THE FRONT-END FILE CANNOT BE USED DIRECTLY
+ *
+ * Every rule in sections.css is scoped under `.yp-page`, and that class is
+ * added to <body> by vibewp_body_class(). But WordPress renders the block
+ * editor canvas inside an IFRAME, and admin_body_class() only reaches the
+ * surrounding admin document — never the iframe. So none of the rules
+ * matched and the editor showed completely unstyled content.
+ *
+ * The fix is to strip our scope and let WordPress apply its own: it
+ * rewrites editor styles by prefixing selectors with
+ * `.editor-styles-wrapper` and swapping `body` for it. Removing `.yp-page`
+ * therefore lands on `.editor-styles-wrapper .yp-hero`, which both matches
+ * the canvas and keeps the two-class specificity the design relies on to
+ * beat core block styles.
+ *
+ * Regenerated whenever sections.css is newer, so the two never drift.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+function vibewp_build_editor_stylesheet() {
+	$source = get_theme_file_path( 'assets/sections.css' );
+	$target = get_theme_file_path( 'assets/sections-editor.css' );
+
+	if ( ! file_exists( $source ) ) {
+		return;
+	}
+	if ( file_exists( $target ) && filemtime( $target ) >= filemtime( $source ) ) {
+		return;
+	}
+
+	$css = file_get_contents( $source );
+	if ( false === $css ) {
+		return;
+	}
+
+	// Order matters: the body-attached form first, then the descendant scope.
+	$css = str_replace( 'body.yp-page', 'body', $css );
+	$css = str_replace( '.yp-page ', '', $css );
+	$css = str_replace( '.yp-page,', 'body,', $css );
+
+	file_put_contents( $target, $css );
+}
+
+/**
  * Theme supports.
  */
 function vibewp_setup() {
@@ -26,8 +72,10 @@ function vibewp_setup() {
 	add_theme_support( 'post-thumbnails' );
 	add_theme_support( 'custom-logo' );
 
-	// The block editor loads the same section CSS, so the editor matches the front end.
-	add_editor_style( 'assets/sections.css' );
+	// The block editor loads a rescoped copy of the same section CSS, so the
+	// editor matches the front end. See vibewp_build_editor_stylesheet().
+	vibewp_build_editor_stylesheet();
+	add_editor_style( 'assets/sections-editor.css' );
 
 	register_nav_menus(
 		array(
