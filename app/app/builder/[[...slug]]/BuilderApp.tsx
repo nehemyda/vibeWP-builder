@@ -13,6 +13,11 @@ import {
   type PageSummary,
 } from "@/app/actions/pages";
 import { detectIntent } from "@/lib/page-intent";
+import {
+  appendBuilderMessageAction,
+  clearBuilderMessagesAction,
+  type StoredMessage,
+} from "@/app/actions/builder-chat";
 
 type ChatMessage = {
   id: string;
@@ -37,6 +42,7 @@ export function BuilderApp({
   siteId,
   smbId,
   initialPages,
+  initialMessages,
   builderPath,
   backPath,
   backLabel,
@@ -48,6 +54,7 @@ export function BuilderApp({
   siteId: string;
   smbId: string;
   initialPages: PageSummary[];
+  initialMessages: StoredMessage[];
   builderPath: string;
   backPath: string;
   backLabel: string;
@@ -59,6 +66,9 @@ export function BuilderApp({
   const router = useRouter();
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (autostart && prompt) return []; // populated by the autostart effect below
+    // A stored transcript wins: the conversation is the record of how this
+    // site got built, and losing it on every reload made the chat feel amnesiac.
+    if (initialMessages.length > 0) return initialMessages;
     if (!initialContent) {
       return [
         {
@@ -74,9 +84,7 @@ export function BuilderApp({
   const [content, setContent] = useState<HeroContent | null>(initialContent);
   const [generating, setGenerating] = useState(false);
   const [viewport, setViewport] = useState<"desktop" | "mobile">("desktop");
-  const [activeTab, setActiveTab] = useState<"chat" | "canvas" | "properties">(
-    "chat",
-  );
+  const [chatOpen, setChatOpen] = useState(true);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState<"export" | "publish" | null>(null);
   const [wpUrl, setWpUrl] = useState<string | null>(null);
@@ -108,6 +116,7 @@ export function BuilderApp({
     setGenerating(true);
     const userMessage: ChatMessage = { id: nextId(), role: "user", text: userPrompt, steps: [] };
     setMessages((prev) => (replaceHistory ? [userMessage] : [...prev, userMessage]));
+    remember("user", userPrompt);
 
     const aiMessageId = nextId();
     setMessages((prev) => [
@@ -160,22 +169,18 @@ export function BuilderApp({
     }
 
     const pageLabel = slug === "home" ? "homepage" : `${slug} page`;
+    const replyText = saved
+      ? target
+        ? `Created your ${pageLabel}. You're now editing it — say "go to home page" to switch back.`
+        : replaceHistory
+          ? "Here's a first pass at your homepage."
+          : `Updated your ${pageLabel}. Say "undo" to put back the previous version.`
+      : "I built this, but couldn't save it. Your changes may be lost if you reload.";
+
     setMessages((prev) =>
-      prev.map((m) =>
-        m.id === aiMessageId
-          ? {
-              ...m,
-              text: saved
-                ? target
-                  ? `Created your ${pageLabel}. You're now editing it — say "go to home page" to switch back.`
-                  : replaceHistory
-                    ? "Here's a first pass at your homepage."
-                    : `Updated your ${pageLabel}. Say "undo" to put back the previous version.`
-                : "I built this, but couldn't save it. Your changes may be lost if you reload.",
-            }
-          : m,
-      ),
+      prev.map((m) => (m.id === aiMessageId ? { ...m, text: replyText } : m)),
     );
+    remember("ai", replyText, GENERATION_STEPS);
     setGenerating(false);
     router.replace(builderPath);
   }
@@ -216,6 +221,7 @@ export function BuilderApp({
     // reach the generator — that is what destroys work.
     if (/^\s*undo\b/i.test(text)) {
       setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
+      remember("user", text);
       const result = await undoPageAction({ siteId, slug: activeSlug });
       if (result.ok) {
         say("Put back the previous version. Reloading…");
@@ -230,6 +236,7 @@ export function BuilderApp({
 
     if (intent.kind === "switch_page") {
       setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
+      remember("user", text);
       const found = pages.find((p) => p.slug === intent.slug);
       if (found) {
         setActiveSlug(found.slug);
@@ -245,6 +252,7 @@ export function BuilderApp({
     if (intent.kind === "create_page") {
       if (pages.some((p) => p.slug === intent.slug)) {
         setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
+      remember("user", text);
         setActiveSlug(intent.slug);
         say(`That page already exists — switched to it rather than overwriting it.`);
         return;
@@ -263,9 +271,23 @@ export function BuilderApp({
     void generate(text, false);
   }
 
+  /**
+   * Records a message so it survives a reload. Best-effort by design: a
+   * failure to log the conversation must never undo work that succeeded.
+   */
+  function remember(role: "user" | "ai", text: string, steps: string[] = []) {
+    void appendBuilderMessageAction({ siteId, role, text, steps }).catch(() => {});
+  }
+
   /** Appends an assistant message — used to report export/publish outcomes. */
   function say(text: string) {
     setMessages((prev) => [...prev, { id: nextId(), role: "ai", text, steps: [] }]);
+    remember("ai", text);
+  }
+
+  async function onClearChat() {
+    setMessages([]);
+    await clearBuilderMessagesAction(siteId).catch(() => {});
   }
 
   async function onExport() {
@@ -373,31 +395,31 @@ export function BuilderApp({
         </div>
       </div>
 
-      <div className={styles.paneTabs}>
-        <button
-          className={activeTab === "chat" ? styles.active : ""}
-          onClick={() => setActiveTab("chat")}
-        >
-          Chat
-        </button>
-        <button
-          className={activeTab === "canvas" ? styles.active : ""}
-          onClick={() => setActiveTab("canvas")}
-        >
-          Canvas
-        </button>
-        <button
-          className={activeTab === "properties" ? styles.active : ""}
-          onClick={() => setActiveTab("properties")}
-        >
-          Properties
-        </button>
-      </div>
-
       <div className={styles.panes}>
-        <div
-          className={`${styles.chatPane} ${activeTab === "chat" ? styles.shown : ""}`}
-        >
+        <div className={`${styles.chatPane} ${chatOpen ? "" : styles.collapsed}`}>
+          <div className={styles.chatHeader}>
+            <span>Assistant</span>
+            <div className={styles.chatHeaderActions}>
+              <button
+                type="button"
+                className={styles.iconBtn}
+                title="Clear conversation"
+                aria-label="Clear conversation"
+                onClick={onClearChat}
+              >
+                ⌫
+              </button>
+              <button
+                type="button"
+                className={styles.iconBtn}
+                title="Close assistant"
+                aria-label="Close assistant"
+                onClick={() => setChatOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
           <div className={styles.chatScroll} ref={chatScrollRef}>
             {messages.map((m) =>
               m.role === "user" ? (
@@ -435,7 +457,7 @@ export function BuilderApp({
         </div>
 
         <div
-          className={`${styles.canvasPane} ${activeTab === "canvas" ? styles.shown : ""}`}
+          className={styles.canvasPane}
         >
           <div className={styles.canvasScroll}>
             <div
@@ -481,24 +503,17 @@ export function BuilderApp({
           </div>
         </div>
 
-        <div
-          className={`${styles.propsPane} ${activeTab === "properties" ? styles.shown : ""}`}
-        >
-          <div className={styles.propsHead}>Properties</div>
-          <div className={styles.propsBody}>
-            <div className={styles.fieldLabel}>Section</div>
-            <div className={styles.fieldBox}>{content ? "HeroSplit" : "—"}</div>
-
-            <div className={styles.fieldLabel}>Eyebrow</div>
-            <div className={styles.fieldBox}>{content?.eyebrow ?? "—"}</div>
-
-            <div className={styles.fieldLabel}>Heading</div>
-            <div className={styles.fieldBox}>{content?.heading ?? "—"}</div>
-
-            <div className={styles.fieldLabel}>Body</div>
-            <div className={styles.fieldBox}>{content?.body ?? "—"}</div>
-          </div>
-        </div>
+        {!chatOpen && (
+          <button
+            type="button"
+            className={styles.chatFab}
+            onClick={() => setChatOpen(true)}
+            aria-label="Open assistant"
+          >
+            <span className={styles.chatFabIcon}>✦</span>
+            Ask AI
+          </button>
+        )}
       </div>
     </div>
   );

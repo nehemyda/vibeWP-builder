@@ -1,7 +1,15 @@
 .builder {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /*
+   * NOT height: 100vh. The impersonation banner is a sibling above this in
+   * <body>, so a full-viewport height here overflows by exactly the banner's
+   * height — which pushed the assistant launcher below the fold. Filling the
+   * space that is actually left works with or without the banner present.
+   */
+  height: 100%;
+  flex: 1;
+  min-height: 0;
   background: var(--bg);
 }
 
@@ -109,20 +117,98 @@
   display: none;
 }
 
-/* ---- three panes ---- */
+/* ---- preview, with the assistant floating over it ---- */
 .panes {
   flex: 1;
   display: flex;
   min-height: 0;
+  /* Anchors the chat overlay and its launcher. */
+  position: relative;
 }
 
+/*
+ * The assistant panel is pinned to the right and sits ON TOP of the
+ * preview rather than taking a column of its own. The preview keeps its
+ * full width underneath, so collapsing the chat reveals more of the site
+ * instead of reflowing it.
+ */
 .chatPane {
-  width: 340px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 380px;
+  max-width: 100%;
+  z-index: 20;
   flex: none;
-  border-right: 1px solid var(--line);
+  border-left: 1px solid var(--line);
   background: var(--surface);
   display: flex;
   flex-direction: column;
+  box-shadow: -14px 0 40px rgba(19, 25, 34, 0.1);
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+.chatPane.collapsed {
+  transform: translateX(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chatHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink);
+  flex: none;
+}
+.chatHeaderActions {
+  display: flex;
+  gap: 0.3rem;
+}
+.iconBtn {
+  border: 1px solid var(--line);
+  background: transparent;
+  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+.iconBtn:hover {
+  color: var(--ink);
+}
+
+/* Collapsed state: a single launcher in the bottom-right corner. */
+.chatFab {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 21;
+  height: 52px;
+  min-width: 52px;
+  padding: 0 1rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 26px rgba(19, 25, 34, 0.28);
+}
+.chatFabIcon {
+  font-size: 1.05rem;
+  line-height: 1;
 }
 .chatScroll {
   flex: 1;
@@ -357,42 +443,6 @@
   font-size: 0.95rem;
 }
 
-/* right pane: properties */
-.propsPane {
-  width: 300px;
-  flex: none;
-  border-left: 1px solid var(--line);
-  background: var(--surface);
-  overflow-y: auto;
-}
-.propsHead {
-  padding: 0.9rem 1.1rem;
-  border-bottom: 1px solid var(--line);
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--faint);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.propsBody {
-  padding: 1.1rem;
-}
-.fieldLabel {
-  font-size: 0.76rem;
-  font-weight: 700;
-  color: var(--muted);
-  margin: 0 0 0.3rem;
-}
-.fieldBox {
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  padding: 0.55rem 0.7rem;
-  font-size: 0.83rem;
-  margin-bottom: 0.9rem;
-  background: var(--bg);
-  word-break: break-word;
-}
-
 @media (max-width: 900px) {
   .paneTabs {
     display: flex;
@@ -419,19 +469,14 @@
   .panes {
     position: relative;
   }
-  .chatPane,
-  .canvasPane,
-  .propsPane {
-    display: none;
+  /* On small screens the assistant takes the full width when open, rather
+     than a 380px panel squeezed against the edge. */
+  .chatPane {
     width: 100%;
+    border-left: none;
   }
-  .chatPane.shown,
-  .canvasPane.shown,
-  .propsPane.shown {
-    display: flex;
-  }
-  .propsPane.shown {
-    display: block;
+  .canvasPane {
+    width: 100%;
   }
 
   .viewportToggle {

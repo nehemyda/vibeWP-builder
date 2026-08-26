@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { sitePages, agencies, profiles } from "@/lib/db/schema";
+import { sitePages, agencies, profiles, builderMessages } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
 import { extractHeroContent } from "@/lib/builder-content";
 import { resolveSitePaths } from "@/lib/site-paths";
@@ -40,11 +40,14 @@ export default async function BuilderPage({
     redirect(`${builderPath}${query}`);
   }
 
-  const allPages = await db
-    .select()
-    .from(sitePages)
-    .where(eq(sitePages.siteId, site.id))
-    .orderBy(sitePages.createdAt);
+  const [allPages, storedMessages] = await Promise.all([
+    db.select().from(sitePages).where(eq(sitePages.siteId, site.id)).orderBy(sitePages.createdAt),
+    db
+      .select()
+      .from(builderMessages)
+      .where(eq(builderMessages.siteId, site.id))
+      .orderBy(builderMessages.createdAt),
+  ]);
 
   // The home page is what the canvas shows on load; the switcher moves off it.
   const page = allPages.find((p) => p.slug === "home") ?? allPages[0];
@@ -87,6 +90,12 @@ export default async function BuilderPage({
             .filter(Boolean)
             .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
             .join(" "),
+      }))}
+      initialMessages={storedMessages.map((m) => ({
+        id: m.id,
+        role: m.role === "user" ? ("user" as const) : ("ai" as const),
+        text: m.text,
+        steps: m.steps ?? [],
       }))}
       builderPath={builderPath}
       backPath={backPath}

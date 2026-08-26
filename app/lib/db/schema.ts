@@ -123,6 +123,28 @@ export const sitePages = pgTable("site_pages", {
 });
 
 /**
+ * The builder chat transcript for a site.
+ *
+ * Kept per site rather than per page: the conversation covers the whole
+ * build ("create a services page") and would be nonsense split up. Held in
+ * the database rather than component state so reloading the builder does
+ * not silently erase what was discussed.
+ */
+export const builderMessages = pgTable("builder_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  siteId: uuid("site_id")
+    .notNull()
+    .references(() => sites.id),
+  role: text("role").notNull(),
+  text: text("text").notNull(),
+  /** The generation step lines shown under an assistant message. */
+  steps: jsonb("steps").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/**
  * A snapshot of a page taken immediately BEFORE it is overwritten.
  *
  * Generation replaces a page's whole schema, so without this a single
