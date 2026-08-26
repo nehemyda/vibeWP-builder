@@ -70,9 +70,15 @@ export function BuilderApp({
   const ran = useRef(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
-  async function runAutostart(userPrompt: string) {
+  /**
+   * The one generation path, used both by autostart from the landing page
+   * and by the chat box. `replaceHistory` distinguishes them: autostart owns
+   * the whole transcript, whereas a chat message appends to it.
+   */
+  async function generate(userPrompt: string, replaceHistory: boolean) {
     setGenerating(true);
-    setMessages([{ id: nextId(), role: "user", text: userPrompt, steps: [] }]);
+    const userMessage: ChatMessage = { id: nextId(), role: "user", text: userPrompt, steps: [] };
+    setMessages((prev) => (replaceHistory ? [userMessage] : [...prev, userMessage]));
 
     const aiMessageId = nextId();
     setMessages((prev) => [
@@ -105,18 +111,37 @@ export function BuilderApp({
     ]);
 
     setContent(generated);
+
+    // Persist before telling the user it worked, so the message reflects
+    // what actually happened rather than optimism — a failed save here used
+    // to be silent, leaving the canvas showing work that was already lost.
+    let saved = true;
+    try {
+      await saveGeneratedSchema(siteId, heroContentToSchema(generated));
+    } catch {
+      saved = false;
+    }
+
     setMessages((prev) =>
       prev.map((m) =>
         m.id === aiMessageId
-          ? { ...m, text: "Here's a first pass at your homepage." }
+          ? {
+              ...m,
+              text: saved
+                ? replaceHistory
+                  ? "Here's a first pass at your homepage."
+                  : "Updated your homepage — tell me what to change next."
+                : "I built this, but couldn't save it. Your changes may be lost if you reload.",
+            }
           : m,
       ),
     );
     setGenerating(false);
-    saveGeneratedSchema(siteId, heroContentToSchema(generated)).catch(() => {
-      // Best-effort persistence — the canvas already reflects the change.
-    });
     router.replace(builderPath);
+  }
+
+  function runAutostart(userPrompt: string) {
+    return generate(userPrompt, true);
   }
 
   useEffect(() => {
@@ -144,20 +169,9 @@ export function BuilderApp({
   function onSendMessage(e: React.FormEvent) {
     e.preventDefault();
     const text = draft.trim();
-    if (!text) return;
+    if (!text || generating) return;
     setDraft("");
-    setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: nextId(),
-          role: "ai",
-          text: "Noted — live editing from chat isn't wired up in this preview build yet. Try describing a whole new site from the landing page to see generation end to end.",
-          steps: [],
-        },
-      ]);
-    }, 500);
+    void generate(text, false);
   }
 
   return (
