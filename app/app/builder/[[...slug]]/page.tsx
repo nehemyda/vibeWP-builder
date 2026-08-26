@@ -7,6 +7,7 @@ import {
   profiles,
   builderMessages,
   siteInstallations,
+  pageRevisions,
 } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
 import { extractHeroContent } from "@/lib/builder-content";
@@ -68,6 +69,19 @@ export default async function BuilderPage({
 
   const initialContent = extractHeroContent(page?.schemaJson);
 
+  // Undo/redo depth for the page shown on load, so the toolbar buttons are
+  // correct on first paint rather than flicking from disabled to enabled.
+  const revisionKinds = page
+    ? await db
+        .select({ kind: pageRevisions.kind })
+        .from(pageRevisions)
+        .where(eq(pageRevisions.pageId, page.id))
+    : [];
+  const initialHistory = {
+    canUndo: revisionKinds.some((r) => r.kind === "undo"),
+    canRedo: revisionKinds.some((r) => r.kind === "redo"),
+  };
+
   // "Back" goes somewhere useful for whoever is actually looking at the
   // builder right now — the site's own SMB dashboard if that's genuinely
   // them, otherwise wherever an agency/admin caller would expect to land.
@@ -113,6 +127,7 @@ export default async function BuilderPage({
         steps: m.steps ?? [],
       }))}
       initialWpUrl={installation?.status === "ready" ? (installation.url ?? null) : null}
+      initialHistory={initialHistory}
       builderPath={builderPath}
       backPath={backPath}
       backLabel={backLabel}

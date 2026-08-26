@@ -371,6 +371,198 @@ export async function upsertPage(opts: {
   return parsed;
 }
 
+export type WpPageContent = {
+  postId: number;
+  content: string;
+  title: string;
+  /** ISO-ish string from WordPress, for telling the user when it was touched. */
+  modifiedAt: string | null;
+};
+
+/**
+ * Reads a page's stored block markup back out of WordPress.
+ *
+ * The only path that reads content FROM WordPress. Until this existed, sync ran
+ * one way and an edit made in wp-admin was destroyed by the next export.
+ *
+ * Returns null when the page does not exist there — a page created in VibeWP
+ * but never exported is not an error.
+ */
+export async function readPageContent(opts: {
+  installPath: string;
+  slug: string;
+  /** The home page is the front page, which may be stored under any slug. */
+  asFrontPage?: boolean;
+}): Promise<WpPageContent | null> {
+  const { installPath, slug, asFrontPage } = opts;
+
+  const script = `
+    $slug = ${JSON.stringify(slug)};
+    $front = ${asFrontPage ? "true" : "false"};
+
+    $post = null;
+    if ($front) {
+      $id = (int) get_option("page_on_front");
+      if ($id) { $post = get_post($id); }
+    }
+    if (!$post) { $post = get_page_by_path($slug, OBJECT, "page"); }
+    if (!$post) { echo "null"; return; }
+
+    echo json_encode([
+      "postId"     => (int) $post->ID,
+      "content"    => $post->post_content,
+      "title"      => $post->post_title,
+      "modifiedAt" => $post->post_modified_gmt,
+    ]);
+  `;
+
+  try {
+    const out = await wp(["eval", script, `--path=${installPath}`]);
+    if (out.trim() === "null") return null;
+    return JSON.parse(out) as WpPageContent;
+  } catch (err) {
+    console.warn("[wp] read failed for", slug, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/**
+ * Downloads an external image into the site's own media library and returns
+ * its local URL.
+ *
+ * WHY NOT JUST HOTLINK: an exported site has to be genuinely the client's —
+ * portable, and still working if it's moved to another host or if we stop
+ * running. A hero <img> pointing at images.pexels.com is a silent dependency
+ * on a third party we don't control. Sideloading makes the install
+ * self-contained, and puts the photo in the media library where the client
+ * can swap it from wp-admin like any other image.
+ *
+ * Re-export is idempotent: the source URL is recorded in attachment meta and
+ * reused, so exporting ten times doesn't leave ten copies of the same photo.
+ *
+ * The stored file is re-encoded to WebP. We ask the CDN for WebP too, but that
+ * can't be trusted to decide what lands on disk: the source URL still ends in
+ * ".jpeg", and a file whose extension disagrees with its bytes causes trouble
+ * later. Re-encoding through WordPress's own image editor guarantees the
+ * extension, the mime type and the generated thumbnail sizes all agree.
+ *
+ * Returns null on any failure — the caller then falls back to the original
+ * URL, which still renders.
+ */
+export type SideloadedImage = {
+  url: string;
+  /** Attachment id, so the exported block is a real media-library image. */
+  id: number;
+  width: number | null;
+  height: number | null;
+};
+
+export async function sideloadImage(opts: {
+  installPath: string;
+  url: string;
+  alt?: string;
+}): Promise<SideloadedImage | null> {
+  const { installPath, url, alt } = opts;
+
+  // A descriptive filename is a small but free SEO win: "bride-holding-rose-
+  // bouquet.webp" says more to a crawler than "pexels-photo-5060099.jpeg".
+  const slug =
+    (alt ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .split("-")
+      .slice(0, 8)
+      .join("-") || "hero-image";
+
+  const script = `
+    $src  = ${JSON.stringify(url)};
+    $alt  = ${JSON.stringify(alt ?? "")};
+    $slug = ${JSON.stringify(slug)};
+
+    $describe = function ($id) {
+      $meta = wp_get_attachment_metadata($id);
+      echo json_encode([
+        "url"    => wp_get_attachment_url($id),
+        "id"     => (int) $id,
+        "width"  => isset($meta["width"])  ? (int) $meta["width"]  : null,
+        "height" => isset($meta["height"]) ? (int) $meta["height"] : null,
+      ]);
+    };
+
+    // Already imported on a previous export? Reuse it.
+    $found = get_posts([
+      "post_type"      => "attachment",
+      "posts_per_page" => 1,
+      "fields"         => "ids",
+      "meta_key"       => "_vibewp_source_url",
+      "meta_value"     => $src,
+    ]);
+    if (!empty($found)) { $describe($found[0]); return; }
+
+    // These live in the admin includes, which WP-CLI's eval context does not
+    // load for us.
+    require_once ABSPATH . "wp-admin/includes/media.php";
+    require_once ABSPATH . "wp-admin/includes/file.php";
+    require_once ABSPATH . "wp-admin/includes/image.php";
+
+    $tmp = download_url($src);
+    if (is_wp_error($tmp)) { WP_CLI::error($tmp->get_error_message()); }
+
+    $name = "";
+    $mime = function_exists("mime_content_type") ? mime_content_type($tmp) : "";
+
+    if ($mime === "image/webp") {
+      // Already WebP — do NOT re-encode. Measured on one photo: the CDN's own
+      // WebP was 70,658 bytes and re-encoding it produced 78,010, because a
+      // lossy->lossy round trip both loses quality and, at WordPress's default
+      // quality, costs size. Just claim the correct filename and move on.
+      // (The source URL still ends ".jpeg" despite serving WebP bytes, which is
+      // exactly why the extension has to come from the bytes, not the URL.)
+      $name = $slug . ".webp";
+    } elseif (wp_image_editor_supports(["mime_type" => "image/webp"])) {
+      // Not WebP — convert. This is the path a client upload or a
+      // non-converting CDN takes.
+      $editor = wp_get_image_editor($tmp);
+      if (!is_wp_error($editor)) {
+        $target = trailingslashit(dirname($tmp)) . $slug . ".webp";
+        $saved  = $editor->save($target, "image/webp");
+        if (!is_wp_error($saved)) {
+          @unlink($tmp);
+          $tmp  = $saved["path"];
+          $name = basename($saved["path"]);
+        }
+      }
+    }
+
+    // Conversion unavailable or failed: keep the original bytes rather than
+    // failing the export — a JPEG hero beats no hero.
+    if ($name === "") {
+      $ext  = pathinfo(parse_url($src, PHP_URL_PATH), PATHINFO_EXTENSION);
+      $name = $slug . "." . ($ext ? $ext : "jpg");
+    }
+
+    $id = media_handle_sideload(["name" => $name, "tmp_name" => $tmp], 0, $alt);
+    if (is_wp_error($id)) { @unlink($tmp); WP_CLI::error($id->get_error_message()); }
+
+    update_post_meta($id, "_vibewp_source_url", $src);
+    // media_handle_sideload()'s description becomes the title, NOT the alt.
+    // Alt text is mandatory, so it is set explicitly here.
+    update_post_meta($id, "_wp_attachment_image_alt", $alt);
+
+    $describe($id);
+  `;
+
+  try {
+    const out = await wp(["eval", script, `--path=${installPath}`]);
+    const parsed = JSON.parse(out) as SideloadedImage;
+    return parsed.url?.startsWith("http") ? parsed : null;
+  } catch (err) {
+    console.warn("[wp] sideload failed for", url, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 /** True if WP-CLI and the database client are actually available here. */
 export async function driverAvailable(): Promise<{ ok: boolean; reason?: string }> {
   try {

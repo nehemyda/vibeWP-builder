@@ -9,7 +9,8 @@ import { db } from "@/lib/db";
 import { profiles, agencies, agencyMembers, sites, siteMembers } from "@/lib/db/schema";
 import { roleHomePath } from "@/lib/role-redirect";
 import { resolveSitePaths } from "@/lib/site-paths";
-import { IMPERSONATION_COOKIE } from "@/lib/impersonation";
+import { IMPERSONATION_COOKIE, readImpersonationSession } from "@/lib/impersonation";
+import { logActivity } from "@/lib/activity";
 
 /** Where impersonation should land — the ID-ful canonical URL, not the bare one, so the admin sees at a glance who they're viewing. */
 async function impersonationHomePath(targetUserId: string, role: string): Promise<string> {
@@ -116,12 +117,40 @@ export async function startImpersonationAction(targetUserId: string) {
     redirect(roleHomePath(callerProfile.role));
   }
 
+  const targetProfile = await db.query.profiles.findFirst({
+    where: eq(profiles.id, targetUserId),
+  });
+
+  /*
+   * Log BEFORE swapping the session, and pass the impersonator explicitly.
+   *
+   * Both details matter. After setSession() below, auth.getUser() resolves to
+   * the target user and the caller's identity is unrecoverable server-side —
+   * so this row could not be written truthfully afterwards. And the cookie
+   * that logActivity() normally reads is not in place yet at this point, hence
+   * the explicit argument.
+   */
+  await logActivity({
+    actorUserId: caller.id,
+    actorName: callerProfile.fullName ?? "Unknown",
+    action: "impersonation.started",
+    targetType: "user",
+    targetId: targetUserId,
+    targetLabel: targetProfile?.fullName ?? targetAuthUser.user.email ?? targetUserId,
+    metadata: { targetRole: targetProfile?.role ?? null },
+    impersonator: { id: caller.id, name: callerProfile.fullName ?? "Unknown" },
+  });
+
   const cookieStore = await cookies();
   cookieStore.set(
     IMPERSONATION_COOKIE,
     JSON.stringify({
       accessToken: callerSession.access_token,
       refreshToken: callerSession.refresh_token,
+      // Carried so logActivity() can name the real operator on every action
+      // taken during this session. See lib/impersonation.ts.
+      impersonatorId: caller.id,
+      impersonatorName: callerProfile.fullName ?? "Unknown",
     }),
     { httpOnly: true, secure: true, sameSite: "lax", path: "/" },
   );
@@ -131,25 +160,46 @@ export async function startImpersonationAction(targetUserId: string) {
     refresh_token: verifyData.session.refresh_token,
   });
 
-  const targetProfile = await db.query.profiles.findFirst({
-    where: eq(profiles.id, targetUserId),
-  });
   redirect(await impersonationHomePath(targetUserId, targetProfile?.role ?? "smb_owner"));
 }
 
 /** Bound to <form action={stopImpersonationAction}> — the "Return to admin" button. */
 export async function stopImpersonationAction() {
-  const cookieStore = await cookies();
-  const raw = cookieStore.get(IMPERSONATION_COOKIE)?.value;
-  if (!raw) redirect("/admin");
+  const backup = await readImpersonationSession();
+  if (!backup) redirect("/admin");
 
-  const backup = JSON.parse(raw) as { accessToken: string; refreshToken: string };
+  // Who we were pretending to be, captured before the session is handed back.
   const supabase = await createClient();
+  const {
+    data: { user: impersonated },
+  } = await supabase.auth.getUser();
+  const impersonatedProfile = impersonated
+    ? await db.query.profiles.findFirst({ where: eq(profiles.id, impersonated.id) })
+    : undefined;
+
   await supabase.auth.setSession({
     access_token: backup.accessToken,
     refresh_token: backup.refreshToken,
   });
 
+  const cookieStore = await cookies();
   cookieStore.delete(IMPERSONATION_COOKIE);
+
+  // Explicit impersonator again: the cookie has just been deleted, so cookie
+  // detection would report this as an ordinary action by the admin — which
+  // would lose the fact that it closes an impersonation session.
+  await logActivity({
+    actorUserId: backup.impersonatorId ?? null,
+    actorName: backup.impersonatorName ?? "Unknown administrator",
+    action: "impersonation.stopped",
+    targetType: "user",
+    targetId: impersonated?.id ?? null,
+    targetLabel: impersonatedProfile?.fullName ?? impersonated?.email ?? "Unknown user",
+    impersonator: {
+      id: backup.impersonatorId ?? null,
+      name: backup.impersonatorName ?? "Unknown administrator",
+    },
+  });
+
   redirect("/admin");
 }

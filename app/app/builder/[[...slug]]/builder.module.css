@@ -368,9 +368,21 @@
   justify-content: center;
   padding: 2rem 1.5rem;
 }
+/*
+ * No width cap on the Desktop preset — the preview fills whatever the pane
+ * gives it, with or without the assistant docked beside it.
+ *
+ * There used to be a 1040px cap here, which discarded ~250px on each side of a
+ * wide window for no reason. It is not this element's job to limit the design's
+ * width: the theme already does that with `.yp-hero { max-width: 1160px }`, and
+ * because the canvas now loads that same stylesheet, letting the frame run full
+ * width reproduces exactly what a browser at that width would show.
+ *
+ * The Tablet/Mobile presets below still cap, deliberately — that is the point
+ * of a preset.
+ */
 .canvasFrame {
   width: 100%;
-  max-width: 1040px;
   background: #fff;
   border-radius: 10px;
   box-shadow: 0 10px 40px -12px rgba(20, 20, 30, 0.18);
@@ -380,6 +392,46 @@
 }
 /* iPad-ish portrait width — wide enough to keep two columns, narrow enough
    to show where the desktop layout starts to strain. */
+.historyGroup {
+  display: flex;
+  gap: 0.25rem;
+  margin-right: 0.2rem;
+}
+
+.historyBtn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, opacity 120ms ease;
+}
+
+.historyBtn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.historyBtn:hover:not(:disabled) {
+  background: #f1efeb;
+}
+
+/*
+ * Visibly dead rather than merely inert: the whole point of reading depth from
+ * the server is that the button's appearance tells the truth about whether
+ * there is a step to take.
+ */
+.historyBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .canvasFrame.tablet {
   max-width: 768px;
 }
@@ -405,88 +457,21 @@
   font-size: 0.82rem;
   color: #555;
 }
-.pvHero {
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: 2rem;
-  align-items: center;
-  padding: 2.6rem 2.2rem;
-  position: relative;
-}
-.canvasFrame.mobile .pvHero {
-  grid-template-columns: 1fr;
-  padding: 1.6rem 1.3rem;
-}
-/* Image above the copy on phones — a visual anchor before the reading. */
-.canvasFrame.mobile .pvMedia {
-  order: -1;
-}
+/*
+ * The hand-written hero approximation that used to live here is gone.
+ *
+ * It was a second stylesheet for one design, and it drifted: 30.4px heading
+ * against the theme's 62.4px, no 1160px container, a 4/3.4 image crop against
+ * the theme's 4/5, and a "Licensed & Insured" badge the exporter never emitted.
+ * The canvas now renders the serializer's own markup with the theme's own
+ * sections.css inside an iframe — see PreviewFrame.tsx — so there is nothing
+ * left here to keep in sync.
+ *
+ * What remains below is genuine app chrome: the mock site header, and the
+ * selection outline drawn around the frame.
+ */
 .canvasFrame.mobile .pvLinks {
   display: none;
-}
-.pvEyebrow {
-  display: inline-block;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #f54900;
-  background: #fdeee6;
-  padding: 0.3rem 0.7rem;
-  border-radius: 999px;
-  margin-bottom: 0.9rem;
-}
-.pvHero h1 {
-  margin: 0 0 0.7rem;
-  font-size: 1.9rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.08;
-}
-.pvHero p {
-  margin: 0 0 1rem;
-  font-size: 0.85rem;
-  color: #666;
-  max-width: 40ch;
-}
-.pvActions {
-  display: flex;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-}
-.pvBtn {
-  font-size: 0.8rem;
-  font-weight: 700;
-  padding: 0.55rem 1rem;
-  border-radius: 8px;
-}
-.pvBtn.primary {
-  background: #f54900;
-  color: #fff;
-}
-.pvBtn.outline {
-  border: 1px solid #ddd;
-  color: #222;
-}
-.pvMedia {
-  position: relative;
-}
-.pvFrame {
-  border-radius: 10px;
-  background: linear-gradient(160deg, #f4f2ee, #e7e3dc);
-  aspect-ratio: 4/3.4;
-}
-.pvBadge {
-  position: absolute;
-  left: -0.8rem;
-  bottom: 1rem;
-  background: #fff;
-  border: 1px solid #eee;
-  border-radius: 8px;
-  padding: 0.5rem 0.7rem;
-  font-size: 0.72rem;
-  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.2);
-  font-weight: 700;
 }
 .pvSelected {
   outline: 2px solid var(--accent);
@@ -596,4 +581,78 @@
   .pvNav {
     padding: 1rem 1.3rem;
   }
+}
+
+/* ---- WordPress sync notice ---- */
+.syncBanner {
+  flex: none;
+  border-bottom: 1px solid #e8c98a;
+  background: #fdf6e7;
+  padding: 0.7rem 1.2rem;
+  font-size: 0.85rem;
+}
+.syncHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.syncDismiss {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+}
+.syncRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid #f0e2c2;
+  flex-wrap: wrap;
+}
+.syncInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.syncPage {
+  font-weight: 700;
+}
+.syncWhy {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+/* The two versions, so the choice is made on content rather than on a label. */
+.syncDiff {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.8rem;
+  margin-top: 0.2rem;
+}
+.syncDiff em {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--muted);
+  margin-right: 0.3rem;
+}
+.syncWarn {
+  font-size: 0.78rem;
+  color: #9a4a00;
+  margin-top: 0.2rem;
+}
+.syncActions {
+  display: flex;
+  gap: 0.4rem;
+  flex: none;
+  flex-wrap: wrap;
+}
+.syncActions .btn {
+  font-size: 0.8rem;
+  padding: 0.4rem 0.7rem;
 }

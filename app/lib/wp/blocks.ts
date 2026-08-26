@@ -64,9 +64,55 @@ export function list(items: string[], className: string): string {
 <!-- /wp:list -->`;
 }
 
-export function image(src: string, alt: string, className: string): string {
-  return `<!-- wp:image {"className":"${className}"} -->
-<figure class="wp-block-image ${className}"><img src="${escAttr(src)}" alt="${escAttr(alt)}"/></figure>
+/**
+ * Returns the first non-empty candidate. Alt text is mandatory — for screen
+ * readers, and because an image with no alt is dead weight for SEO — so this
+ * exists to make "no alt" unrepresentable rather than merely discouraged.
+ *
+ * The chain runs specific → generic: the stock photo's own description, then
+ * the search terms, then the page heading. The final literal should be
+ * unreachable in practice; it's here so the return type can be `string` and
+ * callers never have to handle an empty case.
+ */
+export function requireAlt(...candidates: Array<string | null | undefined>): string {
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim();
+    if (trimmed) return trimmed;
+  }
+  return "Photograph of this business";
+}
+
+/**
+ * @param meta Attachment id and dimensions, known only after the file has been
+ *             sideloaded. The id makes the block a first-class media-library
+ *             image so the client can swap it in wp-admin; width/height let the
+ *             browser reserve space before the image loads, which is what
+ *             keeps Cumulative Layout Shift at zero.
+ */
+export function image(
+  src: string,
+  alt: string,
+  className: string,
+  meta?: { id?: number; width?: number; height?: number },
+): string {
+  // Last line of defence: whatever the caller passed, an empty alt cannot ship.
+  const safeAlt = requireAlt(alt);
+
+  const attrs: Record<string, unknown> = { className };
+  if (meta?.id) {
+    attrs.id = meta.id;
+    attrs.sizeSlug = "large";
+  }
+
+  const figureClass = meta?.id
+    ? `wp-block-image size-large ${className}`
+    : `wp-block-image ${className}`;
+  const imgClass = meta?.id ? ` class="wp-image-${meta.id}"` : "";
+  const width = meta?.width ? ` width="${meta.width}"` : "";
+  const height = meta?.height ? ` height="${meta.height}"` : "";
+
+  return `<!-- wp:image ${JSON.stringify(attrs)} -->
+<figure class="${figureClass}"><img src="${escAttr(src)}" alt="${escAttr(safeAlt)}"${imgClass}${width}${height}/></figure>
 <!-- /wp:image -->`;
 }
 
@@ -96,6 +142,7 @@ type HeroProps = {
   body?: string;
   features?: string[];
   actions?: Action[];
+  image?: { url?: string; alt?: string; id?: number; width?: number; height?: number };
 };
 
 function heroSplitToGutenberg(p: HeroProps): string {
@@ -112,7 +159,29 @@ function heroSplitToGutenberg(p: HeroProps): string {
       .join(""),
   );
 
-  return group("yp-hero", group("yp-hero__grid", copy), "section");
+  // The second grid column. Its absence is why every exported hero was
+  // single-column, and why sections.css's mobile `.yp-hero__media { order: -1 }`
+  // — which puts the photo above the copy on phones — never had anything to
+  // reorder.
+  //
+  // By this point image.url is expected to be a WordPress media-library URL:
+  // exportToWordPressAction sideloads the photo and rewrites the prop before
+  // serializing, so an exported page never hotlinks Pexels.
+  const media = p.image?.url
+    ? group(
+        "yp-hero__media",
+        image(
+          p.image.url,
+          // The heading is the fallback because it describes what the page is
+          // about, which is the next best thing to describing the photo.
+          requireAlt(p.image.alt, p.heading),
+          "yp-hero__frame",
+          { id: p.image.id, width: p.image.width, height: p.image.height },
+        ),
+      )
+    : "";
+
+  return group("yp-hero", group("yp-hero__grid", copy + media), "section");
 }
 
 type SchemaNode = { type?: string; props?: Record<string, unknown> };

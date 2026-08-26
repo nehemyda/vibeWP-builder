@@ -1,7 +1,5 @@
 /**
- * Drops unused business_profiles columns (Customer ID, Market, Salesperson,
- * Additional salespeople, Call tracking number, Lists) — not needed for
- * agencies or SMBs. Safe to re-run.
+ * Raw-SQL migration adding the undo/redo stack marker. Safe to re-run.
  * Run with: npx tsx lib/db/migrate-batch10.ts
  */
 import { config } from "dotenv";
@@ -12,14 +10,25 @@ import postgres from "postgres";
 async function main() {
   const sql = postgres(process.env.DATABASE_URL ?? "", { prepare: false });
 
-  await sql`ALTER TABLE business_profiles DROP COLUMN IF EXISTS customer_id;`;
-  await sql`ALTER TABLE business_profiles DROP COLUMN IF EXISTS market;`;
-  await sql`ALTER TABLE business_profiles DROP COLUMN IF EXISTS salesperson;`;
-  await sql`ALTER TABLE business_profiles DROP COLUMN IF EXISTS additional_salespeople;`;
-  await sql`ALTER TABLE business_profiles DROP COLUMN IF EXISTS call_tracking_number;`;
-  await sql`ALTER TABLE business_profiles DROP COLUMN IF EXISTS lists;`;
+  // Every existing row is a pre-edit snapshot, which is exactly what the undo
+  // stack holds — so the NOT NULL DEFAULT backfills correctly with no separate
+  // UPDATE. Redo stacks simply start empty.
+  await sql`
+    ALTER TABLE page_revisions
+      ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'undo';
+  `;
 
-  console.log("Migration complete.");
+  // Undo and redo both want "newest row on this page for this stack".
+  await sql`
+    CREATE INDEX IF NOT EXISTS page_revisions_page_id_kind_created_at_idx
+      ON page_revisions (page_id, kind, created_at DESC);
+  `;
+
+  const [{ count }] = await sql`
+    SELECT count(*)::int AS count FROM page_revisions WHERE kind = 'undo';
+  `;
+  console.log(`Migration complete. ${count} existing revision(s) marked as undo history.`);
+
   await sql.end();
   process.exit(0);
 }

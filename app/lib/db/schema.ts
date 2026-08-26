@@ -117,6 +117,24 @@ export const sitePages = pgTable("site_pages", {
   /** Human label for the page; falls back to the slug when absent. */
   title: text("title"),
   schemaJson: jsonb("schema_json").notNull(),
+  /** The WordPress post this page is bound to, once exported. */
+  wpPostId: integer("wp_post_id"),
+  /**
+   * The schema both sides agreed on at the last successful sync — the common
+   * ancestor for a three-way comparison.
+   *
+   * This is what distinguishes the four states. Diffing WordPress against
+   * VibeWP alone can only say "they differ"; against a shared base it can say
+   * WHICH side moved, and therefore whether pulling is safe or a genuine
+   * conflict needs a human.
+   *
+   * A schema rather than a markup hash on purpose: WordPress re-serializes on
+   * every editor save (escaping hyphens in block attributes, inserting blank
+   * lines, leaving empty paragraphs), so byte comparison would report a
+   * conflict on every page a client had merely opened. See lib/wp/parse-blocks.ts.
+   */
+  syncedSchemaJson: jsonb("synced_schema_json"),
+  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -157,6 +175,20 @@ export const pageRevisions = pgTable("page_revisions", {
     .notNull()
     .references(() => sitePages.id),
   schemaJson: jsonb("schema_json").notNull(),
+  /**
+   * Which stack this snapshot belongs to.
+   *
+   * This is what makes undo a real stack rather than a toggle. Previously
+   * every row was undifferentiated and undo restored the newest row, so after
+   * one undo the newest row WAS the state you had just left — a second undo
+   * returned to it and older states became unreachable.
+   *
+   *   save: push current onto 'undo', and discard the whole 'redo' stack,
+   *         because editing forks history and the old redo branch is dead.
+   *   undo: newest 'undo' row becomes current; the outgoing current moves to 'redo'.
+   *   redo: newest 'redo' row becomes current; the outgoing current moves to 'undo'.
+   */
+  kind: text("kind").notNull().default("undo"),
   /** What caused the change, e.g. the prompt text — so history is legible. */
   reason: text("reason"),
   createdByUserId: uuid("created_by_user_id"),
@@ -333,6 +365,17 @@ export const activityLog = pgTable("activity_log", {
   id: uuid("id").primaryKey().defaultRandom(),
   actorUserId: uuid("actor_user_id"),
   actorName: text("actor_name").notNull(),
+  /**
+   * The real human behind the action, when it was taken while impersonating.
+   *
+   * Impersonation swaps the live Supabase session to the target user, so from
+   * that moment auth.getUser() — and therefore actorUserId above — resolves to
+   * the CLIENT. Without these two columns an admin could impersonate anyone,
+   * change whatever they liked, and the log would credit it entirely to that
+   * client. Null on ordinary actions; set automatically by logActivity().
+   */
+  impersonatorUserId: uuid("impersonator_user_id"),
+  impersonatorName: text("impersonator_name"),
   /** Dot-namespaced, e.g. "agency.suspended", "user.deactivated", "auth.login". */
   action: text("action").notNull(),
   targetType: text("target_type").notNull(),

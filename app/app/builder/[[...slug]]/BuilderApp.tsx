@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./builder.module.css";
 import { generateHeroContent, heroContentToSchema, type HeroContent } from "@/lib/mock-ai";
@@ -14,9 +14,21 @@ import {
   savePageSchemaAction,
   listPagesAction,
   undoPageAction,
+  redoPageAction,
+  getHistoryStateAction,
   type PageSummary,
+  type HistoryState,
 } from "@/app/actions/pages";
 import { detectIntent } from "@/lib/page-intent";
+import { schemaToGutenberg } from "@/lib/wp/blocks";
+import { PreviewFrame } from "./PreviewFrame";
+import { SyncBanner } from "./SyncBanner";
+import {
+  detectSyncAction,
+  pullFromWordPressAction,
+  resolveConflictAction,
+  type PageSyncReport,
+} from "@/app/actions/sync";
 import {
   appendBuilderMessageAction,
   clearBuilderMessagesAction,
@@ -68,12 +80,28 @@ const SparkIcon = () => (
   </svg>
 );
 
+/* Curved arrow doubling back on itself — the conventional undo/redo glyph. */
+const UndoIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <path d="M9 7H15a5 5 0 0 1 0 10h-5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M12 4L9 7l3 3" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const RedoIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <path d="M15 7H9a5 5 0 0 0 0 10h5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M12 4l3 3-3 3" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 export function BuilderApp({
   siteId,
   smbId,
   initialPages,
   initialMessages,
   initialWpUrl,
+  initialHistory,
   builderPath,
   backPath,
   backLabel,
@@ -87,6 +115,8 @@ export function BuilderApp({
   initialPages: PageSummary[];
   initialMessages: StoredMessage[];
   initialWpUrl: string | null;
+  /** Undo/redo depth for the page shown on load, so the buttons are correct immediately. */
+  initialHistory: HistoryState;
   builderPath: string;
   backPath: string;
   backLabel: string;
@@ -126,8 +156,134 @@ export function BuilderApp({
   const [pages, setPages] = useState<PageSummary[]>(initialPages);
   /** Which page generation writes to. Everything used to assume "home". */
   const [activeSlug, setActiveSlug] = useState("home");
+  /**
+   * Server-reported history depth for the active page, so Undo/Redo are
+   * disabled when they'd fail. Never inferred locally: history lives per page
+   * in the database, and two tabs on one site share it.
+   */
+  const [history, setHistory] = useState<HistoryState>(initialHistory);
+  const [stepping, setStepping] = useState(false);
+  /** WordPress-vs-VibeWP comparison, loaded after paint. Null until it returns. */
+  const [syncReport, setSyncReport] = useState<PageSyncReport[] | null>(null);
+  const [syncBusy, setSyncBusy] = useState<string | null>(null);
+  const [syncDismissed, setSyncDismissed] = useState(false);
   const ran = useRef(false);
+  const syncRan = useRef(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  /** Re-reads the WordPress comparison. */
+  const refreshSync = useCallback(async () => {
+    try {
+      const result = await detectSyncAction(smbId);
+      if (result.ok) setSyncReport(result.pages);
+    } catch {
+      // Detection is advisory; a failure must not stop someone editing.
+    }
+  }, [smbId]);
+
+  /*
+   * Detect on open, as the chosen sync model requires.
+   *
+   * Deliberately client-side after paint rather than in the server component:
+   * detection shells out to WP-CLI and may have to wake a sleeping local PHP
+   * server, which would add seconds to every builder page load. The banner
+   * appearing a moment late is much better than the whole screen waiting.
+   *
+   * The ref guard keeps this to one run for the lifetime of the component;
+   * state is set from the async callback, never synchronously here.
+   */
+  useEffect(() => {
+    if (syncRan.current) return;
+    syncRan.current = true;
+    void refreshSync();
+  }, [refreshSync]);
+
+  async function onPull(slug: string) {
+    setSyncBusy(slug);
+    try {
+      const result = await pullFromWordPressAction({ smbId, slug });
+      if (result.ok) {
+        say(`Pulled the WordPress version of "${slug}" into VibeWP.`);
+        const refreshed = await listPagesAction(siteId);
+        setPages(refreshed);
+        setContent(refreshed.find((p) => p.slug === activeSlug)?.content ?? null);
+        await refreshHistory(activeSlug);
+      } else {
+        say(result.error);
+      }
+      await refreshSync();
+    } finally {
+      setSyncBusy(null);
+    }
+  }
+
+  async function onResolve(slug: string, keep: "wordpress" | "vibewp") {
+    setSyncBusy(slug);
+    try {
+      const result = await resolveConflictAction({ smbId, slug, keep });
+      if (!result.ok) {
+        say(result.error);
+      } else if (keep === "wordpress") {
+        say(`Kept the WordPress version of "${slug}".`);
+        const refreshed = await listPagesAction(siteId);
+        setPages(refreshed);
+        setContent(refreshed.find((p) => p.slug === activeSlug)?.content ?? null);
+        await refreshHistory(activeSlug);
+      } else {
+        say(`Kept the VibeWP version of "${slug}". Export to push it to WordPress.`);
+      }
+      await refreshSync();
+    } finally {
+      setSyncBusy(null);
+    }
+  }
+
+  /**
+   * Re-reads history depth. Called from event handlers — page switch, after a
+   * write, after a step — never from an effect: the initial value arrives as a
+   * prop from the server, which is how every other server-known value here
+   * (initialPages, initialWpUrl) is seeded.
+   */
+  const refreshHistory = useCallback(
+    async (slug: string) => {
+      try {
+        setHistory(await getHistoryStateAction({ siteId, slug }));
+      } catch {
+        // A failed count must not break editing — leave the buttons as they were.
+      }
+    },
+    [siteId],
+  );
+
+  /** Shared by both toolbar buttons and the chat "undo" keyword. */
+  async function stepHistoryBy(direction: "undo" | "redo") {
+    if (stepping) return;
+    setStepping(true);
+    try {
+      const act = direction === "undo" ? undoPageAction : redoPageAction;
+      const result = await act({ siteId, slug: activeSlug });
+      if (result.ok) {
+        setHistory(result.state);
+        /*
+         * Re-read the content and repaint from local state. router.refresh()
+         * alone is NOT enough and used to be all this did: `content` is
+         * useState(initialContent), so a new initialContent prop from the
+         * refreshed server component is ignored after mount. The step landed
+         * in the database while the canvas kept showing the old version —
+         * the buttons flipped, nothing visibly changed.
+         */
+        const refreshed = await listPagesAction(siteId);
+        setPages(refreshed);
+        setContent(refreshed.find((p) => p.slug === activeSlug)?.content ?? null);
+        say(direction === "undo" ? "Stepped back one version." : "Stepped forward one version.");
+      } else {
+        setHistory(await getHistoryStateAction({ siteId, slug: activeSlug }));
+        say(result.error);
+      }
+    } finally {
+      setStepping(false);
+    }
+  }
 
   /**
    * Switches which page is being edited AND repaints the canvas to match.
@@ -141,6 +297,8 @@ export function BuilderApp({
     const list = known ?? pages;
     const page = list.find((p) => p.slug === slug);
     setContent(page?.content ?? null);
+    // History is per page, so the buttons have to follow the switch.
+    void refreshHistory(slug);
   }
 
   /**
@@ -216,6 +374,8 @@ export function BuilderApp({
       const refreshed = await listPagesAction(siteId);
       setPages(refreshed);
       switchToPage(slug, refreshed);
+      // The write just pushed an undo step and dropped any redo branch.
+      await refreshHistory(slug);
     } catch {
       saved = false;
     }
@@ -269,18 +429,24 @@ export function BuilderApp({
     if (!text || generating) return;
     setDraft("");
 
-    // "undo" is handled here rather than as an intent, because it must never
-    // reach the generator — that is what destroys work.
-    if (/^\s*undo\b/i.test(text)) {
+    // "undo"/"redo" are handled here rather than as intents, because they must
+    // never reach the generator — that is what destroys work. Both delegate to
+    // the same helper the toolbar buttons use, so the two routes cannot drift.
+    const stepWord = text.match(/^\s*(undo|redo)\b/i);
+    if (stepWord) {
       setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
       remember("user", text);
-      const result = await undoPageAction({ siteId, slug: activeSlug });
-      if (result.ok) {
-        say("Put back the previous version. Reloading…");
-        router.refresh();
-      } else {
-        say(result.error);
-      }
+      await stepHistoryBy(stepWord[1].toLowerCase() as "undo" | "redo");
+      return;
+    }
+
+    // The confirmation the blocked-export message tells the user to type. A
+    // typed phrase rather than a button, so overwriting someone's WordPress
+    // edit can't happen through a mis-click.
+    if (/^\s*overwrite\s+wordpress\b/i.test(text)) {
+      setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
+      remember("user", text);
+      await onExport(true);
       return;
     }
 
@@ -342,12 +508,12 @@ export function BuilderApp({
     await clearBuilderMessagesAction(siteId).catch(() => {});
   }
 
-  async function onExport() {
+  async function onExport(force = false) {
     if (busy) return;
     setBusy("export");
-    say("Exporting to WordPress…");
+    say(force ? "Overwriting WordPress…" : "Exporting to WordPress…");
     try {
-      const result = await exportToWordPressAction(smbId);
+      const result = await exportToWordPressAction(smbId, force);
       if (result.ok) {
         setWpUrl(result.url);
         say(
@@ -355,6 +521,19 @@ export function BuilderApp({
             ? `Installed WordPress and pushed your homepage. It's live at ${result.pageUrl}`
             : `Updated your WordPress site at ${result.pageUrl}`,
         );
+        await refreshSync();
+      } else if ("blocked" in result) {
+        /*
+         * Refused rather than failed. Surfacing the pages involved and leaving
+         * the banner to offer Pull is the whole point: the old behaviour pushed
+         * straight over a wp-admin edit with no mention of it.
+         */
+        say(
+          `${result.error} Use the notice above to pull those changes in first, ` +
+            `or say "overwrite wordpress" if you're sure.`,
+        );
+        setSyncDismissed(false);
+        await refreshSync();
       } else {
         say(`Couldn't export: ${result.error}`);
       }
@@ -435,6 +614,36 @@ export function BuilderApp({
             </select>
           )}
         </div>
+
+        {/*
+          Undo/redo sit next to the page switcher rather than with the publish
+          actions, because they act on the document being edited. Disabled
+          strictly from server-reported depth, so a button is never offered
+          when the step behind it would fail.
+        */}
+        <div className={styles.historyGroup}>
+          <button
+            type="button"
+            className={styles.historyBtn}
+            onClick={() => void stepHistoryBy("undo")}
+            disabled={!history.canUndo || stepping || generating}
+            title={history.canUndo ? "Undo the last change" : "Nothing to undo on this page yet"}
+            aria-label="Undo"
+          >
+            <UndoIcon />
+          </button>
+          <button
+            type="button"
+            className={styles.historyBtn}
+            onClick={() => void stepHistoryBy("redo")}
+            disabled={!history.canRedo || stepping || generating}
+            title={history.canRedo ? "Redo the change you undid" : "Nothing to redo — undo something first"}
+            aria-label="Redo"
+          >
+            <RedoIcon />
+          </button>
+        </div>
+
         <div className={styles.viewportToggle}>
           <button
             type="button"
@@ -469,7 +678,17 @@ export function BuilderApp({
               {busy === "wpadmin" ? "Opening…" : "WP Admin ↗"}
             </button>
           )}
-          <button type="button" className={styles.btn} onClick={onExport} disabled={busy !== null}>
+          <button
+            type="button"
+            className={styles.btn}
+            /*
+             * Must NOT be `onClick={onExport}`: React would pass the click
+             * event as the `force` argument, and a MouseEvent is truthy — so
+             * every ordinary click would have bypassed the overwrite guard.
+             */
+            onClick={() => void onExport(false)}
+            disabled={busy !== null}
+          >
             {busy === "export" ? "Exporting…" : "Export to WordPress"}
           </button>
           <button
@@ -482,6 +701,17 @@ export function BuilderApp({
           </button>
         </div>
       </div>
+
+      {syncReport && !syncDismissed && (
+        <SyncBanner
+          report={syncReport}
+          busy={syncBusy}
+          onPull={(slug) => void onPull(slug)}
+          onResolve={(slug, keep) => void onResolve(slug, keep)}
+          onOpenWpAdmin={() => void onOpenWpAdmin()}
+          onDismiss={() => setSyncDismissed(true)}
+        />
+      )}
 
       <div className={styles.panes}>
         <div
@@ -563,7 +793,15 @@ export function BuilderApp({
         >
           <div className={styles.canvasScroll}>
             <div
-              className={`${styles.canvasFrame} ${viewport === "mobile" ? styles.mobile : viewport === "tablet" ? styles.tablet : ""}`}
+              // Desktop needs no modifier: the frame is uncapped by default and
+              // simply fills the pane, docked assistant or not.
+              className={`${styles.canvasFrame} ${
+                viewport === "mobile"
+                  ? styles.mobile
+                  : viewport === "tablet"
+                    ? styles.tablet
+                    : ""
+              }`}
             >
               <div className={styles.pvNav}>
                 <div className={styles.pvBrand}>{siteName}</div>
@@ -575,24 +813,15 @@ export function BuilderApp({
               </div>
 
               {content ? (
-                <div className={`${styles.pvHero} ${styles.pvSelected}`}>
-                  <div>
-                    <span className={styles.pvEyebrow}>{content.eyebrow}</span>
-                    <h1>{content.heading}</h1>
-                    <p>{content.body}</p>
-                    <div className={styles.pvActions}>
-                      <span className={`${styles.pvBtn} ${styles.primary}`}>
-                        {content.primaryLabel}
-                      </span>
-                      <span className={`${styles.pvBtn} ${styles.outline}`}>
-                        {content.outlineLabel}
-                      </span>
-                    </div>
-                  </div>
-                  <div className={styles.pvMedia}>
-                    <div className={styles.pvFrame} />
-                    <div className={styles.pvBadge}>✓ Licensed &amp; Insured</div>
-                  </div>
+                /*
+                 * The selection outline and section label stay OUT here as app
+                 * chrome; only the page itself goes in the frame. The markup is
+                 * the serializer's, byte for byte what Export writes to
+                 * WordPress, so the canvas can no longer disagree with the
+                 * exported site.
+                 */
+                <div className={styles.pvSelected}>
+                  <PreviewFrame html={schemaToGutenberg(heroContentToSchema(content))} />
                 </div>
               ) : (
                 <div className={styles.emptyCanvas}>

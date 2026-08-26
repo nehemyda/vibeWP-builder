@@ -1,4 +1,16 @@
-import type { HeroContent } from "@/lib/mock-ai";
+import type { HeroContent, HeroImage } from "@/lib/mock-ai";
+
+function extractImage(raw: unknown): HeroImage | null {
+  if (!raw || typeof raw !== "object") return null;
+  const img = raw as Record<string, unknown>;
+  if (typeof img.url !== "string" || !img.url) return null;
+  return {
+    url: img.url,
+    alt: typeof img.alt === "string" ? img.alt : "",
+    photographer: typeof img.photographer === "string" ? img.photographer : undefined,
+    photographerUrl: typeof img.photographerUrl === "string" ? img.photographerUrl : undefined,
+  };
+}
 
 export function extractHeroContent(schemaJson: unknown): HeroContent | null {
   if (!schemaJson || typeof schemaJson !== "object") return null;
@@ -16,5 +28,6 @@ export function extractHeroContent(schemaJson: unknown): HeroContent | null {
     body: String(p.body ?? ""),
     primaryLabel: actions[0]?.label ?? "Get Started",
     outlineLabel: actions[1]?.label ?? "Learn More",
+    image: extractImage(p.image),
   };
 }

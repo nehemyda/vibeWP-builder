@@ -33,5 +33,21 @@ export async function requireSiteAccess(smbId: string) {
   const profile = await db.query.profiles.findFirst({
     where: (p, { eq }) => eq(p.id, user.id),
   });
+
+  /**
+   * Platform admins reach every site.
+   *
+   * This mirrors canEditSite(), which has granted super_admin write access to
+   * any site since it was written. Without the same branch here, the two
+   * disagreed: every builder ACTION was permitted while the builder PAGE
+   * redirected away, so the "Edit site" links on three admin screens looked
+   * live and silently bounced to /admin.
+   *
+   * Deliberately placed after the ownership checks so the common paths — the
+   * client, their agency — never pay for this extra profile lookup. It reuses
+   * the query that the redirect below already needed.
+   */
+  if (profile?.role === "super_admin") return { user, site };
+
   redirect(roleHomePath(profile?.role ?? "smb_owner"));
 }

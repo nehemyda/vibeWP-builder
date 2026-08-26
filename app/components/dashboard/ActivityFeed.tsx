@@ -32,6 +32,18 @@ export const ACTION_LABEL: Record<string, string> = {
   "section.edited": "edited section",
   "smtp.edited": "edited SMTP settings",
   "smtp.test_sent": "sent a test email",
+  // Builder and WordPress actions. These already existed in the log but had no
+  // labels, so they rendered as raw keys ("wordpress.exported").
+  // Rendered as "<actor> <label> — <target>", so these read as verb + object
+  // with no trailing preposition, matching every other entry above.
+  "page.created": "created a page",
+  "page.edited": "edited a page",
+  "page.reverted": "reverted a page",
+  "wordpress.provisioned": "set up WordPress",
+  "wordpress.exported": "exported to WordPress",
+  "site.published": "published site",
+  "impersonation.started": "started viewing as",
+  "impersonation.stopped": "stopped viewing as",
 };
 
 /** Renders a list of activity_log rows as "Actor <verb> Target — time". */
@@ -61,6 +73,22 @@ export function ActivityFeed({ entries }: { entries: Entry[] }) {
           <span>
             <strong>{e.actorName}</strong> {ACTION_LABEL[e.action] ?? e.action}
             {e.targetLabel ? <> — {e.targetLabel}</> : null}
+            {/*
+              The row above names the account the action ran as. When that was
+              an admin wearing someone else's session, saying so here is the
+              whole point of the impersonator columns — the data existing in the
+              database is no use if the log still reads as the client acting
+              alone. Suppressed on the impersonation start/stop rows themselves,
+              where actor and impersonator are the same person.
+            */}
+            {e.impersonatorName && !e.action.startsWith("impersonation.") ? (
+              <em
+                className={shell.rowSub}
+                style={{ marginLeft: "0.45rem", fontStyle: "normal" }}
+              >
+                (via {e.impersonatorName}, impersonating)
+              </em>
+            ) : null}
           </span>
           <span className={shell.rowSub}>
             {e.createdAt.toLocaleDateString()} {e.createdAt.toLocaleTimeString()}
