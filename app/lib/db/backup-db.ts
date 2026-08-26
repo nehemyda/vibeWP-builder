@@ -75,22 +75,26 @@ async function main() {
     ...present.filter((t) => !RESTORE_ORDER.includes(t)),
   ];
 
-  const takenAt = new Date().toISOString();
   const dump: Record<string, unknown[]> = {};
   const redactedHits: string[] = [];
   const lines: string[] = [
     "-- VibeWP data-only backup.",
-    `-- Taken: ${takenAt}`,
     "-- Restore onto a freshly migrated schema (schema.ts + migrate-batch*.ts).",
     "-- Credentials are redacted — re-enter them via the admin UI after restoring.",
+    "-- Deliberately carries no timestamp: identical data must produce an identical",
+    "-- file, so a scheduled backup only commits when something actually changed.",
+    "-- Use `git log` on this file for when each version was captured.",
     "",
     "BEGIN;",
     "",
   ];
 
   for (const table of ordered) {
+    // Ordered by the whole row so the output is byte-stable between runs —
+    // Postgres gives no ordering guarantee otherwise, and a shuffled dump
+    // would look like a change to git every time.
     const rows = await sql.unsafe<Record<string, unknown>[]>(
-      `SELECT * FROM public.${ident(table)}`,
+      `SELECT * FROM public.${ident(table)} t ORDER BY (to_jsonb(t.*))::text`,
     );
 
     const redactCols = REDACTED[table] ?? [];
@@ -127,10 +131,7 @@ async function main() {
   const outDir = join(process.cwd(), "..", "backups");
   mkdirSync(outDir, { recursive: true });
 
-  writeFileSync(
-    join(outDir, "db-data.json"),
-    JSON.stringify({ takenAt, tables: dump }, null, 2) + "\n",
-  );
+  writeFileSync(join(outDir, "db-data.json"), JSON.stringify({ tables: dump }, null, 2) + "\n");
   writeFileSync(join(outDir, "db-data.sql"), lines.join("\n"));
 
   const total = Object.values(dump).reduce((n, rows) => n + rows.length, 0);
