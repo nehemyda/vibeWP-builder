@@ -127,31 +127,41 @@
 }
 
 /*
- * The assistant panel is pinned to the right and sits ON TOP of the
- * preview rather than taking a column of its own. The preview keeps its
- * full width underneath, so collapsing the chat reveals more of the site
- * instead of reflowing it.
+ * Default: the assistant is a real second column on the right. The preview
+ * shares the width with it, so nothing is hidden behind it.
+ *
+ * `order` keeps it visually right while leaving the preview first in the
+ * DOM, which is the sensible reading order.
  */
 .chatPane {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
+  order: 2;
   width: 380px;
   max-width: 100%;
-  z-index: 20;
   flex: none;
   border-left: 1px solid var(--line);
   background: var(--surface);
   display: flex;
   flex-direction: column;
-  box-shadow: -14px 0 40px rgba(19, 25, 34, 0.1);
   transition: transform 180ms ease, opacity 180ms ease;
 }
+
+/*
+ * Pinned: lifted out of the flow to float ON TOP of the preview, so the
+ * preview gets the full width underneath. Useful for judging the design
+ * full-bleed while still being able to talk to the assistant.
+ */
+.chatPane.pinned {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  box-shadow: -14px 0 40px rgba(19, 25, 34, 0.14);
+}
+
 .chatPane.collapsed {
-  transform: translateX(100%);
-  opacity: 0;
-  pointer-events: none;
+  display: none;
 }
 
 .chatHeader {
@@ -174,15 +184,29 @@
   border: 1px solid var(--line);
   background: transparent;
   border-radius: 8px;
-  width: 26px;
-  height: 26px;
-  line-height: 1;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   color: var(--faint);
-  font-size: 0.85rem;
+  padding: 0;
 }
 .iconBtn:hover {
   color: var(--ink);
+  background: var(--surface-2, #f4f6f8);
+}
+.iconBtn svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+/* Pin reads as engaged when the panel is floating. */
+.iconBtn.on {
+  color: var(--surface, #fff);
+  background: var(--ink, #131922);
+  border-color: var(--ink, #131922);
 }
 
 /* Collapsed state: a single launcher in the bottom-right corner. */
@@ -207,8 +231,13 @@
   box-shadow: 0 10px 26px rgba(19, 25, 34, 0.28);
 }
 .chatFabIcon {
-  font-size: 1.05rem;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+.chatFabIcon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 .chatScroll {
   flex: 1;

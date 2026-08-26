@@ -38,6 +38,32 @@ function nextId() {
   return `m_${idCounter}`;
 }
 
+/* Inline so they inherit currentColor and need no icon dependency. */
+const PinIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
+    <path d="M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5Z" strokeLinejoin="round" />
+    <path d="M12 14v6" strokeLinecap="round" />
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
+    <path d="M4 7h16M10 7V5h4v2M6 7l1 13h10l1-13" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" aria-hidden="true">
+    <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+  </svg>
+);
+
+const SparkIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9L12 2.5Z" />
+  </svg>
+);
+
 export function BuilderApp({
   siteId,
   smbId,
@@ -85,6 +111,8 @@ export function BuilderApp({
   const [generating, setGenerating] = useState(false);
   const [viewport, setViewport] = useState<"desktop" | "mobile">("desktop");
   const [chatOpen, setChatOpen] = useState(true);
+  /** Off by default: docked as a second column. Pinning floats it over the preview. */
+  const [pinned, setPinned] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState<"export" | "publish" | null>(null);
   const [wpUrl, setWpUrl] = useState<string | null>(null);
@@ -396,10 +424,24 @@ export function BuilderApp({
       </div>
 
       <div className={styles.panes}>
-        <div className={`${styles.chatPane} ${chatOpen ? "" : styles.collapsed}`}>
+        <div
+          className={`${styles.chatPane} ${chatOpen ? "" : styles.collapsed} ${
+            pinned ? styles.pinned : ""
+          }`}
+        >
           <div className={styles.chatHeader}>
             <span>Assistant</span>
             <div className={styles.chatHeaderActions}>
+              <button
+                type="button"
+                className={`${styles.iconBtn} ${pinned ? styles.on : ""}`}
+                title={pinned ? "Unpin — show side by side" : "Pin — float over the preview"}
+                aria-label={pinned ? "Unpin assistant" : "Pin assistant over the preview"}
+                aria-pressed={pinned}
+                onClick={() => setPinned((v) => !v)}
+              >
+                <PinIcon />
+              </button>
               <button
                 type="button"
                 className={styles.iconBtn}
@@ -407,7 +449,7 @@ export function BuilderApp({
                 aria-label="Clear conversation"
                 onClick={onClearChat}
               >
-                ⌫
+                <TrashIcon />
               </button>
               <button
                 type="button"
@@ -416,7 +458,7 @@ export function BuilderApp({
                 aria-label="Close assistant"
                 onClick={() => setChatOpen(false)}
               >
-                ✕
+                <CloseIcon />
               </button>
             </div>
           </div>
@@ -510,7 +552,9 @@ export function BuilderApp({
             onClick={() => setChatOpen(true)}
             aria-label="Open assistant"
           >
-            <span className={styles.chatFabIcon}>✦</span>
+            <span className={styles.chatFabIcon}>
+              <SparkIcon />
+            </span>
             Ask AI
           </button>
         )}
