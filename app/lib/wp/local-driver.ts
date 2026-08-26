@@ -147,6 +147,13 @@ export async function provisionSite(opts: {
   });
   await wp(["theme", "activate", "vibewp", `--path=${installPath}`]);
 
+  // WordPress installs with "plain" permalinks (?page_id=N), which means a
+  // second page is not reachable at /its-slug/ — the front page is served
+  // instead. Every page but the homepage is effectively invisible without
+  // this, so it is part of provisioning rather than a later nicety.
+  await wp(["rewrite", "structure", "/%postname%/", `--path=${installPath}`]);
+  await wp(["rewrite", "flush", `--path=${installPath}`]);
+
   // Only write credentials for an install we actually created — otherwise we
   // would overwrite the real password with one that was never set.
   if (!installed) {

@@ -4,9 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./builder.module.css";
 import { generateHeroContent, heroContentToSchema, type HeroContent } from "@/lib/mock-ai";
-import { saveGeneratedSchema } from "@/app/actions/sites";
 import { generateHeroContentAction } from "@/app/actions/ai-generate";
 import { exportToWordPressAction, publishSiteAction } from "@/app/actions/wordpress";
+import {
+  savePageSchemaAction,
+  listPagesAction,
+  undoPageAction,
+  type PageSummary,
+} from "@/app/actions/pages";
+import { detectIntent } from "@/lib/page-intent";
 
 type ChatMessage = {
   id: string;
@@ -30,6 +36,7 @@ function nextId() {
 export function BuilderApp({
   siteId,
   smbId,
+  initialPages,
   builderPath,
   backPath,
   backLabel,
@@ -40,6 +47,7 @@ export function BuilderApp({
 }: {
   siteId: string;
   smbId: string;
+  initialPages: PageSummary[];
   builderPath: string;
   backPath: string;
   backLabel: string;
@@ -72,6 +80,9 @@ export function BuilderApp({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState<"export" | "publish" | null>(null);
   const [wpUrl, setWpUrl] = useState<string | null>(null);
+  const [pages, setPages] = useState<PageSummary[]>(initialPages);
+  /** Which page generation writes to. Everything used to assume "home". */
+  const [activeSlug, setActiveSlug] = useState("home");
   const ran = useRef(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
@@ -80,7 +91,20 @@ export function BuilderApp({
    * and by the chat box. `replaceHistory` distinguishes them: autostart owns
    * the whole transcript, whereas a chat message appends to it.
    */
-  async function generate(userPrompt: string, replaceHistory: boolean) {
+  async function generate(
+    userPrompt: string,
+    replaceHistory: boolean,
+    target?: { slug: string; title?: string },
+    /**
+     * What actually goes to the model, when it differs from what the user
+     * typed. "create services page" is an instruction, not a description of
+     * the business — sending it verbatim produced a page about building
+     * service pages. The caller supplies real context instead.
+     */
+    promptOverride?: string,
+  ) {
+    const slug = target?.slug ?? activeSlug;
+    const aiPrompt = promptOverride ?? userPrompt;
     setGenerating(true);
     const userMessage: ChatMessage = { id: nextId(), role: "user", text: userPrompt, steps: [] };
     setMessages((prev) => (replaceHistory ? [userMessage] : [...prev, userMessage]));
@@ -111,7 +135,7 @@ export function BuilderApp({
       setTimeout(resolve, 500 * (GENERATION_STEPS.length + 1)),
     );
     const [generated] = await Promise.all([
-      generateHeroContentAction(userPrompt).catch(() => generateHeroContent(userPrompt)),
+      generateHeroContentAction(aiPrompt).catch(() => generateHeroContent(aiPrompt)),
       minDelay,
     ]);
 
@@ -122,20 +146,31 @@ export function BuilderApp({
     // to be silent, leaving the canvas showing work that was already lost.
     let saved = true;
     try {
-      await saveGeneratedSchema(siteId, heroContentToSchema(generated));
+      await savePageSchemaAction({
+        siteId,
+        slug,
+        title: target?.title,
+        schema: heroContentToSchema(generated),
+        reason: userPrompt,
+      });
+      setPages(await listPagesAction(siteId));
+      setActiveSlug(slug);
     } catch {
       saved = false;
     }
 
+    const pageLabel = slug === "home" ? "homepage" : `${slug} page`;
     setMessages((prev) =>
       prev.map((m) =>
         m.id === aiMessageId
           ? {
               ...m,
               text: saved
-                ? replaceHistory
-                  ? "Here's a first pass at your homepage."
-                  : "Updated your homepage — tell me what to change next."
+                ? target
+                  ? `Created your ${pageLabel}. You're now editing it — say "go to home page" to switch back.`
+                  : replaceHistory
+                    ? "Here's a first pass at your homepage."
+                    : `Updated your ${pageLabel}. Say "undo" to put back the previous version.`
                 : "I built this, but couldn't save it. Your changes may be lost if you reload.",
             }
           : m,
@@ -171,11 +206,60 @@ export function BuilderApp({
     chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight });
   }, [messages]);
 
-  function onSendMessage(e: React.FormEvent) {
+  async function onSendMessage(e: React.FormEvent) {
     e.preventDefault();
     const text = draft.trim();
     if (!text || generating) return;
     setDraft("");
+
+    // "undo" is handled here rather than as an intent, because it must never
+    // reach the generator — that is what destroys work.
+    if (/^\s*undo\b/i.test(text)) {
+      setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
+      const result = await undoPageAction({ siteId, slug: activeSlug });
+      if (result.ok) {
+        say("Put back the previous version. Reloading…");
+        router.refresh();
+      } else {
+        say(result.error);
+      }
+      return;
+    }
+
+    const intent = detectIntent(text);
+
+    if (intent.kind === "switch_page") {
+      setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
+      const found = pages.find((p) => p.slug === intent.slug);
+      if (found) {
+        setActiveSlug(found.slug);
+        say(`Now editing the ${found.title} page. Tell me what it should say.`);
+      } else {
+        say(
+          `There's no ${intent.slug} page yet — say "create ${intent.slug} page" and I'll make one.`,
+        );
+      }
+      return;
+    }
+
+    if (intent.kind === "create_page") {
+      if (pages.some((p) => p.slug === intent.slug)) {
+        setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
+        setActiveSlug(intent.slug);
+        say(`That page already exists — switched to it rather than overwriting it.`);
+        return;
+      }
+      // Describe the business to the model, not the command that was typed.
+      // Whatever is on the current page is the best available summary of
+      // what this business actually does.
+      const businessContext = content?.body ?? content?.heading ?? "";
+      const contextualPrompt = businessContext
+        ? `Write the "${intent.title}" page for ${siteName}. The business is described as: ${businessContext}. Focus the copy on what this page is for, not on website building.`
+        : `Write the "${intent.title}" page for ${siteName}.`;
+      void generate(text, false, { slug: intent.slug, title: intent.title }, contextualPrompt);
+      return;
+    }
+
     void generate(text, false);
   }
 
@@ -233,6 +317,27 @@ export function BuilderApp({
         </a>
         <div className={styles.topMid}>
           <span className={styles.siteName}>{siteName}</span>
+          {pages.length > 1 && (
+            <select
+              aria-label="Page being edited"
+              value={activeSlug}
+              onChange={(e) => setActiveSlug(e.target.value)}
+              style={{
+                marginLeft: "0.6rem",
+                padding: "0.25rem 0.5rem",
+                borderRadius: 8,
+                border: "1px solid var(--line, #dbdee3)",
+                fontSize: "0.82rem",
+                background: "transparent",
+              }}
+            >
+              {pages.map((p) => (
+                <option key={p.id} value={p.slug}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         <div className={styles.viewportToggle}>
           <button

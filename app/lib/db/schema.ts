@@ -114,7 +114,30 @@ export const sitePages = pgTable("site_pages", {
     .notNull()
     .references(() => sites.id),
   slug: text("slug").notNull().default("home"),
+  /** Human label for the page; falls back to the slug when absent. */
+  title: text("title"),
   schemaJson: jsonb("schema_json").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/**
+ * A snapshot of a page taken immediately BEFORE it is overwritten.
+ *
+ * Generation replaces a page's whole schema, so without this a single
+ * mistaken prompt destroys work with no way back. Every write records what
+ * was there first, which is what makes undo possible.
+ */
+export const pageRevisions = pgTable("page_revisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  pageId: uuid("page_id")
+    .notNull()
+    .references(() => sitePages.id),
+  schemaJson: jsonb("schema_json").notNull(),
+  /** What caused the change, e.g. the prompt text — so history is legible. */
+  reason: text("reason"),
+  createdByUserId: uuid("created_by_user_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

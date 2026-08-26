@@ -32,9 +32,19 @@ export async function exportToWordPressAction(smbId: string): Promise<ExportResu
     return { ok: false, error: available.reason ?? "WordPress tooling unavailable." };
   }
 
-  const page = await db.query.sitePages.findFirst({ where: eq(sitePages.siteId, site.id) });
-  const blockMarkup = schemaToGutenberg(page?.schemaJson);
-  if (!blockMarkup) {
+  const allPages = await db
+    .select()
+    .from(sitePages)
+    .where(eq(sitePages.siteId, site.id))
+    .orderBy(sitePages.createdAt);
+
+  // Only pages with real content are pushed; an empty page would blank a
+  // live one on the WordPress side.
+  const exportable = allPages
+    .map((p) => ({ page: p, markup: schemaToGutenberg(p.schemaJson) }))
+    .filter((p) => p.markup.length > 0);
+
+  if (exportable.length === 0) {
     return {
       ok: false,
       error: "There's nothing to export yet — describe the business in the chat first.",
@@ -102,13 +112,20 @@ export async function exportToWordPressAction(smbId: string): Promise<ExportResu
       return { ok: false, error: "Installation record is missing its path." };
     }
 
-    const pushed = await upsertPage({
-      installPath: installation.installPath,
-      slug: page?.slug ?? "home",
-      title: site.name,
-      blockMarkup,
-      asFrontPage: (page?.slug ?? "home") === "home",
-    });
+    // Every page is reconciled by slug — created if absent, updated if not.
+    let frontPageUrl = "";
+    for (const { page, markup } of exportable) {
+      const isHome = page.slug === "home";
+      const pushed = await upsertPage({
+        installPath: installation.installPath,
+        slug: page.slug,
+        title: isHome ? site.name : (page.title ?? page.slug),
+        blockMarkup: markup,
+        asFrontPage: isHome,
+      });
+      if (isHome || !frontPageUrl) frontPageUrl = pushed.url;
+    }
+    const pushed = { url: frontPageUrl };
 
     await db
       .update(siteInstallations)

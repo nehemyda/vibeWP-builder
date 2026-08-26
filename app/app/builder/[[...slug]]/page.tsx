@@ -40,9 +40,14 @@ export default async function BuilderPage({
     redirect(`${builderPath}${query}`);
   }
 
-  const page = await db.query.sitePages.findFirst({
-    where: eq(sitePages.siteId, site.id),
-  });
+  const allPages = await db
+    .select()
+    .from(sitePages)
+    .where(eq(sitePages.siteId, site.id))
+    .orderBy(sitePages.createdAt);
+
+  // The home page is what the canvas shows on load; the switcher moves off it.
+  const page = allPages.find((p) => p.slug === "home") ?? allPages[0];
 
   const initialContent = extractHeroContent(page?.schemaJson);
 
@@ -72,6 +77,17 @@ export default async function BuilderPage({
     <BuilderApp
       siteId={site.id}
       smbId={site.smbId ?? ""}
+      initialPages={allPages.map((p) => ({
+        id: p.id,
+        slug: p.slug,
+        title:
+          p.title ??
+          p.slug
+            .split("-")
+            .filter(Boolean)
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(" "),
+      }))}
       builderPath={builderPath}
       backPath={backPath}
       backLabel={backLabel}
