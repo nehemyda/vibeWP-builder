@@ -336,6 +336,9 @@ body.yp-page {
 
 @media (max-width: 880px) {
   .yp-page .yp-hero__grid { grid-template-columns: 1fr; gap: 2.5rem; }
+  /* Image above the copy once the columns collapse, so a phone leads with
+     the visual rather than a wall of text. */
+  .yp-page .yp-hero__media { order: -1; }
   .yp-page .yp-hero__badge { left: 1rem; }
   .yp-page .yp-hero__stats { grid-template-columns: 1fr; gap: 1.4rem; }
 }

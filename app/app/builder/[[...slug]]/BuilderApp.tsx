@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import styles from "./builder.module.css";
 import { generateHeroContent, heroContentToSchema, type HeroContent } from "@/lib/mock-ai";
 import { generateHeroContentAction } from "@/app/actions/ai-generate";
-import { exportToWordPressAction, publishSiteAction } from "@/app/actions/wordpress";
+import {
+  exportToWordPressAction,
+  publishSiteAction,
+  openWordPressAdminAction,
+} from "@/app/actions/wordpress";
 import {
   savePageSchemaAction,
   listPagesAction,
@@ -109,12 +113,12 @@ export function BuilderApp({
   });
   const [content, setContent] = useState<HeroContent | null>(initialContent);
   const [generating, setGenerating] = useState(false);
-  const [viewport, setViewport] = useState<"desktop" | "mobile">("desktop");
+  const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
   const [chatOpen, setChatOpen] = useState(true);
   /** Off by default: docked as a second column. Pinning floats it over the preview. */
   const [pinned, setPinned] = useState(false);
   const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState<"export" | "publish" | null>(null);
+  const [busy, setBusy] = useState<"export" | "publish" | "wpadmin" | null>(null);
   const [wpUrl, setWpUrl] = useState<string | null>(null);
   const [pages, setPages] = useState<PageSummary[]>(initialPages);
   /** Which page generation writes to. Everything used to assume "home". */
@@ -358,6 +362,25 @@ export function BuilderApp({
     }
   }
 
+  async function onOpenWpAdmin() {
+    if (busy) return;
+    setBusy("wpadmin");
+    try {
+      const result = await openWordPressAdminAction(smbId);
+      if (result.ok) {
+        // Opened from the click handler so the browser treats it as
+        // user-initiated rather than a popup.
+        window.open(result.url, "_blank", "noopener");
+      } else {
+        say(`Couldn't open WordPress admin: ${result.error}`);
+      }
+    } catch (err) {
+      say(`Couldn't open WordPress admin: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function onPublish() {
     if (busy) return;
     setBusy("publish");
@@ -408,12 +431,21 @@ export function BuilderApp({
         </div>
         <div className={styles.viewportToggle}>
           <button
+            type="button"
             className={viewport === "desktop" ? styles.active : ""}
             onClick={() => setViewport("desktop")}
           >
             🖥 Desktop
           </button>
           <button
+            type="button"
+            className={viewport === "tablet" ? styles.active : ""}
+            onClick={() => setViewport("tablet")}
+          >
+            ▭ Tablet
+          </button>
+          <button
+            type="button"
             className={viewport === "mobile" ? styles.active : ""}
             onClick={() => setViewport("mobile")}
           >
@@ -425,6 +457,11 @@ export function BuilderApp({
             <a className={styles.btn} href={wpUrl} target="_blank" rel="noreferrer">
               View site ↗
             </a>
+          )}
+          {wpUrl && (
+            <button type="button" className={styles.btn} onClick={onOpenWpAdmin} disabled={busy !== null}>
+              {busy === "wpadmin" ? "Opening…" : "WP Admin ↗"}
+            </button>
           )}
           <button type="button" className={styles.btn} onClick={onExport} disabled={busy !== null}>
             {busy === "export" ? "Exporting…" : "Export to WordPress"}
@@ -520,7 +557,7 @@ export function BuilderApp({
         >
           <div className={styles.canvasScroll}>
             <div
-              className={`${styles.canvasFrame} ${viewport === "mobile" ? styles.mobile : ""}`}
+              className={`${styles.canvasFrame} ${viewport === "mobile" ? styles.mobile : viewport === "tablet" ? styles.tablet : ""}`}
             >
               <div className={styles.pvNav}>
                 <div className={styles.pvBrand}>{siteName}</div>

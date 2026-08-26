@@ -10,6 +10,7 @@ import {
   upsertPage,
   driverAvailable,
   ensureSiteServing,
+  createAdminLoginUrl,
 } from "@/lib/wp/local-driver";
 import { logActivity } from "@/lib/activity";
 
@@ -171,6 +172,39 @@ export async function exportToWordPressAction(smbId: string): Promise<ExportResu
     }
     return { ok: false, error: message.split("\n")[0].slice(0, 300) };
   }
+}
+
+export type AdminLoginResult = { ok: true; url: string } | { ok: false; error: string };
+
+/**
+ * Returns a URL that opens wp-admin already signed in, so editing the site
+ * in WordPress does not require a password nobody was ever shown.
+ */
+export async function openWordPressAdminAction(smbId: string): Promise<AdminLoginResult> {
+  const { site } = await requireSiteAccess(smbId);
+
+  const installation = await db.query.siteInstallations.findFirst({
+    where: eq(siteInstallations.siteId, site.id),
+  });
+  if (!installation?.installPath || !installation.url) {
+    return { ok: false, error: "Export to WordPress first — there's no site yet." };
+  }
+
+  const serving = await ensureSiteServing({
+    installPath: installation.installPath,
+    port: installation.port ?? 0,
+  });
+  if (!serving.serving) {
+    return { ok: false, error: serving.error ?? "Could not start the WordPress server." };
+  }
+
+  const loginUrl = await createAdminLoginUrl({
+    installPath: installation.installPath,
+    url: installation.url,
+  });
+  if (!loginUrl) return { ok: false, error: "Could not create a login link." };
+
+  return { ok: true, url: loginUrl };
 }
 
 export type PublishResult = { ok: true; url: string } | { ok: false; error: string };

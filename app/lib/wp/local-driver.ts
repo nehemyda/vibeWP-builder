@@ -131,6 +131,80 @@ export async function ensureSiteServing(opts: {
   return { serving: false, error: `Server did not start on port ${port}` };
 }
 
+/**
+ * Installs a must-use plugin that accepts a single-use login token.
+ *
+ * Nobody knows the generated admin password — it is written to a file next
+ * to the install and never shown — so without this there is no practical
+ * way into wp-admin. The token is minted server-side, expires in 60
+ * seconds, is deleted on first use, and the plugin refuses any request that
+ * did not come from the loopback interface, so it cannot act as a remote
+ * back door if this install is ever exposed.
+ */
+async function installAutoLoginPlugin(installPath: string): Promise<void> {
+  const dir = join(installPath, "wp-content", "mu-plugins");
+  await mkdir(dir, { recursive: true });
+
+  const php = `<?php
+/**
+ * Plugin Name: VibeWP one-time admin login
+ * Description: Lets the VibeWP builder open wp-admin without handling a password.
+ */
+if ( ! defined( 'ABSPATH' ) ) { exit; }
+
+add_action( 'init', function () {
+    if ( empty( $_GET['vibewp_login'] ) ) { return; }
+
+    // Loopback only. This is a local development convenience and must never
+    // authenticate a remote caller.
+    $remote = isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : '';
+    if ( ! in_array( $remote, array( '127.0.0.1', '::1' ), true ) ) { return; }
+
+    $presented = (string) $_GET['vibewp_login'];
+    $expected  = get_transient( 'vibewp_login_token' );
+    if ( ! $expected || ! hash_equals( (string) $expected, $presented ) ) { return; }
+
+    // Single use.
+    delete_transient( 'vibewp_login_token' );
+
+    $user = get_user_by( 'login', 'vibewp' );
+    if ( ! $user ) { return; }
+
+    wp_set_current_user( $user->ID );
+    wp_set_auth_cookie( $user->ID, false );
+    wp_safe_redirect( admin_url() );
+    exit;
+} );
+`;
+
+  await writeFile(join(dir, "vibewp-autologin.php"), php, "utf8");
+}
+
+/**
+ * Mints a one-time token and returns a URL that lands in wp-admin already
+ * signed in. Returns null if the site cannot be reached.
+ */
+export async function createAdminLoginUrl(opts: {
+  installPath: string;
+  url: string;
+}): Promise<string | null> {
+  const { installPath, url } = opts;
+  // Ensure the plugin exists even for installs provisioned before it did.
+  await installAutoLoginPlugin(installPath);
+
+  const token = randomBytes(24).toString("hex");
+  try {
+    await wp([
+      "eval",
+      `set_transient( 'vibewp_login_token', ${JSON.stringify(token)}, 60 );`,
+      `--path=${installPath}`,
+    ]);
+  } catch {
+    return null;
+  }
+  return `${url}/?vibewp_login=${token}`;
+}
+
 export type ProvisionResult = {
   installPath: string;
   url: string;
@@ -234,6 +308,8 @@ export async function provisionSite(opts: {
       "utf8",
     );
   }
+
+  await installAutoLoginPlugin(installPath);
 
   // A site nobody can open is not provisioned, so start serving it here.
   await ensureSiteServing({ installPath, port: effectivePort });
