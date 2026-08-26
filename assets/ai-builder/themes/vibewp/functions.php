@@ -1,23 +1,23 @@
 <?php
 /**
- * PIPEPRO — exported theme bootstrap.
+ * VibeWP — exported theme bootstrap.
  *
  * The only load-bearing logic here is the cascade-layer setup in
- * pipepro_enqueue_styles(). Read the comment there before changing it.
+ * vibewp_enqueue_styles(). Read the comment there before changing it.
  *
- * @package PIPEPRO
+ * @package VibeWP
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'PIPEPRO_VERSION', '1.0.0' );
+define( 'VIBEWP_VERSION', '1.0.0' );
 
 /**
  * Theme supports.
  */
-function pipepro_setup() {
+function vibewp_setup() {
 	add_theme_support( 'wp-block-styles' );
 	add_theme_support( 'responsive-embeds' );
 	add_theme_support( 'editor-styles' );
@@ -31,12 +31,12 @@ function pipepro_setup() {
 
 	register_nav_menus(
 		array(
-			'primary' => __( 'Primary', 'pipepro' ),
-			'footer'  => __( 'Footer', 'pipepro' ),
+			'primary' => __( 'Primary', 'vibewp' ),
+			'footer'  => __( 'Footer', 'vibewp' ),
 		)
 	);
 }
-add_action( 'after_setup_theme', 'pipepro_setup' );
+add_action( 'after_setup_theme', 'vibewp_setup' );
 
 /**
  * Stylesheets, and the cascade layers that make them win.
@@ -58,17 +58,17 @@ add_action( 'after_setup_theme', 'pipepro_setup' );
  * statements may precede it.
  * ─────────────────────────────────────────────────────────────────────
  */
-function pipepro_enqueue_styles() {
+function vibewp_enqueue_styles() {
 
 	// 1. A src-less handle that exists purely to carry the inline layer setup.
-	wp_register_style( 'pipepro-layers', false, array(), PIPEPRO_VERSION );
-	wp_enqueue_style( 'pipepro-layers' );
+	wp_register_style( 'vibewp-layers', false, array(), VIBEWP_VERSION );
+	wp_enqueue_style( 'vibewp-layers' );
 
 	// 2. Layer order + WordPress block CSS pulled into the lower layer.
 	$block_css = includes_url( 'css/dist/block-library/style.min.css' );
 
 	wp_add_inline_style(
-		'pipepro-layers',
+		'vibewp-layers',
 		sprintf(
 			'@layer plugins, theme; @import url("%s") layer(plugins);',
 			esc_url( $block_css )
@@ -80,24 +80,24 @@ function pipepro_enqueue_styles() {
 
 	// 4. The design system. sections.css wraps itself in @layer theme.
 	wp_enqueue_style(
-		'pipepro-sections',
+		'vibewp-sections',
 		get_theme_file_uri( 'assets/sections.css' ),
-		array( 'pipepro-layers' ),
-		PIPEPRO_VERSION
+		array( 'vibewp-layers' ),
+		VIBEWP_VERSION
 	);
 }
-add_action( 'wp_enqueue_scripts', 'pipepro_enqueue_styles' );
+add_action( 'wp_enqueue_scripts', 'vibewp_enqueue_styles' );
 
 /**
  * Subordinate a third-party plugin stylesheet to the same lower layer.
  *
  * Call this for any plugin whose CSS fights the design system:
  *
- *     pipepro_layer_plugin_style( 'contact-form-7' );
+ *     vibewp_layer_plugin_style( 'contact-form-7' );
  *
  * @param string $handle Registered style handle to move into @layer plugins.
  */
-function pipepro_layer_plugin_style( $handle ) {
+function vibewp_layer_plugin_style( $handle ) {
 	add_action(
 		'wp_enqueue_scripts',
 		function () use ( $handle ) {
@@ -119,7 +119,7 @@ function pipepro_layer_plugin_style( $handle ) {
 
 			wp_dequeue_style( $handle );
 			wp_add_inline_style(
-				'pipepro-layers',
+				'vibewp-layers',
 				sprintf( '@import url("%s") layer(plugins);', esc_url( $src ) )
 			);
 		},
@@ -139,11 +139,11 @@ function pipepro_layer_plugin_style( $handle ) {
  * @param string[] $classes Body classes.
  * @return string[]
  */
-function pipepro_body_class( $classes ) {
+function vibewp_body_class( $classes ) {
 	$classes[] = 'yp-page';
 	return $classes;
 }
-add_filter( 'body_class', 'pipepro_body_class' );
+add_filter( 'body_class', 'vibewp_body_class' );
 
 /**
  * Mirror the same scope class inside the block editor canvas, so the
@@ -152,23 +152,23 @@ add_filter( 'body_class', 'pipepro_body_class' );
  * @param string $classes Existing admin body classes.
  * @return string
  */
-function pipepro_admin_body_class( $classes ) {
+function vibewp_admin_body_class( $classes ) {
 	return $classes . ' yp-page ';
 }
-add_filter( 'admin_body_class', 'pipepro_admin_body_class' );
+add_filter( 'admin_body_class', 'vibewp_admin_body_class' );
 
 /**
  * Register the exported sections as block patterns so they can be
  * re-inserted on new pages from the block editor.
  */
-function pipepro_register_patterns() {
+function vibewp_register_patterns() {
 	if ( ! function_exists( 'register_block_pattern_category' ) ) {
 		return;
 	}
 
 	register_block_pattern_category(
-		'pipepro',
-		array( 'label' => __( 'PIPEPRO sections', 'pipepro' ) )
+		'vibewp',
+		array( 'label' => __( 'VibeWP sections', 'vibewp' ) )
 	);
 }
-add_action( 'init', 'pipepro_register_patterns' );
+add_action( 'init', 'vibewp_register_patterns' );

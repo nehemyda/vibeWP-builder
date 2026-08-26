@@ -1,4 +1,4 @@
-# PIPEPRO — theme handoff
+# VibeWP — theme handoff
 
 A standard WordPress block theme. It has no dependency on the platform that
 generated it: no phone-home, no proprietary format, no required plugins.
@@ -9,8 +9,8 @@ Any WordPress developer can maintain it.
 ## Install
 
 1. Zip this folder and upload it at **Appearance → Themes → Add New → Upload Theme**, or drop the folder into `wp-content/themes/`.
-2. Activate **PIPEPRO**.
-3. Create a page, open the inserter, and add the **Hero — Split with badge and stats** pattern from the *PIPEPRO sections* category.
+2. Activate **VibeWP**.
+3. Create a page, open the inserter, and add the **Hero — Split with badge and stats** pattern from the *VibeWP sections* category.
 
 Requires WordPress 6.5+ and PHP 7.4+.
 
@@ -61,7 +61,7 @@ body .is-layout-flow > * + * { margin-block-start: 24px } /* WordPress, (0,1,1) 
 .yp-page .yp-hero__copy      { gap: 1.4rem }            /* this theme, (0,2,0) */
 ```
 
-The class is added by `pipepro_body_class()` in `functions.php`. Remove it and
+The class is added by `vibewp_body_class()` in `functions.php`. Remove it and
 the layout collapses into a plain vertical stack.
 
 If you add new rules, prefix them the same way.
@@ -77,7 +77,7 @@ and the design will drift.
 To subordinate a plugin's stylesheet the same way:
 
 ```php
-pipepro_layer_plugin_style( 'contact-form-7' );
+vibewp_layer_plugin_style( 'contact-form-7' );
 ```
 
 ---
@@ -89,7 +89,7 @@ the sections in this theme — a form, a booking widget, a map. They render as
 themselves.
 
 If a plugin's styling fights the design, pass its style handle to
-`pipepro_layer_plugin_style()` as shown above rather than adding `!important`.
+`vibewp_layer_plugin_style()` as shown above rather than adding `!important`.
 
 ---
 
@@ -112,7 +112,7 @@ platform that generated it. It is fully self-contained.
 ## File map
 
 ```
-pipepro/
+vibewp/
 ├── style.css              theme header only — no styles here
 ├── functions.php          enqueues, cascade layers, body class, patterns
 ├── theme.json             design tokens → WordPress global styles

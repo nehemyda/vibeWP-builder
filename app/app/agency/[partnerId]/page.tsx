@@ -4,6 +4,7 @@ import { eq, sql, and, gte, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { agencyMembers, sites } from "@/lib/db/schema";
 import { requireAgency } from "@/lib/auth/require-agency";
+import { startImpersonationAction } from "@/app/actions/impersonation";
 import { daysAgo } from "@/lib/time";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CopyableText } from "@/components/dashboard/CopyableText";
@@ -23,7 +24,7 @@ export default async function AgencyDashboardPage({
   params: Promise<{ partnerId: string }>;
 }) {
   const { partnerId } = await params;
-  const { profile, agency } = await requireAgency();
+  const { user, profile, agency } = await requireAgency();
 
   if (!agency) {
     return (
@@ -181,6 +182,13 @@ export default async function AgencyDashboardPage({
                         >
                           Open in builder
                         </a>
+                        {site.ownerUserId !== user.id && (
+                          <form action={startImpersonationAction.bind(null, site.ownerUserId)}>
+                            <button type="submit" className={`${shell.btn} ${shell.btnSmall}`}>
+                              Dashboard
+                            </button>
+                          </form>
+                        )}
                       </div>
                     </td>
                   </tr>

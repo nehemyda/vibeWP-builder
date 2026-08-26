@@ -1,5 +1,5 @@
 /* ============================================================
-   PIPEPRO — sections.css
+   VibeWP — sections.css
    Exported from the AI Builder. This file carries the layout.
    Page content is native Gutenberg blocks; every class below is
    emitted by those blocks.
@@ -55,9 +55,9 @@
 /* Never inherit box-sizing from the host. WordPress sets border-box on
    blocks; a bare host does not. Relying on either makes every width
    differ by twice the horizontal padding. */
-.yp-hero,
-.yp-hero *,
-.yp-hero *::before,
+.yp-page .yp-hero,
+.yp-page .yp-hero *,
+.yp-page .yp-hero *::before,
 .yp-page .yp-hero *::after { box-sizing: border-box; }
 
 /* Block-gap reset.
