@@ -6,6 +6,7 @@ import styles from "./builder.module.css";
 import { generateHeroContent, heroContentToSchema, type HeroContent } from "@/lib/mock-ai";
 import { saveGeneratedSchema } from "@/app/actions/sites";
 import { generateHeroContentAction } from "@/app/actions/ai-generate";
+import { exportToWordPressAction, publishSiteAction } from "@/app/actions/wordpress";
 
 type ChatMessage = {
   id: string;
@@ -28,6 +29,7 @@ function nextId() {
 
 export function BuilderApp({
   siteId,
+  smbId,
   builderPath,
   backPath,
   backLabel,
@@ -37,6 +39,7 @@ export function BuilderApp({
   autostart,
 }: {
   siteId: string;
+  smbId: string;
   builderPath: string;
   backPath: string;
   backLabel: string;
@@ -67,6 +70,8 @@ export function BuilderApp({
     "chat",
   );
   const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState<"export" | "publish" | null>(null);
+  const [wpUrl, setWpUrl] = useState<string | null>(null);
   const ran = useRef(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
@@ -174,6 +179,48 @@ export function BuilderApp({
     void generate(text, false);
   }
 
+  /** Appends an assistant message — used to report export/publish outcomes. */
+  function say(text: string) {
+    setMessages((prev) => [...prev, { id: nextId(), role: "ai", text, steps: [] }]);
+  }
+
+  async function onExport() {
+    if (busy) return;
+    setBusy("export");
+    say("Exporting to WordPress…");
+    try {
+      const result = await exportToWordPressAction(smbId);
+      if (result.ok) {
+        setWpUrl(result.url);
+        say(
+          result.provisioned
+            ? `Installed WordPress and pushed your homepage. It's live at ${result.pageUrl}`
+            : `Updated your WordPress site at ${result.pageUrl}`,
+        );
+      } else {
+        say(`Couldn't export: ${result.error}`);
+      }
+    } catch (err) {
+      say(`Couldn't export: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onPublish() {
+    if (busy) return;
+    setBusy("publish");
+    try {
+      const result = await publishSiteAction(smbId);
+      say(result.ok ? `Published — your site is live at ${result.url}` : `Couldn't publish: ${result.error}`);
+      if (result.ok) router.refresh();
+    } catch (err) {
+      say(`Couldn't publish: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className={styles.builder}>
       <div className={styles.topbar}>
@@ -202,8 +249,22 @@ export function BuilderApp({
           </button>
         </div>
         <div className={styles.topActions}>
-          <button className={styles.btn}>Export to WordPress</button>
-          <button className={`${styles.btn} ${styles.btnPrimary}`}>Publish</button>
+          {wpUrl && (
+            <a className={styles.btn} href={wpUrl} target="_blank" rel="noreferrer">
+              View site ↗
+            </a>
+          )}
+          <button type="button" className={styles.btn} onClick={onExport} disabled={busy !== null}>
+            {busy === "export" ? "Exporting…" : "Export to WordPress"}
+          </button>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnPrimary}`}
+            onClick={onPublish}
+            disabled={busy !== null}
+          >
+            {busy === "publish" ? "Publishing…" : "Publish"}
+          </button>
         </div>
       </div>
 

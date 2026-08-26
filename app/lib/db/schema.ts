@@ -120,6 +120,45 @@ export const sitePages = pgTable("site_pages", {
     .defaultNow(),
 });
 
+export const installationStatusEnum = pgEnum("installation_status", [
+  "provisioning",
+  "ready",
+  "failed",
+]);
+
+/**
+ * Where a site's actual WordPress lives.
+ *
+ * One row per site, created the first time someone exports. Its absence is
+ * what tells the export action to provision rather than update — that is the
+ * whole "first time installs, returning visit updates" rule.
+ *
+ * `driver` records which backend produced it, so local installs and a future
+ * hosted one can coexist without the rest of the app caring.
+ */
+export const siteInstallations = pgTable("site_installations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  siteId: uuid("site_id")
+    .notNull()
+    .unique()
+    .references(() => sites.id),
+  driver: text("driver").notNull().default("local"),
+  status: installationStatusEnum("status").notNull().default("provisioning"),
+  /** Filesystem path of the WordPress root (local driver only). */
+  installPath: text("install_path"),
+  /** Where the site is reachable, e.g. http://localhost:8801 */
+  url: text("url"),
+  port: integer("port"),
+  dbName: text("db_name"),
+  adminUser: text("admin_user"),
+  /** Set when provisioning fails, so the UI can explain rather than hang. */
+  lastError: text("last_error"),
+  lastExportedAt: timestamp("last_exported_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 /**
  * History of a site changing hands.
  *

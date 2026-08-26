@@ -71,6 +71,7 @@ export default async function BuilderPage({
   return (
     <BuilderApp
       siteId={site.id}
+      smbId={site.smbId ?? ""}
       builderPath={builderPath}
       backPath={backPath}
       backLabel={backLabel}
