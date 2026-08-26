@@ -6,6 +6,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CopyableText } from "@/components/dashboard/CopyableText";
 import { SiteDetailContent } from "@/components/dashboard/SiteDetailContent";
+import { SiteTransferPanel } from "@/components/dashboard/SiteTransferPanel";
 import { parsePage, pageOffset, PAGE_SIZE } from "@/lib/pagination";
 import { startImpersonationAction } from "@/app/actions/impersonation";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
@@ -16,11 +17,11 @@ export default async function AdminSiteDetailPage({
   searchParams,
 }: {
   params: Promise<{ smbId: string }>;
-  searchParams: Promise<{ page?: string; saved?: string }>;
+  searchParams: Promise<{ page?: string; saved?: string; transferred?: string; error?: string }>;
 }) {
   const { profile } = await requireRole(["super_admin"]);
   const { smbId } = await params;
-  const { page: pageParam, saved } = await searchParams;
+  const { page: pageParam, saved, transferred, error } = await searchParams;
   const page = parsePage(pageParam);
 
   const site = await db.query.sites.findFirst({ where: eq(sites.smbId, smbId) });
@@ -77,6 +78,16 @@ export default async function AdminSiteDetailPage({
           Saved.
         </div>
       )}
+      {transferred && (
+        <div className={shell.panel} style={{ padding: "1rem", marginBottom: "1.2rem", color: "var(--good)" }}>
+          Client transferred. This site is now a direct client with no managing agency.
+        </div>
+      )}
+      {error && (
+        <div className={shell.panel} style={{ padding: "1rem", marginBottom: "1.2rem", color: "#b3261e" }}>
+          {error}
+        </div>
+      )}
       <SiteDetailContent
         site={site}
         ownerName={owner?.fullName ?? null}
@@ -89,6 +100,7 @@ export default async function AdminSiteDetailPage({
         businessProfile={businessProfile ?? null}
         canEditBusinessProfile
       />
+      <SiteTransferPanel site={site} />
     </DashboardShell>
   );
 }

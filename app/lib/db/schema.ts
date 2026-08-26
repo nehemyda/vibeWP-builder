@@ -120,6 +120,35 @@ export const sitePages = pgTable("site_pages", {
     .defaultNow(),
 });
 
+/**
+ * History of a site changing hands.
+ *
+ * A site's SMB ID is permanent and identifies the client forever; which
+ * agency manages it is not. `sites.agencyId` only ever holds the CURRENT
+ * agency, so without this table a move would erase the record that it
+ * happened. Both agency columns are nullable because a site can move from
+ * an agency to being directly owned, or the reverse.
+ */
+export const siteTransfers = pgTable("site_transfers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  siteId: uuid("site_id")
+    .notNull()
+    .references(() => sites.id),
+  fromAgencyId: uuid("from_agency_id").references(() => agencies.id),
+  toAgencyId: uuid("to_agency_id").references(() => agencies.id),
+  transferredByUserId: uuid("transferred_by_user_id").references(() => profiles.id),
+  /**
+   * What the client was being charged before the move. The move clears the
+   * per-site override — it was the old agency's private deal — so the figure
+   * is kept here rather than silently lost.
+   */
+  previousCustomPriceMonthlyCents: integer("previous_custom_price_monthly_cents"),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 /** Team members on an individual SMB site — mirrors agencyMembers, scoped to one site instead of one agency. */
 export const siteMembers = pgTable("site_members", {
   id: uuid("id").primaryKey().defaultRandom(),
