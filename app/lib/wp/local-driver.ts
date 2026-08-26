@@ -1,9 +1,10 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, cp, writeFile } from "node:fs/promises";
+import { mkdir, cp, writeFile, open } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
+import { createConnection } from "node:net";
 
 const run = promisify(execFile);
 
@@ -58,6 +59,76 @@ function portFor(smbId: string): number {
   let hash = 0;
   for (const ch of smbId) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
   return PORT_BASE + (hash % 150);
+}
+
+function canConnect(host: string, port: number, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host, port });
+    const done = (result: boolean) => {
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(result);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => done(true));
+    socket.once("error", () => done(false));
+    socket.once("timeout", () => done(false));
+  });
+}
+
+/**
+ * True if something accepts TCP connections on this port, over EITHER stack.
+ *
+ * Both are checked because PHP's built-in server resolves "localhost" and
+ * binds to whatever comes back — on macOS that is IPv6 (::1) only. Probing
+ * just 127.0.0.1 reported a perfectly healthy server as down, and the
+ * caller then declared the export failed.
+ */
+async function isPortListening(port: number, timeoutMs = 800): Promise<boolean> {
+  const [v4, v6] = await Promise.all([
+    canConnect("127.0.0.1", port, timeoutMs),
+    canConnect("::1", port, timeoutMs),
+  ]);
+  return v4 || v6;
+}
+
+/**
+ * Makes sure a provisioned site is actually being served.
+ *
+ * Installing WordPress only puts files on disk and rows in a database —
+ * without a web server the URL refuses connections, which is exactly what
+ * a freshly provisioned site did. The process is detached and unref'd so it
+ * outlives the request that started it; it will not survive a reboot, hence
+ * this is called on every export rather than only at provision time.
+ */
+export async function ensureSiteServing(opts: {
+  installPath: string;
+  port: number;
+}): Promise<{ serving: boolean; error?: string }> {
+  const { installPath, port } = opts;
+
+  if (await isPortListening(port)) return { serving: true };
+
+  try {
+    // Keep output so a failure to boot can be diagnosed later.
+    const logFile = await open(join(installPath, ".vibewp-server.log"), "a");
+    const child = spawn(
+      PHP,
+      ["-d", "memory_limit=512M", WP_CLI, "server", `--path=${installPath}`, "--host=localhost", `--port=${port}`],
+      { detached: true, stdio: ["ignore", logFile.fd, logFile.fd] },
+    );
+    child.unref();
+    await logFile.close();
+  } catch (err) {
+    return { serving: false, error: err instanceof Error ? err.message : String(err) };
+  }
+
+  // PHP's built-in server binds quickly, but not instantly.
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    if (await isPortListening(port)) return { serving: true };
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return { serving: false, error: `Server did not start on port ${port}` };
 }
 
 export type ProvisionResult = {
@@ -163,6 +234,9 @@ export async function provisionSite(opts: {
       "utf8",
     );
   }
+
+  // A site nobody can open is not provisioned, so start serving it here.
+  await ensureSiteServing({ installPath, port: effectivePort });
 
   return {
     installPath,

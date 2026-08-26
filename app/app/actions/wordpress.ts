@@ -5,7 +5,12 @@ import { db } from "@/lib/db";
 import { sites, sitePages, siteInstallations, profiles } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
 import { schemaToGutenberg } from "@/lib/wp/blocks";
-import { provisionSite, upsertPage, driverAvailable } from "@/lib/wp/local-driver";
+import {
+  provisionSite,
+  upsertPage,
+  driverAvailable,
+  ensureSiteServing,
+} from "@/lib/wp/local-driver";
 import { logActivity } from "@/lib/activity";
 
 export type ExportResult =
@@ -110,6 +115,19 @@ export async function exportToWordPressAction(smbId: string): Promise<ExportResu
 
     if (!installation?.installPath) {
       return { ok: false, error: "Installation record is missing its path." };
+    }
+
+    // A local server does not survive a reboot, so re-check on every export
+    // rather than assuming the one started at provision time is still up.
+    const serving = await ensureSiteServing({
+      installPath: installation.installPath,
+      port: installation.port ?? 0,
+    });
+    if (!serving.serving) {
+      return {
+        ok: false,
+        error: serving.error ?? "Could not start the WordPress server for this site.",
+      };
     }
 
     // Every page is reconciled by slug — created if absent, updated if not.
