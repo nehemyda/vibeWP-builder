@@ -123,6 +123,20 @@ export function BuilderApp({
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
   /**
+   * Switches which page is being edited AND repaints the canvas to match.
+   *
+   * These must move together: changing only the target slug left the
+   * previous page's content on screen, so picking "Services" still showed
+   * the homepage. Always go through here rather than setActiveSlug.
+   */
+  function switchToPage(slug: string, known?: PageSummary[]) {
+    setActiveSlug(slug);
+    const list = known ?? pages;
+    const page = list.find((p) => p.slug === slug);
+    setContent(page?.content ?? null);
+  }
+
+  /**
    * The one generation path, used both by autostart from the landing page
    * and by the chat box. `replaceHistory` distinguishes them: autostart owns
    * the whole transcript, whereas a chat message appends to it.
@@ -190,8 +204,11 @@ export function BuilderApp({
         schema: heroContentToSchema(generated),
         reason: userPrompt,
       });
-      setPages(await listPagesAction(siteId));
-      setActiveSlug(slug);
+      // Refresh the list first so the freshly written content is what the
+      // canvas switches to, not a stale copy.
+      const refreshed = await listPagesAction(siteId);
+      setPages(refreshed);
+      switchToPage(slug, refreshed);
     } catch {
       saved = false;
     }
@@ -267,7 +284,7 @@ export function BuilderApp({
       remember("user", text);
       const found = pages.find((p) => p.slug === intent.slug);
       if (found) {
-        setActiveSlug(found.slug);
+        switchToPage(found.slug);
         say(`Now editing the ${found.title} page. Tell me what it should say.`);
       } else {
         say(
@@ -281,7 +298,7 @@ export function BuilderApp({
       if (pages.some((p) => p.slug === intent.slug)) {
         setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
       remember("user", text);
-        setActiveSlug(intent.slug);
+        switchToPage(intent.slug);
         say(`That page already exists — switched to it rather than overwriting it.`);
         return;
       }
@@ -371,7 +388,7 @@ export function BuilderApp({
             <select
               aria-label="Page being edited"
               value={activeSlug}
-              onChange={(e) => setActiveSlug(e.target.value)}
+              onChange={(e) => switchToPage(e.target.value)}
               style={{
                 marginLeft: "0.6rem",
                 padding: "0.25rem 0.5rem",

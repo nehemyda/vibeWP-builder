@@ -90,6 +90,7 @@ export default async function BuilderPage({
             .filter(Boolean)
             .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
             .join(" "),
+        content: extractHeroContent(p.schemaJson),
       }))}
       initialMessages={storedMessages.map((m) => ({
         id: m.id,

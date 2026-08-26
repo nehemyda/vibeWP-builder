@@ -5,8 +5,20 @@ import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
 import { sites, sitePages, pageRevisions } from "@/lib/db/schema";
 import { canEditSite } from "@/app/actions/sites";
+import { extractHeroContent } from "@/lib/builder-content";
+import type { HeroContent } from "@/lib/mock-ai";
 
-export type PageSummary = { id: string; slug: string; title: string };
+/**
+ * Each page carries its own content, so switching pages in the builder can
+ * repaint the canvas immediately instead of leaving the previous page's
+ * content on screen.
+ */
+export type PageSummary = {
+  id: string;
+  slug: string;
+  title: string;
+  content: HeroContent | null;
+};
 
 async function requireEditor(siteId: string) {
   const supabase = await createClient();
@@ -36,7 +48,12 @@ export async function listPagesAction(siteId: string): Promise<PageSummary[]> {
     .from(sitePages)
     .where(eq(sitePages.siteId, siteId))
     .orderBy(sitePages.createdAt);
-  return rows.map((p) => ({ id: p.id, slug: p.slug, title: labelFor(p) }));
+  return rows.map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    title: labelFor(p),
+    content: extractHeroContent(p.schemaJson),
+  }));
 }
 
 /**
