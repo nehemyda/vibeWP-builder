@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useState, useRef, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveFormAction, type FormFieldSpec } from "@/app/actions/forms";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
@@ -48,6 +48,177 @@ function spanOf(f: FormFieldSpec): number {
   return f.width === "full" ? 12 : 6;
 }
 
+const card: React.CSSProperties = {
+  border: "1px solid var(--line, #e6e8ee)",
+  borderRadius: 12,
+  background: "var(--surface, #fff)",
+  padding: "1rem",
+};
+
+const input: React.CSSProperties = {
+  width: "100%",
+  padding: "0.5rem 0.6rem",
+  border: "1px solid var(--line, #e6e8ee)",
+  borderRadius: 8,
+  font: "inherit",
+  fontSize: "0.88rem",
+  background: "var(--surface, #fff)",
+};
+
+const ctlLabel: React.CSSProperties = {
+  display: "block",
+  fontSize: "0.78rem",
+  color: "var(--ink-2, #4a5160)",
+};
+
+const smallLabel: React.CSSProperties = {
+  display: "block",
+  fontSize: "0.72rem",
+  fontWeight: 600,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  color: "var(--muted, #79808f)",
+  marginBottom: "0.3rem",
+};
+
+/*
+ * A bare number means pixels.
+ *
+ * Nobody types "14px" twice before it becomes annoying, and a value that
+ * silently does nothing because the unit was omitted is worse than one that
+ * guesses. Percentages, rem and keywords pass through untouched.
+ */
+function withUnit(raw: string): string {
+  const v = raw.trim();
+  if (v === "") return "";
+  return /^-?\d*\.?\d+$/.test(v) ? `${v}px` : v;
+}
+
+const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+/** Four boxes composed into one shorthand; blanks fall back to 0. */
+function padParts(value: string): string[] {
+  const parts = (value ?? "").trim().split(/\s+/).filter(Boolean);
+  return [0, 1, 2, 3].map((i) => parts[i] ?? parts[i % 2] ?? parts[0] ?? "");
+}
+
+/*
+ * ─────────────────────────────────────────────────────────────────────
+ * THESE LIVE AT MODULE SCOPE, AND MUST STAY THERE
+ *
+ * Declared inside FormEditor, each render produced a NEW function identity, so
+ * React saw a different component type and remounted the subtree. Every colour
+ * change destroyed and recreated the <input type="color"> — which slammed the
+ * native picker shut the instant you started dragging.
+ *
+ * A component defined during render is remounted on every render. Hoisting is
+ * the fix, not memoisation.
+ */
+function ColorRow({
+  label,
+  value,
+  onCommit,
+  onType,
+}: {
+  label: string;
+  value: string;
+  /** A valid colour, ready to store and push to the preview. */
+  onCommit: (v: string) => void;
+  /** Half-typed text, kept locally so the preview is not repainted mid-hex. */
+  onType: (v: string) => void;
+}) {
+  return (
+    <div style={{ marginBottom: "0.55rem" }}>
+      <label style={ctlLabel}>{label}</label>
+      <div style={{ display: "flex", gap: "0.35rem", marginTop: "0.2rem" }}>
+        <input
+          type="color"
+          aria-label={`${label} picker`}
+          value={HEX.test(value) ? value : "#ffffff"}
+          onChange={(e) => onCommit(e.target.value)}
+          style={{ ...input, width: "2.6rem", padding: 2, flex: "none" }}
+        />
+        <input
+          aria-label={`${label} hex`}
+          value={value}
+          placeholder="inherit"
+          onChange={(e) => {
+            const v = e.target.value.trim();
+            if (v === "" || HEX.test(v)) onCommit(v);
+            else onType(v);
+          }}
+          style={{ ...input, flex: 1, fontFamily: "ui-monospace, monospace", fontSize: "0.8rem" }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function TextRow({
+  label,
+  unit,
+  value,
+  onType,
+  onCommit,
+}: {
+  label: string;
+  unit?: string;
+  value: string;
+  onType: (v: string) => void;
+  onCommit: (v: string) => void;
+}) {
+  return (
+    <div style={{ marginBottom: "0.55rem" }}>
+      <label style={ctlLabel}>
+        {label}
+        {unit && <span style={{ color: "var(--faint, #9aa1ad)" }}> ({unit})</span>}
+      </label>
+      <input
+        value={value}
+        placeholder="inherit"
+        onChange={(e) => onType(e.target.value)}
+        onBlur={(e) => onCommit(withUnit(e.target.value))}
+        style={{ ...input, marginTop: "0.2rem" }}
+      />
+    </div>
+  );
+}
+
+function PadRow({
+  label,
+  value,
+  onCommit,
+}: {
+  label: string;
+  value: string;
+  onCommit: (v: string) => void;
+}) {
+  const parts = padParts(value);
+  return (
+    <div style={{ marginBottom: "0.55rem" }}>
+      <label style={ctlLabel}>
+        {label} <span style={{ color: "var(--faint, #9aa1ad)" }}>(top right bottom left)</span>
+      </label>
+      <div style={{ display: "flex", gap: "0.25rem", marginTop: "0.2rem" }}>
+        {parts.map((v, i) => (
+          <input
+            key={i}
+            aria-label={`${label} ${["top", "right", "bottom", "left"][i]}`}
+            defaultValue={v}
+            placeholder="0"
+            onBlur={(e) => {
+              const next = padParts(value);
+              next[i] = withUnit(e.target.value);
+              onCommit(next.map((x) => x || "0").join(" "));
+            }}
+            style={{ ...input, textAlign: "center", padding: "0.35rem 0.2rem", minWidth: 0 }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function FormEditor({
   smbId,
   formId,
@@ -91,6 +262,46 @@ export function FormEditor({
    * visitor gets. A React copy would be a second renderer, and two renderers
    * drift — that is how the builder canvas drifted from WordPress.
    */
+  /*
+   * Everything the editor currently holds, saved or not.
+   *
+   * Sent whenever the form changes, so the preview cannot drift from the panel
+   * beside it — the failure was a field resized to full width still rendering
+   * at half, because the iframe had fetched the stored definition.
+   */
+  function pushToPreview(nextFields = fields, nextStyle = style) {
+    frameRef.current?.contentWindow?.postMessage(
+      {
+        type: "vibewp:fields",
+        form: {
+          fields: nextFields,
+          style: nextStyle,
+          successMessage,
+          submitLabel: nextStyle["btn-label"] || undefined,
+        },
+      },
+      window.location.origin,
+    );
+  }
+
+  function save() {
+    start(async () => {
+      const res = await saveFormAction({
+        smbId,
+        formId,
+        name,
+        fields,
+        successMessage,
+        notifyEmails,
+        style,
+      });
+      if (res.ok) {
+        setSaved(true);
+        router.refresh();
+      }
+    });
+  }
+
   function setToken(key: string, value: string) {
     const next = { ...style, [key]: value };
     setStyle(next);
@@ -148,63 +359,28 @@ export function FormEditor({
     setSelected(to > from ? to - 1 : to);
   }
 
+  /* Fields can change from a dozen places — add, remove, drag, resize — so the
+     push is driven by the value rather than added to every handler. */
+  useEffect(() => {
+    if (previewOpen) pushToPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields, previewOpen]);
+
   const active = selected !== null ? fields[selected] : undefined;
 
-  const card: React.CSSProperties = {
-    border: "1px solid var(--line, #e6e8ee)",
-    borderRadius: 12,
-    background: "var(--surface, #fff)",
-    padding: "1rem",
-  };
-  const input: React.CSSProperties = {
-    width: "100%",
-    padding: "0.5rem 0.6rem",
-    border: "1px solid var(--line, #e6e8ee)",
-    borderRadius: 8,
-    font: "inherit",
-    fontSize: "0.88rem",
-    background: "var(--surface, #fff)",
-  };
-  const smallLabel: React.CSSProperties = {
-    display: "block",
-    fontSize: "0.72rem",
-    fontWeight: 600,
-    letterSpacing: "0.04em",
-    textTransform: "uppercase",
-    color: "var(--muted, #79808f)",
-    marginBottom: "0.3rem",
-  };
 
-  const CONTROLS: { group: string; items: [string, string, "color" | "text"][] }[] = [
-    {
-      group: "Container",
-      items: [
-        ["bg", "Background", "color"],
-        ["pad", "Padding", "text"],
-        ["radius", "Corner radius", "text"],
-        ["max", "Max width", "text"],
-      ],
-    },
-    {
-      group: "Fields",
-      items: [
-        ["label-size", "Label size", "text"],
-        ["label-weight", "Label weight", "text"],
-        ["input-pad", "Input padding", "text"],
-        ["border", "Border colour", "color"],
-        ["input-bg", "Input background", "color"],
-      ],
-    },
-    {
-      group: "Button",
-      items: [
-        ["accent", "Background", "color"],
-        ["accent-text", "Text colour", "color"],
-        ["btn-pad", "Padding", "text"],
-        ["btn-label", "Label", "text"],
-      ],
-    },
-  ];
+  /*
+   * Only what the form can actually show.
+   *
+   * A dropdown's styling on a form with no dropdown is a control that does
+   * nothing — the same complaint as a field editor offering settings a field
+   * does not have. Derived from the fields present, so it stays true as the
+   * form changes.
+   */
+  const types = new Set(fields.map((f) => f.type));
+  const hasTextInput = ["text", "email", "tel", "number", "date", "url", "textarea"].some((t) =>
+    types.has(t as FormFieldSpec["type"]),
+  );
 
   return (
     <div>
@@ -235,23 +411,7 @@ export function FormEditor({
             type="button"
             className={`${shell.btn} ${shell.btnPrimary}`}
             disabled={pending || !dirty}
-            onClick={() =>
-              start(async () => {
-                const res = await saveFormAction({
-                  smbId,
-                  formId,
-                  name,
-                  fields,
-                  successMessage,
-                  notifyEmails,
-                  style,
-                });
-                if (res.ok) {
-                  setSaved(true);
-                  router.refresh();
-                }
-              })
-            }
+            onClick={save}
           >
             {pending ? "Saving…" : dirty ? "Save changes" : "Saved"}
           </button>
@@ -579,30 +739,193 @@ export function FormEditor({
               }}
             >
               <strong style={{ fontSize: "0.95rem" }}>Preview: {name}</strong>
-              <button type="button" className={shell.btn} onClick={() => setPreviewOpen(false)}>
-                Close
-              </button>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                {/*
+                  Says whether this is live yet, and fixes it without leaving.
+                  The preview deliberately shows unsaved work — which is right
+                  while styling, and misleading unless it admits it. Nobody
+                  should have to remember that a preview and a published form
+                  are different things.
+                */}
+                {dirty ? (
+                  <>
+                    <span style={{ fontSize: "0.82rem", color: "var(--primary, #f54900)" }}>
+                      Not published yet
+                    </span>
+                    <button
+                      type="button"
+                      className={`${shell.btn} ${shell.btnPrimary}`}
+                      disabled={pending}
+                      onClick={save}
+                    >
+                      {pending ? "Saving…" : "Save & publish"}
+                    </button>
+                  </>
+                ) : (
+                  <span style={{ fontSize: "0.82rem", color: "var(--muted, #79808f)" }}>
+                    This is what visitors see
+                  </span>
+                )}
+                <button type="button" className={shell.btn} onClick={() => setPreviewOpen(false)}>
+                  Close
+                </button>
+              </div>
             </header>
 
             {/* Styles */}
             <div style={{ overflowY: "auto", padding: "1rem", borderRight: "1px solid var(--line, #e6e8ee)" }}>
-              {CONTROLS.map((section) => (
-                <div key={section.group} style={{ marginBottom: "1.1rem" }}>
-                  <span style={smallLabel}>{section.group}</span>
-                  {section.items.map(([key, label, kind]) => (
-                    <div key={key} style={{ marginBottom: "0.5rem" }}>
-                      <label style={{ fontSize: "0.78rem", color: "var(--ink-2, #4a5160)" }}>{label}</label>
-                      <input
-                        type={kind === "color" ? "color" : "text"}
-                        value={style[key] ?? (kind === "color" ? "#ffffff" : "")}
-                        onChange={(e) => setToken(key, e.target.value)}
-                        placeholder={kind === "text" ? "inherit" : undefined}
-                        style={{ ...input, marginTop: "0.2rem", padding: kind === "color" ? "2px" : input.padding }}
-                      />
-                    </div>
-                  ))}
+              <div style={{ marginBottom: "1.1rem" }}>
+                <span style={smallLabel}>Container</span>
+                <ColorRow
+                  label="Background"
+                  value={style["bg"] ?? ""}
+                  onCommit={(v) => setToken("bg", v)}
+                  onType={(v) => setStyle({ ...style, "bg": v })}
+                />
+                <PadRow
+                  label="Padding"
+                  value={style["pad"] ?? ""}
+                  onCommit={(v) => setToken("pad", v)}
+                />
+                <TextRow
+                  label="Corner radius"
+                  unit="px"
+                  value={style["radius"] ?? ""}
+                  onType={(v) => setStyle({ ...style, "radius": v })}
+                  onCommit={(v) => setToken("radius", v)}
+                />
+                <TextRow
+                  label="Max width"
+                  unit="px"
+                  value={style["max"] ?? ""}
+                  onType={(v) => setStyle({ ...style, "max": v })}
+                  onCommit={(v) => setToken("max", v)}
+                />
+                <TextRow
+                  label="Space between fields"
+                  unit="px"
+                  value={style["gap"] ?? ""}
+                  onType={(v) => setStyle({ ...style, "gap": v })}
+                  onCommit={(v) => setToken("gap", v)}
+                />
+              </div>
+
+              <div style={{ marginBottom: "1.1rem" }}>
+                <span style={smallLabel}>Labels</span>
+                <TextRow
+                  label="Size"
+                  unit="px"
+                  value={style["label-size"] ?? ""}
+                  onType={(v) => setStyle({ ...style, "label-size": v })}
+                  onCommit={(v) => setToken("label-size", v)}
+                />
+                <TextRow
+                  label="Weight"
+                  value={style["label-weight"] ?? ""}
+                  onType={(v) => setStyle({ ...style, "label-weight": v })}
+                  onCommit={(v) => setToken("label-weight", v)}
+                />
+                <ColorRow
+                  label="Colour"
+                  value={style["label"] ?? ""}
+                  onCommit={(v) => setToken("label", v)}
+                  onType={(v) => setStyle({ ...style, "label": v })}
+                />
+              </div>
+
+              {hasTextInput && (
+                <div style={{ marginBottom: "1.1rem" }}>
+                  <span style={smallLabel}>Inputs</span>
+                  <TextRow
+                  label="Text size"
+                  unit="px"
+                  value={style["input-size"] ?? ""}
+                  onType={(v) => setStyle({ ...style, "input-size": v })}
+                  onCommit={(v) => setToken("input-size", v)}
+                />
+                  <PadRow
+                  label="Padding"
+                  value={style["input-pad"] ?? ""}
+                  onCommit={(v) => setToken("input-pad", v)}
+                />
+                  <ColorRow
+                  label="Border colour"
+                  value={style["border"] ?? ""}
+                  onCommit={(v) => setToken("border", v)}
+                  onType={(v) => setStyle({ ...style, "border": v })}
+                />
+                  <ColorRow
+                  label="Background"
+                  value={style["input-bg"] ?? ""}
+                  onCommit={(v) => setToken("input-bg", v)}
+                  onType={(v) => setStyle({ ...style, "input-bg": v })}
+                />
+                  <TextRow
+                  label="Placeholder size"
+                  unit="px"
+                  value={style["ph-size"] ?? ""}
+                  onType={(v) => setStyle({ ...style, "ph-size": v })}
+                  onCommit={(v) => setToken("ph-size", v)}
+                />
+                  <ColorRow
+                  label="Placeholder colour"
+                  value={style["ph-color"] ?? ""}
+                  onCommit={(v) => setToken("ph-color", v)}
+                  onType={(v) => setStyle({ ...style, "ph-color": v })}
+                />
                 </div>
-              ))}
+              )}
+
+              {types.has("textarea") && (
+                <div style={{ marginBottom: "1.1rem" }}>
+                  <span style={smallLabel}>Long text</span>
+                  {/* Height only: everything else is shared with the inputs, and a
+                      textarea that does not match the fields beside it looks broken. */}
+                  <TextRow
+                  label="Height"
+                  unit="px"
+                  value={style["textarea-height"] ?? ""}
+                  onType={(v) => setStyle({ ...style, "textarea-height": v })}
+                  onCommit={(v) => setToken("textarea-height", v)}
+                />
+                </div>
+              )}
+
+              <div style={{ marginBottom: "1.1rem" }}>
+                <span style={smallLabel}>Button</span>
+                <ColorRow
+                  label="Background"
+                  value={style["accent"] ?? ""}
+                  onCommit={(v) => setToken("accent", v)}
+                  onType={(v) => setStyle({ ...style, "accent": v })}
+                />
+                <ColorRow
+                  label="Text colour"
+                  value={style["accent-text"] ?? ""}
+                  onCommit={(v) => setToken("accent-text", v)}
+                  onType={(v) => setStyle({ ...style, "accent-text": v })}
+                />
+                <PadRow
+                  label="Padding"
+                  value={style["btn-pad"] ?? ""}
+                  onCommit={(v) => setToken("btn-pad", v)}
+                />
+                <TextRow
+                  label="Text size"
+                  unit="px"
+                  value={style["btn-size"] ?? ""}
+                  onType={(v) => setStyle({ ...style, "btn-size": v })}
+                  onCommit={(v) => setToken("btn-size", v)}
+                />
+                <TextRow
+                  label="Label"
+                  value={style["btn-label"] ?? ""}
+                  onType={(v) => setStyle({ ...style, "btn-label": v })}
+                  onCommit={(v) => setToken("btn-label", v)}
+                />
+              </div>
+
               <p style={{ fontSize: "0.74rem", color: "var(--muted, #79808f)" }}>
                 Blank means &ldquo;inherit from the page it sits on&rdquo;. Save to keep these.
               </p>
@@ -617,12 +940,7 @@ export function FormEditor({
               ref={frameRef}
               title="Form preview"
               src={`/forms/preview/${embedToken}`}
-              onLoad={() =>
-                frameRef.current?.contentWindow?.postMessage(
-                  { type: "vibewp:style", style },
-                  window.location.origin,
-                )
-              }
+              onLoad={() => pushToPreview()}
               style={{ border: 0, width: "100%", height: "100%", background: "#fff" }}
             />
           </div>

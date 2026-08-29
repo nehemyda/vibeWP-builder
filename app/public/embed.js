@@ -54,7 +54,10 @@
       "border-radius:var(--vwf-radius);background:var(--vwf-input-bg,#fff);color:inherit}" +
       ".vibewp-form__control:focus{outline:none;border-color:var(--vwf-accent);" +
       "box-shadow:0 0 0 3px color-mix(in srgb,var(--vwf-accent) 20%,transparent)}" +
-      ".vibewp-form textarea.vibewp-form__control{resize:vertical;min-height:120px}" +
+      ".vibewp-form textarea.vibewp-form__control{resize:vertical;min-height:var(--vwf-textarea-height,120px)}" +
+      /* Placeholder is its own size and colour: at the input's size it competes
+         with a real answer, which is how people mistake it for filled in. */
+      ".vibewp-form__control::placeholder{font-size:var(--vwf-ph-size,inherit);color:var(--vwf-ph-color,#8a91a0);opacity:1}" +
       ".vibewp-form__check{flex-direction:row;align-items:center;gap:8px}" +
       ".vibewp-form__check .vibewp-form__control{width:auto}" +
       ".vibewp-form__submit{grid-column:span 12;justify-self:var(--vwf-btn-justify,start);" +
@@ -110,7 +113,11 @@
     return el;
   }
 
+  /** The last mount + definition rendered, so the editor can replace them. */
+  var current = { mount: null, def: null };
+
   function render(mount, def) {
+    current = { mount: mount, def: def };
     injectStyleOnce();
 
     var form = document.createElement("form");
@@ -257,7 +264,28 @@
   window.addEventListener("message", function (event) {
     if (event.origin !== ORIGIN) return;
     var msg = event.data;
-    if (!msg || msg.type !== "vibewp:style" || typeof msg.style !== "object") return;
+    if (!msg) return;
+
+    /*
+     * The editor's unsaved definition.
+     *
+     * The preview fetches what is STORED, so a field resized but not yet saved
+     * rendered at its old width — the preview quietly disagreed with the editor
+     * beside it, which is worse than having no preview at all. This re-renders
+     * from whatever the editor currently holds.
+     */
+    if (msg.type === "vibewp:fields" && msg.form && current.mount) {
+      render(current.mount, {
+        token: current.def ? current.def.token : msg.form.token,
+        fields: msg.form.fields || [],
+        successMessage: msg.form.successMessage || "Thanks — we'll be in touch.",
+        style: msg.form.style || {},
+        submitLabel: msg.form.submitLabel
+      });
+      return;
+    }
+
+    if (msg.type !== "vibewp:style" || typeof msg.style !== "object") return;
     var form = document.querySelector(".vibewp-form");
     if (!form) return;
     Object.keys(msg.style).forEach(function (k) {
