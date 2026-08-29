@@ -124,13 +124,6 @@ export const sites = pgTable("sites", {
     .defaultNow(),
   /** Soft delete — hidden from listings when set, recoverable. */
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  /**
-   * Public identifier a website's form posts with.
-   *
-   * Visible in page source by design — it says WHICH site is submitting and
-   * proves nothing. Per site so a leak exposes one site and rotates alone.
-   */
-  formToken: text("form_token"),
 });
 
 /** Page schema shaped like docs/hybrid-renderer.md so a real renderer can read it later. */
@@ -379,6 +372,16 @@ export const formDefinitions = pgTable("form_definitions", {
   name: text("name").notNull().default("Contact form"),
   /** Ordered field specs: type, label, name, required, width, options. */
   fields: jsonb("fields").notNull().default([]),
+  /**
+   * The id in the embed snippet. Public, and identity only — the endpoint
+   * still validates every submission against this form's own fields.
+   *
+   * On the form rather than the site: one form may be embedded in several
+   * places and must be revocable without disturbing the others.
+   */
+  embedToken: text("embed_token"),
+  /** Turns submissions off without deleting the form or its leads. */
+  isActive: boolean("is_active").notNull().default(true),
   notifyEmails: text("notify_emails"),
   successMessage: text("success_message"),
   redirectUrl: text("redirect_url"),

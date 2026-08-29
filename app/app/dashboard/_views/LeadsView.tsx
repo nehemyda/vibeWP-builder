@@ -8,6 +8,9 @@ import { Pagination } from "@/components/dashboard/Pagination";
 import { totalPages, PAGE_SIZE, pageOffset } from "@/lib/pagination";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
 import { smbNav } from "../nav";
+import { FormsTab } from "./FormsTab";
+import { FormEditor } from "./FormEditor";
+import type { FormFieldSpec } from "@/app/actions/forms";
 
 type Profile = typeof profiles.$inferSelect;
 type Site = typeof sites.$inferSelect;
@@ -48,6 +51,7 @@ export async function LeadsView({
   paths,
   page,
   tab,
+  formId,
 }: {
   profile: Profile;
   role: Role;
@@ -56,6 +60,8 @@ export async function LeadsView({
   page: number;
   /** "submissions" (default) or "forms". */
   tab?: string;
+  /** A form id opens the field editor for it. */
+  formId?: string;
 }) {
   if (!site || !paths) {
     return (
@@ -76,7 +82,7 @@ export async function LeadsView({
 
   const showForms = tab === "forms";
 
-  const [rows, [{ count: totalCount }], [{ count: unreadCount }], forms] = await Promise.all([
+  const [rows, [{ count: totalCount }], [{ count: unreadCount }], forms, perForm] = await Promise.all([
     db
       .select()
       .from(formSubmissions)
@@ -93,7 +99,17 @@ export async function LeadsView({
       .from(formSubmissions)
       .where(and(eq(formSubmissions.siteId, site.id), isNull(formSubmissions.readAt))),
     db.select().from(formDefinitions).where(eq(formDefinitions.siteId, site.id)),
+    db
+      .select({ formId: formSubmissions.formId, count: sql<number>`count(*)::int` })
+      .from(formSubmissions)
+      .where(eq(formSubmissions.siteId, site.id))
+      .groupBy(formSubmissions.formId),
   ]);
+
+  // A form with no submissions after a week is usually one nobody embedded.
+  const countByForm = new Map(perForm.filter((r) => r.formId).map((r) => [r.formId as string, r.count]));
+
+  const editing = formId ? forms.find((f) => f.id === formId) : undefined;
 
   const tabStyle = (active: boolean) => ({
     padding: "0.55rem 0.1rem",
@@ -124,6 +140,7 @@ export async function LeadsView({
         forms is rare setup, and mixing them clutters the thing checked every
         morning with the thing touched twice a year.
       */}
+      {!editing && (
       <nav style={{ borderBottom: "1px solid var(--line, #e6e8ee)", marginBottom: "1.1rem" }}>
         <Link href={paths.leadsPath} style={tabStyle(!showForms)}>
           Submissions
@@ -132,29 +149,33 @@ export async function LeadsView({
           Forms {forms.length > 0 && `(${forms.length})`}
         </Link>
       </nav>
+      )}
 
-      {showForms ? (
-        <div className={shell.panel} style={{ padding: "1.3rem", lineHeight: 1.6 }}>
-          {forms.length === 0 ? (
-            <>
-              <p style={{ margin: "0 0 0.6rem", fontWeight: 600 }}>No custom forms yet.</p>
-              <p style={{ margin: 0, color: "var(--ink-2, #4a5160)" }}>
-                Your site uses the standard contact form — name, email, phone and
-                message. To add one to a page, open{" "}
-                <Link href={paths.builderPath}>the site builder</Link> and ask for a
-                contact form.
-              </p>
-            </>
-          ) : (
-            <ul style={{ margin: 0, paddingLeft: "1.1rem" }}>
-              {forms.map((f) => (
-                <li key={f.id}>
-                  {f.name} — {(f.fields as unknown[]).length} fields
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      {editing ? (
+        <FormEditor
+          smbId={site.smbId ?? ""}
+          formId={editing.id}
+          backHref={`${paths.leadsPath}?tab=forms`}
+          initial={{
+            name: editing.name,
+            fields: (editing.fields as FormFieldSpec[]) ?? [],
+            successMessage: editing.successMessage ?? "",
+            notifyEmails: editing.notifyEmails ?? "",
+          }}
+        />
+      ) : showForms ? (
+        <FormsTab
+          smbId={site.smbId ?? ""}
+          leadsPath={paths.leadsPath}
+          forms={forms.map((f) => ({
+            id: f.id,
+            name: f.name,
+            fieldCount: (f.fields as unknown[]).length,
+            embedToken: f.embedToken,
+            isActive: f.isActive,
+            submissionCount: countByForm.get(f.id) ?? 0,
+          }))}
+        />
       ) : (
         <div className={shell.panel}>
           <div className={shell.tableWrap}>

@@ -25,9 +25,6 @@ import { sites, formDefinitions, formSubmissions, siteInstallations } from "@/li
  * this platform gets abused, so the checks come first and the storage last.
  */
 
-/** Fields accepted when a site has no stored definition yet — the v1 section. */
-const DEFAULT_FIELDS = ["name", "email", "phone", "message"];
-
 /** Nothing legitimate is longer; anything longer is someone probing. */
 const MAX_FIELD_CHARS = 5000;
 const MAX_FIELDS = 40;
@@ -89,15 +86,18 @@ export async function OPTIONS(request: Request) {
   const token = new URL(request.url).searchParams.get("site");
   if (!token) return new NextResponse(null, { status: 204 });
 
-  const site = await db.query.sites.findFirst({ where: eq(sites.formToken, token) });
-  if (!site) return new NextResponse(null, { status: 204 });
+  const form = await db.query.formDefinitions.findFirst({
+    where: eq(formDefinitions.embedToken, token),
+  });
+  if (!form) return new NextResponse(null, { status: 204 });
 
+  const site = await db.query.sites.findFirst({ where: eq(sites.id, form.siteId) });
   const install = await db.query.siteInstallations.findFirst({
-    where: eq(siteInstallations.siteId, site.id),
+    where: eq(siteInstallations.siteId, form.siteId),
   });
   return new NextResponse(null, {
     status: 204,
-    headers: corsHeaders(origin, allowedOrigins(site.domain, install?.url ?? null)),
+    headers: corsHeaders(origin, allowedOrigins(site?.domain ?? null, install?.url ?? null)),
   });
 }
 
@@ -145,24 +145,38 @@ export async function POST(request: Request) {
   const token = typeof body.site === "string" ? body.site : "";
   if (!token) return NextResponse.json({ ok: false, error: "Unknown form." }, { status: 400 });
 
-  const site = await db.query.sites.findFirst({ where: eq(sites.formToken, token) });
   /*
-   * Same answer for "no such token" as for a token that exists but is wrong.
-   * Distinguishing them turns this into an oracle for guessing valid tokens.
+   * The token identifies a FORM, not a site.
+   *
+   * Same answer for "no such token", "wrong token" and "form switched off":
+   * distinguishing them turns this into an oracle for guessing valid tokens,
+   * and a deactivated form should look exactly like one that never existed.
    */
-  if (!site) return NextResponse.json({ ok: false, error: "Unknown form." }, { status: 400 });
-
-  const install = await db.query.siteInstallations.findFirst({
-    where: eq(siteInstallations.siteId, site.id),
+  const form = await db.query.formDefinitions.findFirst({
+    where: eq(formDefinitions.embedToken, token),
   });
-  const headers = corsHeaders(origin, allowedOrigins(site.domain, install?.url ?? null));
+  if (!form || !form.isActive) {
+    return NextResponse.json({ ok: false, error: "Unknown form." }, { status: 400 });
+  }
+
+  const site = await db.query.sites.findFirst({ where: eq(sites.id, form.siteId) });
+  const install = await db.query.siteInstallations.findFirst({
+    where: eq(siteInstallations.siteId, form.siteId),
+  });
+  /*
+   * An embeddable form has no single home, so origins are not restricted the
+   * way a site-bound one could be. The known origins are still echoed for
+   * browsers that need them; abuse is held off by the per-form rate limit and
+   * the field allow-list, which do not depend on where the page lives.
+   */
+  const headers = corsHeaders(origin, allowedOrigins(site?.domain ?? null, install?.url ?? null));
 
   const ip =
     request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
     request.headers.get("x-real-ip") ??
     "unknown";
 
-  if (rateLimited(`site:${site.id}`) || rateLimited(`ip:${ip}`)) {
+  if (rateLimited(`form:${form.id}`) || rateLimited(`ip:${ip}`)) {
     return NextResponse.json({ ok: false, error: "Too many submissions. Try again shortly." }, {
       status: 429,
       headers,
@@ -186,17 +200,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, message: "Thanks — we'll be in touch." }, { headers });
   }
 
-  // What this form is actually allowed to collect.
-  const formId = typeof body.form === "string" ? body.form : null;
-  const definition = formId
-    ? await db.query.formDefinitions.findFirst({ where: eq(formDefinitions.id, formId) })
-    : null;
-
-  // A definition belonging to another site is not this form's definition.
-  const usable = definition && definition.siteId === site.id ? definition : null;
-  const declared = usable
-    ? (usable.fields as Array<{ name?: string }>).map((f) => f.name).filter(Boolean)
-    : DEFAULT_FIELDS;
+  // What this form is allowed to collect — its own declared fields.
+  const declared = (form.fields as Array<{ name?: string }>).map((f) => f.name).filter(Boolean);
+  if (declared.length === 0) {
+    return NextResponse.json({ ok: false, error: "This form has no fields yet." }, { status: 400, headers });
+  }
 
   const submitted = (body.data ?? {}) as Record<string, unknown>;
   if (Object.keys(submitted).length > MAX_FIELDS) {
@@ -219,8 +227,8 @@ export async function POST(request: Request) {
   }
 
   await db.insert(formSubmissions).values({
-    siteId: site.id,
-    formId: usable?.id ?? null,
+    siteId: form.siteId,
+    formId: form.id,
     data,
     meta: {
       ip,
@@ -241,7 +249,7 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json(
-    { ok: true, message: usable?.successMessage || "Thanks — we'll be in touch." },
+    { ok: true, message: form.successMessage || "Thanks — we'll be in touch." },
     { headers },
   );
 }
