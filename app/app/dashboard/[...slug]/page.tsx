@@ -38,8 +38,13 @@ export default async function SmbDashboardPage({
   const siteSlug = subPage ? slug.slice(0, -1) : slug;
   if (siteSlug.length > 2) notFound();
 
+  /* TEMPORARY TIMING — remove once the slow step is found. */
+  const __t0 = Date.now();
   const { profile, role, site } = await requireSmbSite();
+  console.log("[timing] requireSmbSite", Date.now() - __t0, "ms");
+  const __t1 = Date.now();
   const sp = await searchParams;
+  console.log("[timing] searchParams", Date.now() - __t1, "ms");
 
   if (!site) {
     if (subPage === "leads") return <LeadsView profile={profile} role={role} site={undefined} paths={null} page={1} />;

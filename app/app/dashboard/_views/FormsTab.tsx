@@ -97,6 +97,22 @@ export function FormsTab({
                 </span>
 
                 <div style={{ display: "flex", gap: "0.35rem" }}>
+                  {/*
+                    Opens in a new tab, and only when a token exists.
+                    A preview is something you glance at beside the editor, not
+                    somewhere you navigate away to and have to find your way
+                    back from.
+                  */}
+                  {f.embedToken && (
+                    <a
+                      className={shell.btn}
+                      href={`/forms/preview/${f.embedToken}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Preview
+                    </a>
+                  )}
                   <a className={shell.btn} href={`${leadsPath}?tab=forms&form=${f.id}`}>
                     Edit
                   </a>

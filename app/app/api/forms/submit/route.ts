@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { sites, formDefinitions, formSubmissions, siteInstallations } from "@/lib/db/schema";
+import { formDefinitions, formSubmissions } from "@/lib/db/schema";
 
 /**
  * Where a website's contact form posts.
@@ -53,57 +53,40 @@ function rateLimited(key: string): boolean {
   return recent.length > MAX_PER_WINDOW;
 }
 
-/** Origins allowed to post for this site: its own domain and its WP install. */
-function allowedOrigins(domain: string | null, installUrl: string | null): string[] {
-  const out: string[] = [];
-  for (const value of [domain, installUrl]) {
-    if (!value) continue;
-    try {
-      out.push(new URL(value.startsWith("http") ? value : `https://${value}`).origin);
-    } catch {
-      // A malformed stored domain must not throw the request away.
-    }
-  }
-  return out;
+/*
+ * Any origin may post, and that is the correct answer here.
+ *
+ * The point of an embeddable form is that it lives on pages we do not know
+ * about — a client's WordPress, a landing page, someone else's platform. An
+ * allow-list of the site's own domain blocked exactly the case the feature
+ * exists for: a form embedded elsewhere failed with a CORS error the visitor
+ * saw as "check your connection".
+ *
+ * Nothing is lost by opening it, because CORS was never the protection. It
+ * constrains browsers only — the token is public, so anyone determined can
+ * POST from a shell with no origin at all. What actually holds the line is
+ * unchanged and does not care where the request came from: submissions are
+ * validated against the form's own declared fields, rate-limited per form and
+ * per IP, and screened by honeypot and timing.
+ *
+ * Safe as `*` specifically because this endpoint uses no cookies and no
+ * credentials; there is no ambient authority for another origin to borrow.
+ */
+function corsHeaders(): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
 }
 
-function corsHeaders(origin: string | null, allowed: string[]): Record<string, string> {
-  // Echo only an origin we recognise. Never "*": that would let any page on the
-  // internet post leads into a client's dashboard.
-  if (origin && allowed.includes(origin)) {
-    return {
-      "Access-Control-Allow-Origin": origin,
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-      Vary: "Origin",
-    };
-  }
-  return { Vary: "Origin" };
-}
-
-export async function OPTIONS(request: Request) {
-  const origin = request.headers.get("origin");
-  const token = new URL(request.url).searchParams.get("site");
-  if (!token) return new NextResponse(null, { status: 204 });
-
-  const form = await db.query.formDefinitions.findFirst({
-    where: eq(formDefinitions.embedToken, token),
-  });
-  if (!form) return new NextResponse(null, { status: 204 });
-
-  const site = await db.query.sites.findFirst({ where: eq(sites.id, form.siteId) });
-  const install = await db.query.siteInstallations.findFirst({
-    where: eq(siteInstallations.siteId, form.siteId),
-  });
-  return new NextResponse(null, {
-    status: 204,
-    headers: corsHeaders(origin, allowedOrigins(site?.domain ?? null, install?.url ?? null)),
-  });
+export async function OPTIONS() {
+  // No lookup: the preflight reveals nothing and must not be a way to test
+  // whether a token exists.
+  return new NextResponse(null, { status: 204, headers: corsHeaders() });
 }
 
 export async function POST(request: Request) {
-  const origin = request.headers.get("origin");
-
   /*
    * Two content types, because the form genuinely works without JavaScript.
    *
@@ -159,17 +142,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Unknown form." }, { status: 400 });
   }
 
-  const site = await db.query.sites.findFirst({ where: eq(sites.id, form.siteId) });
-  const install = await db.query.siteInstallations.findFirst({
-    where: eq(siteInstallations.siteId, form.siteId),
-  });
-  /*
-   * An embeddable form has no single home, so origins are not restricted the
-   * way a site-bound one could be. The known origins are still echoed for
-   * browsers that need them; abuse is held off by the per-form rate limit and
-   * the field allow-list, which do not depend on where the page lives.
-   */
-  const headers = corsHeaders(origin, allowedOrigins(site?.domain ?? null, install?.url ?? null));
+  const headers = corsHeaders();
 
   const ip =
     request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??

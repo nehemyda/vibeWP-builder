@@ -380,6 +380,8 @@ export const formDefinitions = pgTable("form_definitions", {
    * places and must be revocable without disturbing the others.
    */
   embedToken: text("embed_token"),
+  /** Styling as tokens (background, radius, accent…), never raw CSS. */
+  style: jsonb("style").notNull().default({}),
   /** Turns submissions off without deleting the form or its leads. */
   isActive: boolean("is_active").notNull().default(true),
   notifyEmails: text("notify_emails"),

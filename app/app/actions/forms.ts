@@ -80,6 +80,7 @@ export async function saveFormAction(opts: {
   fields: FormFieldSpec[];
   successMessage: string;
   notifyEmails: string;
+  style?: Record<string, string>;
 }) {
   const { site } = await requireSiteAccess(opts.smbId);
 
@@ -97,6 +98,7 @@ export async function saveFormAction(opts: {
       fields: opts.fields,
       successMessage: opts.successMessage.trim() || null,
       notifyEmails: opts.notifyEmails.trim() || null,
+      ...(opts.style ? { style: opts.style } : {}),
       updatedAt: new Date(),
     })
     .where(and(eq(formDefinitions.id, opts.formId), eq(formDefinitions.siteId, site.id)))

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveFormAction, type FormFieldSpec } from "@/app/actions/forms";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
@@ -51,12 +51,21 @@ function spanOf(f: FormFieldSpec): number {
 export function FormEditor({
   smbId,
   formId,
+  embedToken,
   initial,
   backHref,
 }: {
   smbId: string;
   formId: string;
-  initial: { name: string; fields: FormFieldSpec[]; successMessage: string; notifyEmails: string };
+  /** Needed to point the preview iframe at this form. */
+  embedToken: string | null;
+  initial: {
+    name: string;
+    fields: FormFieldSpec[];
+    successMessage: string;
+    notifyEmails: string;
+    style?: Record<string, string>;
+  };
   backHref: string;
 }) {
   const router = useRouter();
@@ -71,13 +80,33 @@ export function FormEditor({
   /** Set while dragging a NEW field in from the palette. */
   const [incoming, setIncoming] = useState<FormFieldSpec["type"] | null>(null);
   const [saved, setSaved] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [style, setStyle] = useState<Record<string, string>>(initial.style ?? {});
+  const frameRef = useRef<HTMLIFrameElement>(null);
+
+  /*
+   * Pushed to the iframe rather than re-rendered here.
+   *
+   * The preview runs the real embed script, so what is on screen is the form a
+   * visitor gets. A React copy would be a second renderer, and two renderers
+   * drift — that is how the builder canvas drifted from WordPress.
+   */
+  function setToken(key: string, value: string) {
+    const next = { ...style, [key]: value };
+    setStyle(next);
+    frameRef.current?.contentWindow?.postMessage(
+      { type: "vibewp:style", style: next },
+      window.location.origin,
+    );
+  }
   const [pending, start] = useTransition();
 
   const dirty =
     name !== initial.name ||
     successMessage !== initial.successMessage ||
     notifyEmails !== initial.notifyEmails ||
-    JSON.stringify(fields) !== JSON.stringify(initial.fields);
+    JSON.stringify(fields) !== JSON.stringify(initial.fields) ||
+    JSON.stringify(style) !== JSON.stringify(initial.style ?? {});
 
   function addField(type: FormFieldSpec["type"], at?: number) {
     const label = PALETTE.find((p) => p.type === type)?.label ?? "Field";
@@ -146,6 +175,37 @@ export function FormEditor({
     marginBottom: "0.3rem",
   };
 
+  const CONTROLS: { group: string; items: [string, string, "color" | "text"][] }[] = [
+    {
+      group: "Container",
+      items: [
+        ["bg", "Background", "color"],
+        ["pad", "Padding", "text"],
+        ["radius", "Corner radius", "text"],
+        ["max", "Max width", "text"],
+      ],
+    },
+    {
+      group: "Fields",
+      items: [
+        ["label-size", "Label size", "text"],
+        ["label-weight", "Label weight", "text"],
+        ["input-pad", "Input padding", "text"],
+        ["border", "Border colour", "color"],
+        ["input-bg", "Input background", "color"],
+      ],
+    },
+    {
+      group: "Button",
+      items: [
+        ["accent", "Background", "color"],
+        ["accent-text", "Text colour", "color"],
+        ["btn-pad", "Padding", "text"],
+        ["btn-label", "Label", "text"],
+      ],
+    },
+  ];
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: "0.8rem", marginBottom: "1rem" }}>
@@ -159,6 +219,15 @@ export function FormEditor({
           style={{ ...input, maxWidth: "18rem", fontWeight: 700 }}
         />
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          <button
+            type="button"
+            className={shell.btn}
+            disabled={!embedToken}
+            title={embedToken ? "Style it and see the real form" : "Save the form first"}
+            onClick={() => setPreviewOpen(true)}
+          >
+            Preview &amp; style
+          </button>
           {saved && !dirty && (
             <span style={{ fontSize: "0.82rem", color: "var(--muted, #79808f)" }}>Saved</span>
           )}
@@ -175,6 +244,7 @@ export function FormEditor({
                   fields,
                   successMessage,
                   notifyEmails,
+                  style,
                 });
                 if (res.ok) {
                   setSaved(true);
@@ -466,6 +536,98 @@ export function FormEditor({
           )}
         </div>
       </div>
+
+      {previewOpen && embedToken && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Preview and style"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 200,
+            background: "rgba(12,16,24,.5)",
+            display: "grid",
+            placeItems: "center",
+            padding: "2vh 2vw",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPreviewOpen(false);
+          }}
+        >
+          <div
+            style={{
+              width: "min(1100px, 96vw)",
+              height: "min(760px, 92vh)",
+              display: "grid",
+              gridTemplateColumns: "17rem 1fr",
+              gridTemplateRows: "auto 1fr",
+              background: "var(--surface, #fff)",
+              borderRadius: 14,
+              overflow: "hidden",
+              boxShadow: "0 40px 90px -30px rgba(10,14,25,.55)",
+            }}
+          >
+            <header
+              style={{
+                gridColumn: "span 2",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "0.85rem 1.1rem",
+                borderBottom: "1px solid var(--line, #e6e8ee)",
+              }}
+            >
+              <strong style={{ fontSize: "0.95rem" }}>Preview: {name}</strong>
+              <button type="button" className={shell.btn} onClick={() => setPreviewOpen(false)}>
+                Close
+              </button>
+            </header>
+
+            {/* Styles */}
+            <div style={{ overflowY: "auto", padding: "1rem", borderRight: "1px solid var(--line, #e6e8ee)" }}>
+              {CONTROLS.map((section) => (
+                <div key={section.group} style={{ marginBottom: "1.1rem" }}>
+                  <span style={smallLabel}>{section.group}</span>
+                  {section.items.map(([key, label, kind]) => (
+                    <div key={key} style={{ marginBottom: "0.5rem" }}>
+                      <label style={{ fontSize: "0.78rem", color: "var(--ink-2, #4a5160)" }}>{label}</label>
+                      <input
+                        type={kind === "color" ? "color" : "text"}
+                        value={style[key] ?? (kind === "color" ? "#ffffff" : "")}
+                        onChange={(e) => setToken(key, e.target.value)}
+                        placeholder={kind === "text" ? "inherit" : undefined}
+                        style={{ ...input, marginTop: "0.2rem", padding: kind === "color" ? "2px" : input.padding }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ))}
+              <p style={{ fontSize: "0.74rem", color: "var(--muted, #79808f)" }}>
+                Blank means &ldquo;inherit from the page it sits on&rdquo;. Save to keep these.
+              </p>
+            </div>
+
+            {/*
+              The real embed, in an iframe. Not a React copy: what is shown here
+              is the form a visitor gets, restyled live by postMessage rather
+              than reloaded on every keystroke.
+            */}
+            <iframe
+              ref={frameRef}
+              title="Form preview"
+              src={`/forms/preview/${embedToken}`}
+              onLoad={() =>
+                frameRef.current?.contentWindow?.postMessage(
+                  { type: "vibewp:style", style },
+                  window.location.origin,
+                )
+              }
+              style={{ border: 0, width: "100%", height: "100%", background: "#fff" }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -81,6 +81,7 @@ export async function LeadsView({
   }
 
   const showForms = tab === "forms";
+  const __q0 = Date.now();
 
   const [rows, [{ count: totalCount }], [{ count: unreadCount }], forms, perForm] = await Promise.all([
     db
@@ -105,6 +106,8 @@ export async function LeadsView({
       .where(eq(formSubmissions.siteId, site.id))
       .groupBy(formSubmissions.formId),
   ]);
+
+  console.log("[timing] LeadsView queries", Date.now() - __q0, "ms", "| editor:", Boolean(formId));
 
   // A form with no submissions after a week is usually one nobody embedded.
   const countByForm = new Map(perForm.filter((r) => r.formId).map((r) => [r.formId as string, r.count]));
@@ -155,12 +158,14 @@ export async function LeadsView({
         <FormEditor
           smbId={site.smbId ?? ""}
           formId={editing.id}
+          embedToken={editing.embedToken}
           backHref={`${paths.leadsPath}?tab=forms`}
           initial={{
             name: editing.name,
             fields: (editing.fields as FormFieldSpec[]) ?? [],
             successMessage: editing.successMessage ?? "",
             notifyEmails: editing.notifyEmails ?? "",
+            style: (editing.style as Record<string, string>) ?? {},
           }}
         />
       ) : showForms ? (
