@@ -6,7 +6,20 @@ import styles from "./dashboard-shell.module.css";
 import { signOut } from "@/app/actions/auth";
 import { NotificationBell } from "./NotificationBell";
 
-export type NavItem = { icon: string; label: string; href: string };
+export type NavItem = {
+  icon: string;
+  label: string;
+  href: string;
+  /**
+   * Reserves a slot for something not built yet: shown greyed and not
+   * clickable.
+   *
+   * Exists so planned structure can be visible without shipping links that
+   * 404 — the agency sidebar previously carried exactly that kind of dead
+   * link and it had to be removed.
+   */
+  soon?: boolean;
+};
 export type NavGroup = { label: string; items: NavItem[] };
 
 export function DashboardShell({
@@ -46,7 +59,19 @@ export function DashboardShell({
         {navGroups.map((group) => (
           <div className={styles.navGroup} key={group.label}>
             <div className={styles.navLabel}>{group.label}</div>
-            {group.items.map((item) => (
+            {group.items.map((item) =>
+              item.soon ? (
+                <span
+                  key={item.label}
+                  className={`${styles.navItem} ${styles.navSoon}`}
+                  aria-disabled="true"
+                  title={`${item.label} — not built yet`}
+                >
+                  <span className={styles.ic}>{item.icon}</span>
+                  {item.label}
+                  <span className={styles.soonTag}>soon</span>
+                </span>
+              ) : (
               <Link
                 key={item.label}
                 href={item.href}
@@ -58,7 +83,8 @@ export function DashboardShell({
                 <span className={styles.ic}>{item.icon}</span>
                 {item.label}
               </Link>
-            ))}
+              ),
+            )}
           </div>
         ))}
         <div className={styles.sidebarFoot}>

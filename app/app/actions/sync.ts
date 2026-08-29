@@ -5,15 +5,21 @@ import { db } from "@/lib/db";
 import { sitePages, siteInstallations } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
 import { extractHeroContent } from "@/lib/builder-content";
-import { gutenbergToSchema, detectUnmodelledBlocks } from "@/lib/wp/parse-blocks";
-import { schemaToGutenberg } from "@/lib/wp/blocks";
+import { gutenbergToSchema, detectUnmodelledBlocks } from "@/lib/wp/serialize";
+import { schemaToGutenberg } from "@/lib/wp/serialize";
 import {
   classifyPage,
   describeState,
   projectForSync,
   type PageSyncState,
 } from "@/lib/wp/sync";
-import { driverAvailable, ensureSiteServing, readPageContent } from "@/lib/wp/local-driver";
+import {
+  driverAvailable,
+  ensureSiteServing,
+  readPageContent,
+  readEditLocks,
+  type WpEditLock,
+} from "@/lib/wp/local-driver";
 import { savePageSchemaAction } from "@/app/actions/pages";
 
 /**
@@ -284,4 +290,43 @@ export async function resolveConflictAction(opts: {
     .where(eq(sitePages.id, page.id));
 
   return { ok: true };
+}
+
+export type EditLockReport =
+  | { ok: true; locks: WpEditLock[] }
+  | { ok: false; error: string };
+
+/**
+ * Whether anyone has this site open in the WordPress editor right now.
+ *
+ * Polled by the builder rather than checked once at open. The previous model
+ * detected WordPress state exactly once per page load, which meant a client
+ * could work for an hour in a builder that had stopped looking — the whole
+ * point of a lock is that it appears while you are already sitting there.
+ *
+ * Deliberately cheap: one WP-CLI call, no page-content reads and no diffing,
+ * because this runs on a timer and the expensive comparison does not have to.
+ */
+export async function detectEditLocksAction(smbId: string): Promise<EditLockReport> {
+  const { site } = await requireSiteAccess(smbId);
+
+  const installation = await db.query.siteInstallations.findFirst({
+    where: eq(siteInstallations.siteId, site.id),
+  });
+  // Nothing exported yet, so there is no WordPress for anyone to be editing in.
+  if (!installation?.installPath || installation.status !== "ready") {
+    return { ok: true, locks: [] };
+  }
+
+  /*
+   * No ensureSiteServing() here, unlike detectSyncAction.
+   *
+   * Waking a sleeping PHP server takes seconds, and this runs every twenty.
+   * A site nobody has visited is also a site nobody is editing, so the honest
+   * answer for an asleep install is "no locks" — reached without the wait.
+   */
+  const available = await driverAvailable();
+  if (!available.ok) return { ok: false, error: available.reason ?? "WordPress tooling unavailable." };
+
+  return { ok: true, locks: await readEditLocks(installation.installPath) };
 }

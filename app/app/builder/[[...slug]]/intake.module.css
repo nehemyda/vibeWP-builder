@@ -1,0 +1,648 @@
+/*
+ * The intake cover.
+ *
+ * Opaque, not translucent. A first-time client has an empty canvas behind this
+ * and a half-lit empty page is a worse backdrop than none — while the form is
+ * open, the form is the screen.
+ */
+.cover {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: linear-gradient(150deg, #f7f5f2 0%, #eceef2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.75rem, 3vw, 2.5rem);
+  overflow: auto;
+}
+
+.panel {
+  width: min(920px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 32px 70px -30px rgba(15, 20, 35, 0.4);
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem 1.7rem 1.1rem;
+  border-bottom: 1px solid var(--line);
+}
+.title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.sub {
+  margin: 0.35rem 0 0;
+  max-width: 62ch;
+  font-size: 0.87rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.close {
+  flex: none;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.close:hover {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.steps {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.9rem 1.7rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  flex-wrap: wrap;
+}
+.stepChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem 0.35rem 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.stepOn {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.stepNum {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bg);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+.stepOn .stepNum {
+  background: var(--ink);
+  color: #fff;
+}
+
+/* The only scrolling region, so the header and the actions stay put. */
+.body {
+  padding: 1.4rem 1.7rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 1.1rem;
+}
+.span2 {
+  grid-column: 1 / -1;
+}
+
+.label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-bottom: 0.32rem;
+}
+.req {
+  color: var(--danger, #b4232a);
+}
+.hint {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.76rem;
+  color: var(--faint);
+  line-height: 1.45;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.9rem;
+  background: #fff;
+  color: var(--ink);
+}
+.textarea {
+  resize: vertical;
+  line-height: 1.55;
+}
+.input:focus,
+.textarea:focus {
+  outline: 2px solid var(--ink);
+  outline-offset: -1px;
+}
+
+.legend {
+  margin: 0 0 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.legendHint {
+  margin: 0 0 0.7rem;
+  font-size: 0.78rem;
+  color: var(--faint);
+  line-height: 1.5;
+  max-width: 62ch;
+}
+
+/* ---- Opening hours ---- */
+.hours {
+  display: grid;
+  gap: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+}
+.hourRow {
+  display: grid;
+  grid-template-columns: 5.5rem 5rem 1fr auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+}
+.dayName {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.closedBox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+.time {
+  width: 100%;
+  padding: 0.32rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.82rem;
+  background: #fff;
+}
+.time:disabled {
+  background: var(--bg);
+  color: var(--faint);
+}
+.dash {
+  color: var(--faint);
+  font-size: 0.8rem;
+}
+
+/* ---- Services ---- */
+.services {
+  display: grid;
+  gap: 0.45rem;
+}
+.serviceRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem;
+}
+.remove {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  width: 34px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.remove:hover {
+  color: var(--danger, #b4232a);
+  border-color: currentColor;
+}
+.addBtn {
+  justify-self: start;
+  border: 1px dashed var(--line);
+  background: transparent;
+  border-radius: 8px;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.addBtn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+/* ---- Palettes ---- */
+.palettes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0.7rem;
+}
+.palette {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem;
+  background: #fff;
+  cursor: pointer;
+}
+.palette:hover {
+  border-color: var(--ink);
+}
+.paletteOn {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink) inset;
+}
+.swatches {
+  display: flex;
+  gap: 0.25rem;
+}
+.swatches span {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+.paletteName {
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+.paletteDesc {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.customRow {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 1.1rem;
+  flex-wrap: wrap;
+}
+.customLabel {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.colorInput {
+  width: 42px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+.hexInput {
+  width: 8.5rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.82rem;
+}
+.hexInput[aria-invalid="true"] {
+  border-color: var(--danger, #b4232a);
+}
+.resetBtn {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.previewCard {
+  margin-top: 1.2rem;
+  border: 1px solid;
+  border-radius: 12px;
+  padding: 1.3rem 1.4rem 1.5rem;
+}
+.previewEyebrow {
+  margin: 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+}
+.previewHeading {
+  margin: 0.5rem 0 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.previewBody {
+  margin: 0.4rem 0 1rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  max-width: 50ch;
+}
+.previewBtn {
+  display: inline-block;
+  padding: 0.55rem 1.1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.error {
+  margin: 0;
+  padding: 0.7rem 1.7rem;
+  background: #fdecec;
+  border-top: 1px solid #f0c5c5;
+  color: #8c1d24;
+  font-size: 0.85rem;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1rem 1.7rem;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+.footSpacer {
+  flex: 1;
+}
+.primaryBtn {
+  border: none;
+  border-radius: 9px;
+  background: var(--ink);
+  color: #fff;
+  padding: 0.62rem 1.3rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.primaryBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.ghostBtn {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  padding: 0.6rem 1rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.ghostBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.hintFoot {
+  margin: 0;
+  padding: 0 1.7rem 0.9rem;
+  font-size: 0.78rem;
+  color: var(--faint);
+}
+
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  /* The five-column hour row is unreadable on a phone: day and Closed on one
+     line, the two times on the next. */
+  .hourRow {
+    grid-template-columns: 1fr auto;
+    row-gap: 0.3rem;
+  }
+  .hourRow .time {
+    grid-column: span 1;
+  }
+  .dash {
+    display: none;
+  }
+  .head,
+  .steps,
+  .body,
+  .foot {
+    padding-left: 1.1rem;
+    padding-right: 1.1rem;
+  }
+}
+
+/* ---- WordPress-side changes ----
+   Amber rather than red: this is not an error, it is a fact the client needs
+   before they save. It sits above the fields so it cannot be scrolled past. */
+.drift {
+  border-bottom: 1px solid #e8c98a;
+  background: #fdf6e7;
+  padding: 0.9rem 1.7rem 1rem;
+}
+.driftTitle {
+  display: block;
+  font-size: 0.87rem;
+  color: #7a5310;
+}
+.driftNote {
+  margin: 0.25rem 0 0.6rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #8a6320;
+  max-width: 66ch;
+}
+.driftList {
+  margin: 0 0 0.7rem;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.3rem;
+}
+/* Grid, not flex: a multi-line value (the week's hours) has to sit in its own
+   column and keep its line breaks, rather than collapsing into the row. */
+.driftList li {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.15rem 0.5rem;
+  font-size: 0.82rem;
+}
+.driftLabel {
+  font-weight: 700;
+  min-width: 7.5rem;
+  color: #6b4a10;
+}
+/* The old value is struck through, so which one is current needs no caption. */
+.driftWas {
+  grid-column: 2;
+  color: #9a7c48;
+  text-decoration: line-through;
+  white-space: pre-line;
+}
+/* Reads as "was → now" down the column, so the arrow sits between the two
+   values rather than trying to share a line with a three-line one. */
+.driftArrow {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: end;
+  color: #9a7c48;
+}
+.driftNow {
+  grid-column: 2;
+  font-weight: 600;
+  color: #4a3208;
+  white-space: pre-line;
+}
+.driftManual {
+  grid-column: 2;
+  font-size: 0.75rem;
+  color: #8a6320;
+}
+.driftBtn {
+  border: 1px solid #c9a45c;
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.42rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #7a5310;
+  cursor: pointer;
+}
+.driftBtn:hover:not(:disabled) {
+  background: #7a5310;
+  border-color: #7a5310;
+  color: #fff;
+}
+.driftBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---- Logo ---- */
+.logoRow {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+/* A chequerboard, so a transparent logo reads as transparent rather than as
+   a white rectangle the client will wonder about. */
+.logoPreview {
+  flex: none;
+  width: 84px;
+  height: 84px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #eef0f3 25%, transparent 25%, transparent 75%, #eef0f3 75%),
+    linear-gradient(45deg, #eef0f3 25%, transparent 25%, transparent 75%, #eef0f3 75%);
+  background-size: 14px 14px;
+  background-position: 0 0, 7px 7px;
+}
+.logoPreview img {
+  max-width: 76px;
+  max-height: 76px;
+  object-fit: contain;
+}
+.logoEmpty {
+  font-size: 0.72rem;
+  color: var(--faint);
+}
+.logoActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.logoBtn {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.logoBtn:hover {
+  border-color: var(--ink);
+}
+.logoRemove {
+  border: none;
+  background: transparent;
+  font-size: 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.logoHint {
+  flex-basis: 100%;
+  font-size: 0.74rem;
+  color: var(--faint);
+}
+.logoNote {
+  margin: 0.6rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--good, #1c7a4f);
+}
+
+/* ---- Colours taken from the logo ---- */
+.fromLogo {
+  margin-top: 1.1rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.fromLogoTitle {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.fromLogoSwatches {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.logoSwatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  padding: 0;
+}
+.logoSwatchOn {
+  box-shadow: 0 0 0 2px var(--ink);
+}
+.fromLogoNote {
+  margin: 0.55rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 62ch;
+}

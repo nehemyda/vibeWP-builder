@@ -84,6 +84,39 @@ export default async function AdminSettingsPage({
               style={inputStyle}
             />
           </div>
+          {/*
+            Where client domains point.
+            These are read by the builder's site-details panel and shown to
+            clients as the records to enter at their registrar, so they must be
+            this platform's real hosting targets. Left blank, the panel says no
+            records are configured rather than showing an example — a
+            placeholder is indistinguishable from a real value to whoever types
+            it in, and would send a live domain to the wrong server.
+          */}
+          <div>
+            <label htmlFor="hostingIpv4" style={labelStyle}>
+              Hosting IP address (A record)
+            </label>
+            <input
+              id="hostingIpv4"
+              name="hostingIpv4"
+              defaultValue={settings.hostingIpv4 ?? ""}
+              placeholder="Leave blank until you have a real server"
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label htmlFor="hostingCname" style={labelStyle}>
+              Hosting hostname (CNAME for www)
+            </label>
+            <input
+              id="hostingCname"
+              name="hostingCname"
+              defaultValue={settings.hostingCname ?? ""}
+              placeholder="e.g. sites.yourplatform.com"
+              style={inputStyle}
+            />
+          </div>
           <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.9rem" }}>
             <input type="checkbox" name="maintenanceMode" defaultChecked={settings.maintenanceMode} />
             Maintenance mode (illustrative — not enforced yet)

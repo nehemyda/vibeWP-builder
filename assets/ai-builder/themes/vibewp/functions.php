@@ -108,6 +108,7 @@ add_action( 'after_setup_theme', 'vibewp_setup' );
  */
 function vibewp_enqueue_styles() {
 
+
 	// 1. A src-less handle that exists purely to carry the inline layer setup.
 	wp_register_style( 'vibewp-layers', false, array(), VIBEWP_VERSION );
 	wp_enqueue_style( 'vibewp-layers' );
@@ -220,3 +221,41 @@ function vibewp_register_patterns() {
 	);
 }
 add_action( 'init', 'vibewp_register_patterns' );
+
+/**
+ * Replaces the {{year}} token with the current year, everywhere.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY A TOKEN AND NOT A HARD-CODED YEAR
+ *
+ * A footer reading "© 2026" is wrong from the first of January and nobody
+ * notices for months — it is the single most common stale detail on a small
+ * business site. Generating the year into the content at build time guarantees
+ * that outcome.
+ *
+ * A CSS ::before cannot help either: CSS has no access to the date. So the
+ * content carries a token and this filter substitutes it at render time.
+ *
+ * Chosen over registering a dynamic block because a token survives everything:
+ * it works in template parts and page content alike, a client editing the
+ * footer in wp-admin sees plain text rather than a block they might delete, and
+ * copy/pasting the line keeps it working.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+/*
+ * Business details: the Settings screen and the {{phone}}/{{email}}/{{address}}
+ * /{{hours}}/{{business_name}} tokens. Same mechanism as {{year}} below, which
+ * is the precedent it was built from.
+ */
+require_once get_theme_file_path( 'inc/business-details.php' );
+
+function vibewp_render_year_token( $block_content ) {
+	if ( false === strpos( $block_content, '{{year}}' ) ) {
+		return $block_content;
+	}
+	return str_replace( '{{year}}', date_i18n( 'Y' ), $block_content );
+}
+add_filter( 'render_block', 'vibewp_render_year_token' );
+
+/* Also covers the token appearing in a widget or raw post content. */
+add_filter( 'the_content', 'vibewp_render_year_token' );

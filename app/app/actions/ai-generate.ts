@@ -1,9 +1,24 @@
 "use server";
 
+import { createClient } from "@/lib/supabase/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { sites } from "@/lib/db/schema";
+import { canEditSite } from "@/app/actions/sites";
 import { getAiProviderSettings } from "@/lib/ai-provider-settings";
+import { generatePageWithGemini } from "@/lib/ai/generate-page";
+import {
+  loadBusinessContext,
+  photoQueryFor,
+  describeBusiness,
+  contactFactsFor,
+} from "@/lib/ai/business-context";
 import { generateHeroContentWithGemini } from "@/lib/ai/gemini";
 import { searchPhoto } from "@/lib/images/pexels";
-import { generateHeroContent, heroImageQuery, type HeroContent } from "@/lib/mock-ai";
+import { sectionsForPlan } from "@/lib/sections/resolve";
+import { planPage, planChrome, type PlannedSection } from "@/lib/sections/page-plan";
+import { generateHeroContent, heroContentToSchema } from "@/lib/mock-ai";
+import type { FieldSpec } from "@/lib/sections/types";
 
 /** Stable per-prompt spread, so two businesses in one vertical don't collide. */
 function seedFrom(prompt: string): number {
@@ -12,31 +27,225 @@ function seedFrom(prompt: string): number {
   return Math.abs(h);
 }
 
+/** One section node: what gets stored for a header or a footer. */
+export type ChromeNode = { id: string; type: string; props: Record<string, unknown> };
+
+export type GeneratedPage = {
+  schema: { schemaVersion: string; nodes: Array<Record<string, unknown>> };
+  /**
+   * The site's header and footer, when this generation established them.
+   *
+   * Returned as well as stored so the builder can repaint its canvas with the
+   * real chrome instead of the placeholder navigation it used to draw.
+   */
+  chrome: { header: ChromeNode | null; footer: ChromeNode | null };
+  /** One line per section built, shown as the build steps in chat. */
+  steps: string[];
+  /** Set when the page had to be built without the AI, so chat can say so. */
+  degraded: string | null;
+};
+
 /**
- * Called by the builder's autostart flow. Uses whichever provider is active
- * in /admin/ai-providers; falls back to the deterministic keyword mock if no
- * provider is configured or the real call fails for any reason, so the
- * builder never just breaks because of a bad key or a rate limit.
+ * Builds a whole page.
+ *
+ * Replaces generateHeroContentAction, which took a prompt and nothing else and
+ * returned a single hero. Two consequences of that, both of which this fixes:
+ *
+ *   1. The model was handed the user's instruction as the business
+ *      description, so "build home page" for a bakery produced copy about
+ *      building homepages.
+ *   2. The result was one hardcoded HeroSplit, so no prompt could ever produce
+ *      a page with more than one section.
+ *
+ * Access is checked here rather than trusted from the caller: this reads the
+ * business record and spends API budget, so it must not be callable for a site
+ * the user cannot edit.
  */
-export async function generateHeroContentAction(prompt: string): Promise<HeroContent> {
-  const settings = await getAiProviderSettings();
+export async function generatePageAction(opts: {
+  siteId: string;
+  slug: string;
+  title?: string;
+  instruction: string;
+}): Promise<GeneratedPage> {
+  const { siteId, slug, instruction, title } = opts;
 
-  let content: HeroContent | null = null;
-
-  if (settings.activeProvider === "gemini" && settings.geminiApiKey) {
-    try {
-      content = await generateHeroContentWithGemini(prompt, settings.geminiApiKey);
-    } catch (err) {
-      console.error("Gemini generation failed, falling back to keyword mock:", err);
-    }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated.");
+  if (!(await canEditSite(user.id, siteId))) {
+    throw new Error("You don't have access to this site.");
   }
 
-  content ??= generateHeroContent(prompt);
+  const site = await db.query.sites.findFirst({ where: eq(sites.id, siteId) });
+  const business = await loadBusinessContext(siteId);
+  const settings = await getAiProviderSettings();
 
-  // Copy first, photo second. Neither provider writes images, so the hero
-  // photo is sourced separately — and a miss here leaves content untouched
-  // rather than failing the generation.
-  const photo = await searchPhoto(heroImageQuery(prompt), seedFrom(prompt));
+  const available = await sectionsForPlan(site?.plan ?? "starter");
+  const plan = planPage(slug, available);
+
+  /*
+   * Header and footer are chosen once and then left alone. Re-picking them on
+   * every generation would change the navigation across the whole site because
+   * someone regenerated one inner page.
+   */
+  const chromeSettled = Boolean(site?.headerSchemaJson && site?.footerSchemaJson);
+  const chromePlan = chromeSettled ? [] : planChrome(available);
+
+  const pageTitle = title ?? (slug === "home" ? "Home" : slug);
+
+  // No business record and no plan means there is nothing to build against.
+  if (!business || plan.length === 0) {
+    return degradedHero(instruction, "no sections are available for this site's plan");
+  }
+
+  if (settings.activeProvider !== "gemini" || !settings.geminiApiKey) {
+    return degradedHero(instruction, "no AI provider is configured");
+  }
+
+  let generated;
+  try {
+    generated = await generatePageWithGemini({
+      apiKey: settings.geminiApiKey,
+      plan: [...plan, ...chromePlan],
+      business,
+      instruction,
+      pageTitle,
+    });
+  } catch (err) {
+    console.error("Page generation failed, falling back to a single hero:", err);
+    return degradedHero(instruction, "the AI provider failed", business.businessName);
+  }
+
+  /*
+   * Photos are sourced from the business, never from the instruction — the old
+   * code searched on what was typed, so "build home page" returned a concrete
+   * building. One query per page, reused, so a page costs one stock lookup.
+   */
+  const photo = await searchPhoto(photoQueryFor(business), seedFrom(business.businessName));
+
+  // Real contact details overwrite whatever the model produced for those
+  // fields. Facts we hold beat text we generated, every time.
+  const facts = contactFactsFor(business);
+
+  const nodes: Array<Record<string, unknown>> = [];
+  const steps: string[] = [];
+  const rejected: string[] = [];
+
+  for (const { job, section } of plan) {
+    const raw = generated[section.key];
+    if (!raw) {
+      rejected.push(section.key);
+      continue;
+    }
+
+    const props = withFacts(photo ? withPhoto(raw, section, photo) : raw, section, facts);
+
+    if (!usable(props, section)) {
+      rejected.push(section.key);
+      continue;
+    }
+
+    nodes.push({ id: `n_${section.key}`, type: section.nodeType, props });
+    steps.push(`${job} — ${section.name}`);
+  }
+
+  if (rejected.length) {
+    console.warn(`Dropped ${rejected.length} unusable section(s): ${rejected.join(", ")}`);
+  }
+
+  /*
+   * Build and persist the header/footer.
+   *
+   * Written to the site row, not the page, and only on the generation that
+   * establishes them. Export turns these into parts/header.html and
+   * parts/footer.html; until this existed, every exported site kept the
+   * theme's stub footer — a site title and the words "All rights reserved" —
+   * and none of the five footer sections in the library could ever reach one.
+   */
+  const chrome: GeneratedPage["chrome"] = { header: null, footer: null };
+  for (const { job, section } of chromePlan) {
+    /*
+     * A section with no fields has nothing for the model to return, so an
+     * absent key is expected rather than a failure. header-simple is exactly
+     * this: its title and menu are WordPress dynamic blocks, so its whole
+     * definition is `fields: {}`.
+     */
+    const hasFields = Object.keys(section.definition.fields).length > 0;
+    const raw = generated[section.key] ?? (hasFields ? null : {});
+    if (!raw) continue;
+    const props = withFacts(raw, section, facts);
+    if (!usable(props, section)) continue;
+
+    const node: ChromeNode = { id: `n_${section.key}`, type: section.nodeType, props };
+    const placement = section.definition.placement;
+    if (placement === "header") chrome.header = node;
+    else if (placement === "footer") chrome.footer = node;
+    else continue;
+    steps.push(`${job} — ${section.name}`);
+  }
+
+  if (chrome.header || chrome.footer) {
+    await db
+      .update(sites)
+      .set({
+        ...(chrome.header ? { headerSchemaJson: chrome.header } : {}),
+        ...(chrome.footer ? { footerSchemaJson: chrome.footer } : {}),
+      })
+      .where(eq(sites.id, siteId));
+  }
+
+  // Already-settled chrome is returned unchanged, so the builder always has
+  // something to draw around the page rather than falling back to a placeholder.
+  if (!chrome.header) chrome.header = (site?.headerSchemaJson as ChromeNode | null) ?? null;
+  if (!chrome.footer) chrome.footer = (site?.footerSchemaJson as ChromeNode | null) ?? null;
+
+  // Every section failing means the response was unusable, not that the page
+  // is legitimately empty. A hero is better than a blank canvas.
+  if (nodes.length === 0) {
+    return degradedHero(instruction, "the AI returned nothing usable", business.businessName);
+  }
+
+  return {
+    schema: { schemaVersion: "1.0", nodes },
+    chrome,
+    steps,
+    degraded: rejected.length
+      ? `${rejected.length} section${rejected.length === 1 ? "" : "s"} came back unusable and ${rejected.length === 1 ? "was" : "were"} left out.`
+      : null,
+  };
+}
+
+/**
+ * The single-hero path, used whenever a full page cannot be built.
+ *
+ * Deliberately still produces something rather than throwing: a builder that
+ * shows a blank canvas because a key expired is worse than one that shows a
+ * hero and says why. The reason is returned so chat can state it plainly
+ * instead of implying the page is finished.
+ */
+async function degradedHero(
+  instruction: string,
+  reason: string,
+  businessName?: string,
+): Promise<GeneratedPage> {
+  const settings = await getAiProviderSettings();
+  const promptForHero = businessName
+    ? `${businessName}. ${instruction}`
+    : instruction;
+
+  let content = null;
+  if (settings.activeProvider === "gemini" && settings.geminiApiKey) {
+    try {
+      content = await generateHeroContentWithGemini(promptForHero, settings.geminiApiKey);
+    } catch {
+      // Falls through to the keyword mock below.
+    }
+  }
+  content ??= generateHeroContent(promptForHero);
+
+  const photo = await searchPhoto(businessName ?? instruction, seedFrom(promptForHero));
   if (photo) {
     content = {
       ...content,
@@ -49,5 +258,143 @@ export async function generateHeroContentAction(prompt: string): Promise<HeroCon
     };
   }
 
-  return content;
+  return {
+    schema: heroContentToSchema(content) as GeneratedPage["schema"],
+    chrome: { header: null, footer: null },
+    steps: ["Opening pitch — Hero"],
+    degraded: `Only the hero was built, because ${reason}.`,
+  };
+}
+
+/**
+ * Attaches the stock photo to a section that declares a top-level image field.
+ *
+ * LIMITATION, stated rather than hidden: images nested inside a list — the
+ * photo cards, the gallery — are not filled, because each entry needs its OWN
+ * subject and one shared query cannot supply that. Those sections are kept out
+ * of the default plans for exactly this reason; if one is planned, it renders
+ * without photographs rather than with three identical ones.
+ */
+function withPhoto(
+  props: Record<string, unknown>,
+  section: PlannedSection["section"],
+  photo: { url: string; alt: string; photographer?: string; photographerUrl?: string },
+): Record<string, unknown> {
+  const imageField = Object.entries(section.definition.fields).find(
+    ([, spec]) => (spec as FieldSpec).type === "image",
+  );
+  if (!imageField) return props;
+
+  return {
+    ...props,
+    [imageField[0]]: {
+      url: photo.url,
+      alt: photo.alt,
+      ...(photo.photographer ? { photographer: photo.photographer } : {}),
+      ...(photo.photographerUrl ? { photographerUrl: photo.photographerUrl } : {}),
+    },
+  };
+}
+
+/**
+ * Writes known contact details over the generated ones.
+ *
+ * Only touches fields the section actually declares, so a hero is unaffected
+ * and a contact section gets the real number. A fact we hold is never worse
+ * than a line the model wrote about it.
+ */
+/*
+ * Fields the WordPress theme can resolve at render time, and the token each
+ * one becomes. Anything not listed here is written as a literal value.
+ */
+const TOKENISED_FACTS: Record<string, string> = {
+  phone: "{{phone}}",
+  email: "{{email}}",
+  address: "{{address}}",
+  hours: "{{hours}}",
+};
+
+function withFacts(
+  props: Record<string, unknown>,
+  section: PlannedSection["section"],
+  facts: Record<string, string>,
+): Record<string, unknown> {
+  const out = { ...props };
+  for (const field of Object.keys(facts)) {
+    if (!(field in section.definition.fields)) continue;
+    /*
+     * A TOKEN, not the value.
+     *
+     * Writing "01225 447 812" into the page freezes it there: change the number
+     * later and it has to be changed on the contact section, the footer, and
+     * every other place it appears, on every page. The token is resolved by the
+     * theme from a single option, so one edit in Settings → Business details
+     * updates the whole site — which is the entire reason the WordPress side
+     * has an options screen at all.
+     *
+     * Same mechanism as {{year}}, and the same trade: the token is visible as
+     * literal text if this content is ever moved to a theme that cannot resolve
+     * it. The builder preview substitutes them so the canvas still shows the
+     * real details.
+     */
+    out[field] = TOKENISED_FACTS[field] ?? facts[field];
+  }
+  return out;
+}
+
+/**
+ * Whether generated props are fit to publish.
+ *
+ * Two failure modes worth catching, both seen in practice:
+ *
+ *   - The model echoes the sample. Sample copy is about a fictional florist,
+ *     so publishing it would put someone else's business on this site.
+ *   - The shape is wrong enough that serializing throws, which would take the
+ *     whole page down instead of one section.
+ */
+function usable(props: Record<string, unknown>, section: PlannedSection["section"]): boolean {
+  const def = section.definition;
+
+  let markup: string;
+  try {
+    markup = def.toGutenberg(props);
+  } catch {
+    return false;
+  }
+  if (!markup.trim()) return false;
+
+  // Compared on text, not on the object: a model that reworded one field but
+  // copied the rest has still mostly echoed the sample.
+  /*
+   * A section that declares no fields has no copy to judge — it serializes from
+   * dynamic blocks alone. Requiring text here rejected header-simple outright,
+   * which would have left every site without a header.
+   */
+  if (Object.keys(def.fields).length === 0) return true;
+
+  const sampleText = textOf(def.sample as Record<string, unknown>);
+  const propsText = textOf(props);
+  if (propsText.length === 0) return false;
+  if (sampleText.length > 0 && propsText === sampleText) return false;
+
+  return true;
+}
+
+/** Every string in an object tree, flattened, for comparison. */
+function textOf(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) return value.map(textOf).filter(Boolean).join("|");
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>)
+      .map(textOf)
+      .filter(Boolean)
+      .join("|");
+  }
+  return "";
+}
+
+/** Kept for callers that only want a business summary, e.g. chat context. */
+export async function describeBusinessAction(siteId: string): Promise<string | null> {
+  const ctx = await loadBusinessContext(siteId);
+  return ctx ? describeBusiness(ctx) : null;
 }

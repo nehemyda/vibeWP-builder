@@ -1,0 +1,149 @@
+.back {
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  margin-bottom: 0.9rem;
+}
+.back:hover {
+  color: var(--ink);
+}
+
+/* Preview gets the room; settings stay a readable column beside it. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 0.9fr);
+  gap: 1.1rem;
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: 1rem 1.1rem 1.2rem;
+  margin-bottom: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.panelHead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.3rem;
+}
+
+.fields {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+}
+.fields td {
+  padding: 0.45rem 0.5rem 0.45rem 0;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+}
+.fields tr:first-child td {
+  border-top: none;
+}
+.type {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+}
+.limit {
+  margin-left: 0.4rem;
+  font-size: 0.74rem;
+  color: var(--faint);
+}
+.warn {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #9a4a00;
+  line-height: 1.5;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+.field > span {
+  font-weight: 600;
+}
+.field input[type="text"],
+.field input:not([type]),
+.field input[type="number"],
+.field textarea {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: var(--surface);
+  width: 100%;
+}
+.field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+.row {
+  display: grid;
+  grid-template-columns: 1fr 110px;
+  gap: 0.6rem;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.check input {
+  margin-top: 0.2rem;
+  flex: none;
+}
+.check em,
+.help {
+  display: block;
+  font-style: normal;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.save {
+  margin-top: 0.4rem;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--ink);
+  color: #fff;
+  font-size: 0.87rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.codeNote {
+  margin: 0.6rem 0 0;
+  font-size: 0.78rem;
+  color: var(--faint);
+  line-height: 1.55;
+}

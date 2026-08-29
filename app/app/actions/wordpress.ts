@@ -1,11 +1,16 @@
 "use server";
 
+
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { sites, sitePages, siteInstallations, profiles } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
-import { schemaToGutenberg, requireAlt } from "@/lib/wp/blocks";
-import { gutenbergToSchema } from "@/lib/wp/parse-blocks";
+import { requireAlt } from "@/lib/wp/blocks";
+import { schemaToGutenberg, sectionToTemplatePart, withSiteLogo } from "@/lib/wp/serialize";
+import { resolveBrandColors } from "@/lib/brand/palettes";
+import { loadBusinessContext, contactFactsFor } from "@/lib/ai/business-context";
+import { detectBusinessDriftAction } from "@/app/actions/business-sync";
+import { gutenbergToSchema } from "@/lib/wp/serialize";
 import { pushWouldOverwrite } from "@/lib/wp/sync";
 import { detectSyncAction } from "@/app/actions/sync";
 import {
@@ -15,6 +20,11 @@ import {
   ensureSiteServing,
   createAdminLoginUrl,
   sideloadImage,
+  syncTheme,
+  writeTemplatePart,
+  writeThemePalette,
+  writeBusinessOptions,
+  setSiteLogo,
 } from "@/lib/wp/local-driver";
 import { logActivity } from "@/lib/activity";
 
@@ -113,6 +123,30 @@ export async function exportToWordPressAction(
   }
 
   /*
+   * Refresh the theme BEFORE the content guard below.
+   *
+   * Deliberate ordering. The guard can refuse a content push because the
+   * client edited a page in wp-admin — but the theme is platform-owned, and
+   * updating it touches no content, so a content conflict must not also
+   * strand a stylesheet fix on that site.
+   *
+   * Placing this after the guard is exactly the bug that was caught here: a
+   * blocked export left the site on the stylesheet it was provisioned with,
+   * while the builder preview showed the current one.
+   */
+  const existing = await db.query.siteInstallations.findFirst({
+    where: eq(siteInstallations.siteId, site.id),
+  });
+  if (existing?.installPath && existing.status === "ready") {
+    try {
+      await syncTheme(existing.installPath);
+    } catch (err) {
+      // Never fatal: an out-of-date stylesheet is far better than a failed export.
+      console.warn("[wp] theme sync failed", err);
+    }
+  }
+
+  /*
    * Refuse to overwrite work done in wp-admin.
    *
    * This used to push unconditionally: upsertPage() replaces post_content
@@ -137,6 +171,28 @@ export async function exportToWordPressAction(
         };
       }
     }
+    /*
+     * The same guard for the business details.
+     *
+     * Export writes these options unconditionally, so without this a client who
+     * corrected their phone number on the live site had it silently replaced by
+     * the next push — the exact failure the page guard above was built to stop,
+     * on data where being wrong means a customer cannot reach the business.
+     */
+    const detailDrift = await detectBusinessDriftAction(site.id);
+    if (detailDrift.ok && detailDrift.drift.length > 0) {
+      const names = detailDrift.drift.map((d) => d.label.toLowerCase());
+      return {
+        ok: false,
+        blocked: true,
+        error:
+          `${names.length === 1 ? "The " + names[0] : names.join(", ")} ` +
+          `${names.length === 1 ? "was" : "were"} changed in WordPress since the last export. ` +
+          `Pushing now would overwrite ${names.length === 1 ? "it" : "them"} — open Business details in the builder to take the WordPress values first.`,
+        pages: [],
+      };
+    }
+
     // A failed detection is not a reason to block: if WordPress is unreachable
     // there is nothing to overwrite yet, and the push will report its own error.
   }
@@ -228,6 +284,99 @@ export async function exportToWordPressAction(
         ok: false,
         error: serving.error ?? "Could not start the WordPress server for this site.",
       };
+    }
+
+    /*
+     * Business details into WordPress options.
+     *
+     * The theme resolves {{phone}} and friends from these at render time, so
+     * this is what makes the details editable on the WordPress side instead of
+     * frozen into each page at the moment it was generated.
+     */
+    try {
+      const ctx = await loadBusinessContext(site.id);
+      if (ctx) {
+        const facts = contactFactsFor(ctx);
+        await writeBusinessOptions({
+          installPath: installation.installPath,
+          values: {
+            business_name: ctx.businessName,
+            phone: facts.phone ?? "",
+            email: facts.email ?? "",
+            address: facts.address ?? "",
+            hours: facts.hours ?? "",
+          },
+        });
+      }
+    } catch (err) {
+      // Non-fatal: the details are also present in the page content itself.
+      console.warn("[wp] could not write business options", err);
+    }
+
+    /*
+     * The logo into the media library, and set as the site logo.
+     *
+     * Before the template parts, because whether a logo exists decides whether
+     * the header shows one instead of the site title.
+     */
+    let hasLogo = false;
+    try {
+      const ctx = await loadBusinessContext(site.id);
+      if (ctx?.logoUrl) {
+        await setSiteLogo({ installPath: installation.installPath, dataUrl: ctx.logoUrl });
+        hasLogo = true;
+      }
+    } catch (err) {
+      // Non-fatal: a site with its name in the header instead of a logo works.
+      console.warn("[wp] could not set the site logo", err);
+    }
+
+    /*
+     * Brand colours into theme.json.
+     *
+     * After syncTheme for the same reason as the template parts: it replaces
+     * the theme directory wholesale. One write restyles every section, because
+     * sections.css reads these presets rather than hardcoding hexes.
+     */
+    try {
+      await writeThemePalette({
+        installPath: installation.installPath,
+        colors: resolveBrandColors(site.brandPaletteKey, site.brandColors),
+      });
+    } catch (err) {
+      // Non-fatal: the theme's own defaults are a working palette.
+      console.warn("[wp] could not write theme.json palette", err);
+    }
+
+    /*
+     * Write the site's header and footer into the theme.
+     *
+     * AFTER syncTheme and after provisioning, both of which copy the theme
+     * directory wholesale and would overwrite these. Before this existed, the
+     * exported site always showed the stub that ships in source — the site
+     * title and "All rights reserved" — so none of the header or footer
+     * sections in the library could ever appear on a real site.
+     *
+     * Non-fatal: a site with the stub chrome is a working site, and failing the
+     * whole export over a template part would lose the page content too.
+     */
+    for (const [name, node] of [
+      ["header", site.headerSchemaJson],
+      ["footer", site.footerSchemaJson],
+    ] as const) {
+      const chrome = node as { type?: string; props?: unknown } | null;
+      if (!chrome?.type) continue;
+      try {
+        const html = withSiteLogo(
+          sectionToTemplatePart(chrome.type, chrome.props ?? {}),
+          hasLogo,
+        );
+        if (html.trim()) {
+          await writeTemplatePart({ installPath: installation.installPath, name, html });
+        }
+      } catch (err) {
+        console.warn(`[wp] could not write parts/${name}.html`, err);
+      }
     }
 
     // Every page is reconciled by slug — created if absent, updated if not.

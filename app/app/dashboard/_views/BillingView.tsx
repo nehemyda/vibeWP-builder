@@ -63,7 +63,7 @@ export async function BillingView({
 
   return (
     <DashboardShell
-      navGroups={smbNav(paths)}
+      navGroups={smbNav(paths, Boolean(site.intakeCompletedAt))}
       activeHref={paths.billingPath}
       userName={profile.fullName}
       userRole={site.name}

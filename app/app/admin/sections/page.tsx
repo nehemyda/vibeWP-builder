@@ -1,35 +1,68 @@
-import { requireRole } from "@/lib/auth/require-role";
-import { db } from "@/lib/db";
+import Link from "next/link";
+import { requirePermission } from "@/lib/auth/require-permission";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
-import { createSectionAction, updateSectionAction } from "@/app/actions/sections";
+import { listSections, reconcileSections } from "@/lib/sections/resolve";
+import { deleteOrphanSectionAction } from "@/app/actions/sections";
+import { sectionPreviewMarkup } from "@/lib/wp/serialize";
+import { CardPreview } from "./CardPreview";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
+import styles from "./sections.module.css";
 import { ADMIN_NAV } from "../nav";
 
-const inputStyle = {
-  width: "100%",
-  padding: "0.6rem 0.8rem",
-  borderRadius: 10,
-  border: "1px solid var(--line)",
-  fontSize: "0.87rem",
-} as const;
-const labelStyle = {
-  display: "block",
-  fontSize: "0.78rem",
-  fontWeight: 600,
-  marginBottom: "0.35rem",
-  color: "var(--muted)",
-} as const;
-
+/**
+ * The library index.
+ *
+ * Built from the section registry, not from the database. The old page listed
+ * table rows and offered a form to create more, which let an admin add an entry
+ * pointing at a component that did not exist — it showed up here and rendered
+ * nothing. Now a card exists because code exists; the database only adjusts it.
+ */
 export default async function AdminSectionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ category?: string; q?: string; added?: string }>;
 }) {
-  const { profile } = await requireRole(["super_admin"]);
-  const { saved } = await searchParams;
+  const { profile } = await requirePermission("sections.manage");
+  const { category, q, added } = await searchParams;
 
-  const allSections = await db.query.sections.findMany();
-  const sorted = allSections.slice().sort((a, b) => a.sortOrder - b.sortOrder);
+  // Deploying a section should make it manageable without a manual step.
+  await reconcileSections();
+
+  const { resolved, orphans } = await listSections();
+
+  /*
+   * Counts come from the unfiltered set, so a chip always shows how many
+   * sections that category holds — not how many survive the current filter,
+   * which would make every count read 0 for the categories you aren't in.
+   *
+   * Ordered by the sequence a page is actually assembled in rather than
+   * alphabetically, so the list reads header → content → footer.
+   */
+  const CATEGORY_ORDER = [
+    "Header",
+    "Hero",
+    "Content",
+    "Social proof",
+    "Conversion",
+    "Support",
+    "Contact",
+    "Footer",
+  ];
+  const counts = new Map<string, number>();
+  for (const s of resolved) counts.set(s.category, (counts.get(s.category) ?? 0) + 1);
+  const categories = [...counts.keys()].sort(
+    (a, b) => CATEGORY_ORDER.indexOf(a) - CATEGORY_ORDER.indexOf(b),
+  );
+  const needle = q?.trim().toLowerCase();
+  const visible = resolved.filter((s) => {
+    if (category && s.category !== category) return false;
+    if (!needle) return true;
+    return (
+      s.name.toLowerCase().includes(needle) ||
+      s.description.toLowerCase().includes(needle) ||
+      s.key.includes(needle)
+    );
+  });
 
   return (
     <DashboardShell
@@ -38,88 +71,119 @@ export default async function AdminSectionsPage({
       userName={profile.fullName}
       userRole="Super admin"
       title="Section library"
-      subtitle="Reusable page-building blocks available in the builder — platform-wide, managed only here."
+      subtitle={`${resolved.length} section${resolved.length === 1 ? "" : "s"} available to the builder`}
     >
-      {saved && (
-        <div className={shell.panel} style={{ padding: "1rem", marginBottom: "1.2rem", color: "var(--good)" }}>
-          Saved.
+      {added && (
+        <div className={styles.notice}>
+          Registered {added} new section{added === "1" ? "" : "s"} from the latest deploy.
         </div>
       )}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: "1rem",
-          marginBottom: "1.2rem",
-        }}
-      >
-        {sorted.map((section) => (
-          <div key={section.id} className={shell.panel} style={{ padding: "1.3rem" }}>
-            <form action={updateSectionAction} style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
-              <input type="hidden" name="sectionId" value={section.id} />
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span className={shell.idBadge}>{section.key}</span>
-                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem" }}>
-                  <input type="checkbox" name="isActive" defaultChecked={section.isActive} />
-                  Active
-                </label>
-              </div>
-              <div>
-                <label style={labelStyle}>Name</label>
-                <input name="name" defaultValue={section.name} required style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>Description</label>
-                <textarea
-                  name="description"
-                  rows={2}
-                  defaultValue={section.description ?? ""}
-                  style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
-                />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem" }}>
-                <div>
-                  <label style={labelStyle}>Category</label>
-                  <input name="category" defaultValue={section.category} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Component type</label>
-                  <input name="componentType" defaultValue={section.componentType} required style={inputStyle} />
-                </div>
-              </div>
-              <button type="submit" className={`${shell.btn} ${shell.btnPrimary}`}>
-                Save {section.name}
+      {/*
+        An orphan means a section was renamed or removed in code while its
+        settings row survived. Shown rather than hidden, because any page still
+        referencing it will quietly fail to render that section.
+      */}
+      {orphans.length > 0 && (
+        <div className={styles.orphans}>
+          <strong>
+            {orphans.length} settings row{orphans.length === 1 ? "" : "s"} with no matching section
+            in code
+          </strong>
+          <p>
+            These were created before sections came from the registry, or the section was renamed.
+            Nothing will render them.
+          </p>
+          {orphans.map((o) => (
+            <form action={deleteOrphanSectionAction} key={o.id} className={styles.orphanRow}>
+              <input type="hidden" name="sectionId" value={o.id} />
+              <input type="hidden" name="key" value={o.key} />
+              <code>{o.key}</code>
+              <span className={shell.rowSub}>expects component “{o.componentType}”</span>
+              <button type="submit" className={styles.linkBtn}>
+                Remove row
               </button>
             </form>
-          </div>
+          ))}
+        </div>
+      )}
+
+      <form className={styles.filters}>
+        <input
+          type="search"
+          name="q"
+          defaultValue={q ?? ""}
+          placeholder="Search sections…"
+          className={styles.search}
+        />
+        <div className={styles.chips}>
+          <Link
+            href="/admin/sections"
+            className={`${styles.chip} ${!category ? styles.chipOn : ""}`}
+          >
+            All <span className={styles.chipCount}>{resolved.length}</span>
+          </Link>
+          {categories.map((c) => (
+            <Link
+              key={c}
+              href={`/admin/sections?category=${encodeURIComponent(c)}`}
+              className={`${styles.chip} ${category === c ? styles.chipOn : ""}`}
+            >
+              {c} <span className={styles.chipCount}>{counts.get(c)}</span>
+            </Link>
+          ))}
+        </div>
+      </form>
+
+      <div className={styles.grid}>
+        {visible.map((s) => (
+          <Link href={`/admin/sections/${s.key}`} key={s.key} className={styles.card}>
+            <div className={styles.thumb}>
+              {/*
+                A stored image wins if an admin has deliberately set one —
+                useful for a section whose sample doesn't photograph well.
+                Otherwise render the section for real, so a thumbnail can
+                never disagree with the section it depicts.
+              */}
+              {s.previewImageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={s.previewImageUrl} alt={`${s.name} preview`} />
+              ) : (
+                <CardPreview html={sectionPreviewMarkup(s.nodeType, s.definition.sample)} />
+              )}
+            </div>
+            <div className={styles.cardBody}>
+              <div className={styles.cardTop}>
+                <span className={styles.cardName}>{s.name}</span>
+                <span className={s.isActive ? styles.pillOn : styles.pillOff}>
+                  {s.isActive ? "Active" : "Off"}
+                </span>
+              </div>
+              <span className={styles.cardCat}>{s.category}</span>
+              <p className={styles.cardDesc}>{s.description}</p>
+              <div className={styles.cardMeta}>
+                <code>{s.key}</code>
+                {s.aiPromptOverride && <span className={styles.tag}>custom prompt</span>}
+                {s.allowedPlans.length > 0 && (
+                  <span className={styles.tag}>{s.allowedPlans.length} plan(s)</span>
+                )}
+              </div>
+            </div>
+          </Link>
         ))}
+
+        {visible.length === 0 && (
+          <p className={shell.rowSub} style={{ padding: "1.3rem" }}>
+            No sections match that filter.
+          </p>
+        )}
       </div>
 
-      <div className={shell.panel} style={{ padding: "1.3rem", maxWidth: 420 }}>
-        <h2 style={{ margin: "0 0 1rem", fontSize: "1rem" }}>Add a section</h2>
-        <form action={createSectionAction} style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
-          <div>
-            <label style={labelStyle}>Key (internal, unique)</label>
-            <input name="key" required placeholder="testimonial-grid" style={inputStyle} />
-          </div>
-          <div>
-            <label style={labelStyle}>Name</label>
-            <input name="name" required placeholder="Testimonial Grid" style={inputStyle} />
-          </div>
-          <div>
-            <label style={labelStyle}>Component type</label>
-            <input name="componentType" required placeholder="TestimonialGrid" style={inputStyle} />
-          </div>
-          <div>
-            <label style={labelStyle}>Category</label>
-            <input name="category" defaultValue="General" style={inputStyle} />
-          </div>
-          <button type="submit" className={shell.btn}>
-            Create section
-          </button>
-        </form>
-      </div>
+      <p className={styles.footnote}>
+        Sections are defined in code (<code>lib/sections/</code>) so each one ships with its own
+        markup and stylesheet. This page controls how they are presented and who can use them —
+        adding a new section type is a deploy.
+      </p>
     </DashboardShell>
   );
 }

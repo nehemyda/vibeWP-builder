@@ -22,21 +22,47 @@ export function NotificationBell() {
   const [loaded, setLoaded] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
+  /*
+   * Polled, and refreshed whenever the tab is looked at again.
+   *
+   * This used to fetch once on mount and never again, so a notification only
+   * ever appeared if you happened to load a page after it was written. That
+   * read as notifications arriving "very late" — they were not late, nothing
+   * was asking for them. Someone sitting on a dashboard would never see one.
+   *
+   * The visibility listener matters more than the interval here: the common
+   * case is a client working in another tab (often WordPress) and coming back,
+   * and that should show the current state immediately rather than up to a
+   * minute later.
+   */
   useEffect(() => {
     let cancelled = false;
-    fetch("/notifications")
-      .then((res) => (res.ok ? res.json() : { items: [] }))
-      .then((data: { items: Item[] }) => {
-        if (!cancelled) {
-          setItems(data.items ?? []);
-          setLoaded(true);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLoaded(true);
-      });
+
+    const load = () => {
+      fetch("/notifications")
+        .then((res) => (res.ok ? res.json() : { items: [] }))
+        .then((data: { items: Item[] }) => {
+          if (!cancelled) {
+            setItems(data.items ?? []);
+            setLoaded(true);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setLoaded(true);
+        });
+    };
+
+    load();
+    const timer = setInterval(load, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 

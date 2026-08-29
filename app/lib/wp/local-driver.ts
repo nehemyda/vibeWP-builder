@@ -1,6 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, cp, writeFile, open } from "node:fs/promises";
+import { mkdir, cp, writeFile, readFile, rm, open } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -286,10 +286,7 @@ export async function provisionSite(opts: {
 
   // Ship the theme with the install so the site is self-contained and keeps
   // working even if this platform disappears.
-  await cp(THEME_SRC, join(installPath, "wp-content", "themes", "vibewp"), {
-    recursive: true,
-    force: true,
-  });
+  await syncTheme(installPath);
   await wp(["theme", "activate", "vibewp", `--path=${installPath}`]);
 
   // WordPress installs with "plain" permalinks (?page_id=N), which means a
@@ -371,6 +368,220 @@ export async function upsertPage(opts: {
   return parsed;
 }
 
+/**
+ * Copies the current theme into an install, overwriting the previous copy.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THIS RUNS ON EVERY EXPORT, NOT JUST AT PROVISION
+ *
+ * Each site gets its own copy of the theme, which is what makes it portable.
+ * But the copy used to be taken once, at provision time — so a fix to
+ * sections.css reached new sites only. Existing sites kept the stylesheet they
+ * were born with, while the builder preview read the current source.
+ *
+ * That quietly breaks the property the preview is built on: the canvas and the
+ * live site are supposed to be the same markup in the same CSS. Fixing the
+ * hero's mobile padding, for instance, would have changed the preview and left
+ * every already-exported site untouched.
+ *
+ * Content is the client's; the theme is ours. So this overwrites — a site that
+ * has had its theme files hand-edited will lose those edits, which is the
+ * intended trade. Client-facing customisation belongs in theme.json presets and
+ * block content, both of which live outside these files.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export async function syncTheme(installPath: string): Promise<void> {
+  await cp(THEME_SRC, join(installPath, "wp-content", "themes", "vibewp"), {
+    recursive: true,
+    force: true,
+  });
+}
+
+/**
+ * Imports the business logo into the media library and sets it as the site logo.
+ *
+ * The logo is held in VibeWP as a data URL, so it is decoded to a temporary
+ * file first — WP-CLI imports from a path or an http URL, and a data: URL is
+ * neither.
+ *
+ * Both `site_logo` (the option a block theme's site-logo block reads) and the
+ * `custom_logo` theme mod are set: the option is what WordPress 5.8+ uses, the
+ * theme mod is what older code and some plugins still look at, and having them
+ * disagree is how a logo ends up showing in one place and not another.
+ */
+export async function setSiteLogo(opts: {
+  installPath: string;
+  dataUrl: string;
+}): Promise<void> {
+  const { installPath, dataUrl } = opts;
+
+  const match = dataUrl.match(/^data:image\/(png|jpeg|webp);base64,(.+)$/);
+  if (!match) throw new Error("Logo is not a supported data URL.");
+
+  const [, ext, base64] = match;
+  const file = join(
+    installPath,
+    `.vibewp-logo.${ext === "jpeg" ? "jpg" : ext}`,
+  );
+  await writeFile(file, Buffer.from(base64, "base64"));
+
+  try {
+    const id = (
+      await wp(["media", "import", file, "--porcelain", "--title=Site logo"], installPath)
+    ).trim();
+    if (!/^\d+$/.test(id)) throw new Error(`Unexpected attachment id: ${id}`);
+
+    await wp(["option", "update", "site_logo", id], installPath);
+    await wp(["theme", "mod", "set", "custom_logo", id], installPath);
+  } finally {
+    // The media library has its own copy now; leaving this behind would put a
+    // stray file in the site root on every export.
+    await rm(file, { force: true });
+  }
+}
+
+/** The business-detail options the theme reads. */
+export const BUSINESS_OPTION_KEYS = [
+  "business_name",
+  "phone",
+  "email",
+  "address",
+  "hours",
+] as const;
+
+/**
+ * Reads the business details back out of WordPress.
+ *
+ * The other half of writeBusinessOptions, and the reason it exists: a client
+ * who corrects their phone number in Settings → Business details was invisible
+ * to VibeWP, and the next export overwrote them without a word. Push-only is
+ * the same mistake export used to make with page content.
+ *
+ * A missing option comes back as an empty string rather than throwing — an
+ * option is absent until someone first saves it.
+ */
+export async function readBusinessOptions(
+  installPath: string,
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+
+  for (const key of BUSINESS_OPTION_KEYS) {
+    try {
+      out[key] = (await wp(["option", "get", `vibewp_business_${key}`], installPath)).trim();
+    } catch {
+      out[key] = "";
+    }
+  }
+  return out;
+}
+
+/**
+ * Pushes the client's business details into WordPress options.
+ *
+ * These back the {{phone}} / {{email}} / {{address}} / {{hours}} tokens the
+ * theme resolves at render time, and the LocalBusiness JSON-LD. Setting them
+ * here is what makes the WordPress side editable: change the number in
+ * Settings → Business details and every page follows, rather than each page
+ * carrying its own frozen copy.
+ *
+ * Values go through WP-CLI rather than being written into content, so a client
+ * editing a page cannot accidentally break the link between the two.
+ */
+export async function writeBusinessOptions(opts: {
+  installPath: string;
+  values: Record<string, string>;
+}): Promise<void> {
+  const { installPath, values } = opts;
+
+  for (const [key, value] of Object.entries(values)) {
+    if (!/^[a-z_]+$/.test(key)) continue;
+    /*
+     * Passed as an argv element, never interpolated into a shell string —
+     * execFile does not spawn a shell, so an address containing a quote or a
+     * semicolon is just an address.
+     */
+    await wp(["option", "update", `vibewp_business_${key}`, value], installPath);
+  }
+}
+
+/**
+ * Writes the site's brand palette into its copy of theme.json.
+ *
+ * MUST run AFTER syncTheme(), which replaces the whole theme directory.
+ *
+ * WHY theme.json AND NOT A STYLESHEET OR AN OPTIONS PAGE
+ *
+ * Every rule in sections.css already reads the preset:
+ *
+ *     --primary: var(--wp--preset--color--primary, #f54900);
+ *
+ * so setting the preset restyles all 56 sections at once, with nothing to keep
+ * in sync and no per-section work. It also keeps Appearance → Editor → Styles
+ * working, because that screen edits exactly these values — a custom colour
+ * panel would be a second place to set a colour that fights this one.
+ *
+ * Merges into the existing file rather than replacing it: theme.json carries
+ * layout, typography and spacing presets that have nothing to do with brand.
+ */
+export async function writeThemePalette(opts: {
+  installPath: string;
+  colors: Record<string, string>;
+}): Promise<void> {
+  const { installPath, colors } = opts;
+  const path = join(installPath, "wp-content", "themes", "vibewp", "theme.json");
+
+  const raw = await readFile(path, "utf8");
+  const theme = JSON.parse(raw) as {
+    settings?: { color?: { palette?: Array<{ slug: string; name?: string; color: string }> } };
+  };
+
+  const palette = theme.settings?.color?.palette;
+  if (!Array.isArray(palette)) return;
+
+  for (const entry of palette) {
+    const next = colors[entry.slug];
+    /*
+     * Re-validated here even though the action already sanitised it. This value
+     * is written to a file that is served as CSS to every visitor, and being
+     * the last gate before that, it does not get to assume an earlier one ran.
+     */
+    if (typeof next === "string" && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(next)) {
+      entry.color = next;
+    }
+  }
+
+  await writeFile(path, `${JSON.stringify(theme, null, "\t")}\n`, "utf8");
+}
+
+/**
+ * Writes a template part into the site's theme — parts/header.html or
+ * parts/footer.html.
+ *
+ * MUST run AFTER syncTheme(). syncTheme copies the whole theme directory over
+ * the site's copy, so a part written before it is overwritten by the stub that
+ * ships in source. That stub is what every exported site used to show: the site
+ * title and the words "All rights reserved", with none of the footer sections
+ * in the library able to reach a live site.
+ *
+ * Deliberately does not go through WP-CLI. Template parts are theme FILES in a
+ * block theme; writing them to disk is what makes them the theme's default,
+ * whereas a wp_template_part post would be a database override of a file that
+ * still said something else.
+ */
+export async function writeTemplatePart(opts: {
+  installPath: string;
+  /** "header" or "footer" — becomes parts/<name>.html. */
+  name: string;
+  html: string;
+}): Promise<void> {
+  const { installPath, name, html } = opts;
+  if (!/^[a-z0-9-]+$/.test(name)) throw new Error(`Unsafe template part name: ${name}`);
+
+  const dir = join(installPath, "wp-content", "themes", "vibewp", "parts");
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, `${name}.html`), `${html}\n`, "utf8");
+}
+
 export type WpPageContent = {
   postId: number;
   content: string;
@@ -423,6 +634,77 @@ export async function readPageContent(opts: {
   } catch (err) {
     console.warn("[wp] read failed for", slug, err instanceof Error ? err.message : err);
     return null;
+  }
+}
+
+export type WpEditLock = {
+  /** Page slug being edited, and its title for a message worth reading. */
+  slug: string;
+  title: string;
+  /** Who has it open, as WordPress knows them. */
+  userName: string;
+  /** Seconds since the lock was last refreshed. */
+  ageSeconds: number;
+};
+
+/**
+ * Who, if anyone, currently has a page open in the WordPress editor.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY WORDPRESS'S OWN LOCK AND NOT ONE OF OURS
+ *
+ * WordPress already solves this for two wp-admin users editing at once: the
+ * editor writes `_edit_lock` post meta as "timestamp:user_id" and refreshes it
+ * by heartbeat every fifteen seconds while the tab is open. A second editor
+ * gets "This content is currently locked".
+ *
+ * Inventing a VibeWP lock alongside it would give one page two different
+ * answers to the same question, and ours would be the one WordPress ignores —
+ * wp-admin would happily let someone in while we showed the site as free. So
+ * this READS the existing lock. VibeWP becomes another participant in the
+ * mechanism WordPress already enforces, rather than a competing one.
+ *
+ * The staleness window is WordPress's own `wp_check_post_lock_window` filter,
+ * not a number of ours, so a site that has tuned it keeps agreeing with us.
+ * Closing the browser leaves the lock behind, which is why it expires on age
+ * rather than needing a release.
+ */
+export async function readEditLocks(installPath: string): Promise<WpEditLock[]> {
+  const script = `
+    $window = (int) apply_filters("wp_check_post_lock_window", 150);
+    $out = [];
+    $pages = get_posts(["post_type" => "page", "numberposts" => -1, "post_status" => "any"]);
+    foreach ($pages as $page) {
+      $lock = get_post_meta($page->ID, "_edit_lock", true);
+      if (!$lock) { continue; }
+      $parts = explode(":", $lock);
+      $time = isset($parts[0]) ? (int) $parts[0] : 0;
+      $uid  = isset($parts[1]) ? (int) $parts[1] : 0;
+      $age  = time() - $time;
+      if ($age >= $window) { continue; }
+      $user = $uid ? get_userdata($uid) : null;
+      $out[] = [
+        "slug"       => $page->post_name,
+        "title"      => $page->post_title,
+        "userName"   => $user ? $user->display_name : "Someone",
+        "ageSeconds" => $age,
+      ];
+    }
+    echo json_encode($out);
+  `;
+
+  try {
+    const out = await wp(["eval", script, `--path=${installPath}`]);
+    const parsed = JSON.parse(out.trim() || "[]");
+    return Array.isArray(parsed) ? (parsed as WpEditLock[]) : [];
+  } catch (err) {
+    /*
+     * Advisory. A failed lock check must never block editing in VibeWP —
+     * refusing to let someone work because we could not reach WP-CLI would be
+     * a worse outcome than the conflict this is trying to avoid.
+     */
+    console.warn("[wp] lock check failed", err instanceof Error ? err.message : err);
+    return [];
   }
 }
 

@@ -3,12 +3,10 @@
 import { eq, and, desc } from "drizzle-orm";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
-import { sites, sitePages, pageRevisions } from "@/lib/db/schema";
+import { sites, sitePages, pageRevisions, siteRevisions } from "@/lib/db/schema";
 import { profiles } from "@/lib/db/schema";
 import { canEditSite } from "@/app/actions/sites";
-import { extractHeroContent } from "@/lib/builder-content";
 import { logActivity } from "@/lib/activity";
-import type { HeroContent } from "@/lib/mock-ai";
 
 /**
  * Records who changed a client's page.
@@ -51,7 +49,16 @@ export type PageSummary = {
   id: string;
   slug: string;
   title: string;
-  content: HeroContent | null;
+  /**
+   * The stored schema, all nodes.
+   *
+   * The canvas renders THIS. It used to render heroContentToSchema(content),
+   * which rebuilt a single-node schema from the extracted hero — so a page
+   * with six sections would have displayed only its first one. Rendering the
+   * stored schema directly also removes a way for the canvas to disagree with
+   * what Export writes.
+   */
+  schema: Record<string, unknown> | null;
 };
 
 async function requireEditor(siteId: string) {
@@ -86,7 +93,7 @@ export async function listPagesAction(siteId: string): Promise<PageSummary[]> {
     id: p.id,
     slug: p.slug,
     title: labelFor(p),
-    content: extractHeroContent(p.schemaJson),
+    schema: (p.schemaJson as Record<string, unknown> | null) ?? null,
   }));
 }
 
@@ -181,10 +188,17 @@ export async function getHistoryStateAction(opts: {
     .from(pageRevisions)
     .where(eq(pageRevisions.pageId, page.id));
 
-  return {
-    canUndo: rows.some((r) => r.kind === "undo"),
-    canRedo: rows.some((r) => r.kind === "redo"),
-  };
+  // Chrome counts: a header swap is undoable from any page, because the header
+  // is on every page.
+  const chromeRows = await db
+    .select({ kind: siteRevisions.kind })
+    .from(siteRevisions)
+    .where(eq(siteRevisions.siteId, siteId));
+
+  const has = (kind: string) =>
+    rows.some((r) => r.kind === kind) || chromeRows.some((r) => r.kind === kind);
+
+  return { canUndo: has("undo"), canRedo: has("redo") };
 }
 
 /**
@@ -199,7 +213,10 @@ export async function getHistoryStateAction(opts: {
 async function stepHistory(
   opts: { siteId: string; slug: string },
   from: "undo" | "redo",
-): Promise<{ ok: true; state: HistoryState } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; state: HistoryState; chrome?: { header: unknown; footer: unknown } }
+  | { ok: false; error: string }
+> {
   const { siteId, slug } = opts;
   const to = from === "undo" ? "redo" : "undo";
   const user = await requireEditor(siteId);
@@ -215,6 +232,56 @@ async function stepHistory(
     .where(and(eq(pageRevisions.pageId, page.id), eq(pageRevisions.kind, from)))
     .orderBy(desc(pageRevisions.createdAt))
     .limit(1);
+
+  /*
+   * The header and footer are a separate stack, so undo has to choose.
+   *
+   * Chrome belongs to the site and the page schema belongs to a page, but the
+   * client made one sequence of changes and "undo" means the last of them.
+   * Whichever snapshot is NEWER is the one that steps back — without this
+   * comparison, undo restored a page revision and left a header swap in place
+   * while reporting it had gone back a version.
+   */
+  const [chromeRestore] = await db
+    .select()
+    .from(siteRevisions)
+    .where(and(eq(siteRevisions.siteId, siteId), eq(siteRevisions.kind, from)))
+    .orderBy(desc(siteRevisions.createdAt))
+    .limit(1);
+
+  const chromeIsNewer =
+    chromeRestore && (!restore || chromeRestore.createdAt > restore.createdAt);
+
+  if (chromeIsNewer) {
+    const site = await db.query.sites.findFirst({ where: eq(sites.id, siteId) });
+    await db.transaction(async (tx) => {
+      await tx.insert(siteRevisions).values({
+        siteId,
+        headerSchemaJson: site?.headerSchemaJson as Record<string, unknown> | null,
+        footerSchemaJson: site?.footerSchemaJson as Record<string, unknown> | null,
+        kind: to,
+        reason: from === "undo" ? "Replaced by undo" : "Replaced by redo",
+        createdByUserId: user.id,
+      });
+      await tx
+        .update(sites)
+        .set({
+          headerSchemaJson: chromeRestore.headerSchemaJson,
+          footerSchemaJson: chromeRestore.footerSchemaJson,
+        })
+        .where(eq(sites.id, siteId));
+      await tx.delete(siteRevisions).where(eq(siteRevisions.id, chromeRestore.id));
+    });
+
+    return {
+      ok: true,
+      state: await getHistoryStateAction({ siteId, slug }),
+      chrome: {
+        header: chromeRestore.headerSchemaJson,
+        footer: chromeRestore.footerSchemaJson,
+      },
+    };
+  }
 
   if (!restore) {
     return {

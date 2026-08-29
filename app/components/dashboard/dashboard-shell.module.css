@@ -392,3 +392,26 @@
     display: none;
   }
 }
+
+/*
+ * A reserved nav slot: visible so the planned structure reads, but inert so it
+ * cannot lead to a 404.
+ */
+.navSoon {
+  opacity: 0.45;
+  cursor: default;
+}
+.navSoon:hover {
+  background: transparent;
+}
+.soonTag {
+  margin-left: auto;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.05rem 0.35rem;
+}

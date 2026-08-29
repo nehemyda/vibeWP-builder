@@ -17,6 +17,15 @@ export async function updatePlatformSettingsAction(formData: FormData) {
   const supportEmail = String(formData.get("supportEmail") ?? "").trim();
   const defaultTimezone = String(formData.get("defaultTimezone") ?? "").trim() || "America/New_York";
   const maintenanceMode = formData.get("maintenanceMode") === "on";
+  /*
+   * Trimmed and stored as null when blank, never as "".
+   *
+   * The builder's site panel decides whether to show DNS instructions by
+   * whether these are set; an empty string is truthy enough to slip through a
+   * loose check and would show a client an empty A record to copy.
+   */
+  const hostingIpv4 = String(formData.get("hostingIpv4") ?? "").trim();
+  const hostingCname = String(formData.get("hostingCname") ?? "").trim();
 
   await db
     .update(platformSettings)
@@ -25,6 +34,8 @@ export async function updatePlatformSettingsAction(formData: FormData) {
       supportEmail: supportEmail || null,
       defaultTimezone,
       maintenanceMode,
+      hostingIpv4: hostingIpv4 || null,
+      hostingCname: hostingCname || null,
       updatedAt: new Date(),
     })
     .where(eq(platformSettings.id, settings.id));

@@ -10,8 +10,11 @@ import {
   pageRevisions,
 } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
-import { extractHeroContent } from "@/lib/builder-content";
 import { resolveSitePaths } from "@/lib/site-paths";
+import type { ChromeNode } from "@/app/actions/ai-generate";
+import { loadIntakeAction } from "@/app/actions/intake";
+import { getPlatformSettings } from "@/lib/platform-settings";
+import { loadBusinessContext, contactFactsFor } from "@/lib/ai/business-context";
 import { BuilderApp } from "./BuilderApp";
 
 /**
@@ -67,7 +70,21 @@ export default async function BuilderPage({
   // The home page is what the canvas shows on load; the switcher moves off it.
   const page = allPages.find((p) => p.slug === "home") ?? allPages[0];
 
-  const initialContent = extractHeroContent(page?.schemaJson);
+  // Prefilled from whatever Settings already holds, so a client who filled in
+  // their business details once is never asked for them again.
+  const initialIntake = await loadIntakeAction(site.id);
+
+  // Hosting targets for the site-details drawer. Null until an admin sets them.
+  const platform = await getPlatformSettings();
+
+  // Real contact details, so the canvas resolves the {{phone}}-style tokens
+  // the generated content carries and shows what the live site will show.
+  const businessCtx = await loadBusinessContext(site.id);
+  const previewFacts = businessCtx ? contactFactsFor(businessCtx) : {};
+
+  // The whole schema, so the canvas paints every section on first load and
+  // not just the hero the extractor pulls out.
+  const initialSchema = (page?.schemaJson as Record<string, unknown> | undefined) ?? null;
 
   // Undo/redo depth for the page shown on load, so the toolbar buttons are
   // correct on first paint rather than flicking from disabled to enabled.
@@ -92,8 +109,19 @@ export default async function BuilderPage({
     backPath = dashboardPath;
     backLabel = "Dashboard";
   } else if (callerProfile?.role === "agency_owner" || callerProfile?.role === "agency_member") {
-    backPath = "/agency";
-    backLabel = "Agency dashboard";
+    /*
+     * THIS site's dashboard, not the agency's list of all of them.
+     *
+     * Leaving the builder used to land on /agency — the top of the tree, with
+     * no memory of which client you had open. Someone who came in to edit one
+     * site and stepped out for a moment then had to find it again. dashboardPath
+     * is /dashboard/{PartnerID}/{SMB-ID}, so "back" returns to the project
+     * being worked on.
+     */
+    backPath = dashboardPath;
+    // Just "Dashboard": whose dashboard it is follows from where you land, and
+    // the toolbar has better uses for the width.
+    backLabel = "Dashboard";
   } else if (callerProfile?.role === "super_admin") {
     if (site.agencyId) {
       const agency = await db.query.agencies.findFirst({ where: eq(agencies.id, site.agencyId) });
@@ -118,7 +146,7 @@ export default async function BuilderPage({
             .filter(Boolean)
             .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
             .join(" "),
-        content: extractHeroContent(p.schemaJson),
+        schema: (p.schemaJson as Record<string, unknown> | null) ?? null,
       }))}
       initialMessages={storedMessages.map((m) => ({
         id: m.id,
@@ -132,7 +160,33 @@ export default async function BuilderPage({
       backPath={backPath}
       backLabel={backLabel}
       siteName={site.name}
-      initialContent={initialContent}
+      initialSchema={initialSchema}
+      initialIntake={initialIntake}
+      previewFacts={previewFacts}
+      /*
+       * Read here rather than in the drawer: it is a server component, so the
+       * hosting records never travel through a client action, and an unset
+       * value arrives as null instead of an example somebody might type into a
+       * registrar.
+       */
+      siteDetails={{
+        siteName: site.name,
+        smbId: site.smbId ?? "",
+        partnerId: urlPartnerId,
+        plan: site.plan ?? null,
+        status: site.status ?? null,
+        wpUrl: installation?.status === "ready" ? (installation.url ?? null) : null,
+        domain: site.domain ?? null,
+        createdAt: site.createdAt ? new Date(site.createdAt).toLocaleDateString() : null,
+        lastEditedAt: site.lastEditedAt ? new Date(site.lastEditedAt).toLocaleString() : null,
+        pageCount: allPages.length,
+        hostingIpv4: platform?.hostingIpv4 ?? null,
+        hostingCname: platform?.hostingCname ?? null,
+      }}
+      initialChrome={{
+        header: (site.headerSchemaJson as ChromeNode | null) ?? null,
+        footer: (site.footerSchemaJson as ChromeNode | null) ?? null,
+      }}
       prompt={prompt ?? null}
       autostart={autostart === "1"}
     />

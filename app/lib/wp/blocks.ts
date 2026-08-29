@@ -93,12 +93,35 @@ export function image(
   src: string,
   alt: string,
   className: string,
-  meta?: { id?: number; width?: number; height?: number },
+  meta?: {
+    id?: number;
+    width?: number;
+    height?: number;
+    lightbox?: boolean;
+    /** Set for images inside a gallery — how core groups them. */
+    inGallery?: boolean;
+  },
+  /** Rendered as the block's own figcaption, which is where core keeps it. */
+  caption?: string,
 ): string {
   // Last line of defence: whatever the caller passed, an empty alt cannot ship.
   const safeAlt = requireAlt(alt);
 
   const attrs: Record<string, unknown> = { className };
+  if (caption) attrs.caption = caption;
+  /*
+   * WordPress's own image lightbox (core, since 6.4, via the Interactivity
+   * API). Deliberately not a custom script: core already ships the markup,
+   * the styles, focus trapping and Escape handling, and a hand-rolled version
+   * would be one more thing on a client's site to keep working.
+   *
+   * It does nothing in the builder canvas — that iframe has no WordPress and
+   * so no Interactivity API. Same as the sticky header: correct on the
+   * exported site, not demonstrable in the preview.
+   */
+  if (meta?.lightbox) attrs.lightbox = { enabled: true };
+  // Core reads this to decide the image belongs to a gallery.
+  if (meta?.inGallery && meta?.id) attrs["data-id"] = String(meta.id);
   if (meta?.id) {
     attrs.id = meta.id;
     attrs.sizeSlug = "large";
@@ -108,12 +131,109 @@ export function image(
     ? `wp-block-image size-large ${className}`
     : `wp-block-image ${className}`;
   const imgClass = meta?.id ? ` class="wp-image-${meta.id}"` : "";
+  const dataId = meta?.inGallery && meta?.id ? ` data-id="${meta.id}"` : "";
   const width = meta?.width ? ` width="${meta.width}"` : "";
   const height = meta?.height ? ` height="${meta.height}"` : "";
 
   return `<!-- wp:image ${JSON.stringify(attrs)} -->
-<figure class="${figureClass}"><img src="${escAttr(src)}" alt="${escAttr(safeAlt)}"${imgClass}${width}${height}/></figure>
+<figure class="${figureClass}"><img src="${escAttr(src)}" alt="${escAttr(safeAlt)}"${imgClass}${dataId}${width}${height}/>${
+    caption ? `<figcaption class="wp-element-caption">${esc(caption)}</figcaption>` : ""
+  }</figure>
 <!-- /wp:image -->`;
+}
+
+
+/**
+ * WordPress's dynamic blocks: rendered by PHP at request time, no inner HTML.
+ *
+ * Used by header and footer sections so the brand follows Settings → General
+ * and the menu follows whatever the client edits under Appearance → Menus.
+ * Baking those in as static text would fork them from the real site the moment
+ * anyone renamed the business.
+ *
+ * They render as nothing in the preview iframe, which has no PHP — see
+ * withPreviewPlaceholders() in serialize.ts.
+ */
+export function siteTitle(className: string): string {
+  return `<!-- wp:site-title {"level":0,"className":"${className}"} /-->`;
+}
+
+export function navigation(className: string): string {
+  /*
+   * overlayMenu: "mobile" is set EXPLICITLY.
+   *
+   * Core's navigation block already ships a hamburger and a full-screen
+   * overlay; it was left unset, so every site got whatever core's default
+   * happened to be rather than a decision. "mobile" means: inline links on a
+   * desktop, hamburger below core's breakpoint.
+   *
+   * `icon` and `openSubmenusOnClick` are left alone deliberately — core's
+   * defaults are sensible and naming them here would freeze them against
+   * future WordPress versions.
+   */
+  const attrs = JSON.stringify({
+    className,
+    overlayMenu: "mobile",
+    layout: { type: "flex" },
+  });
+  return `<!-- wp:navigation ${attrs} /-->`;
+}
+
+export function socialLinks(className: string): string {
+  return `<!-- wp:social-links {"className":"${className}"} /-->`;
+}
+
+/**
+ * Turns a phone number or email into a usable href.
+ *
+ * Contact details rendered as plain text are a small but real failure: on a
+ * phone, a number you cannot tap is a number the customer has to memorise and
+ * retype. `tel:` strips everything a dialler cannot use — spaces, brackets,
+ * dashes — while the visible text keeps its human formatting.
+ */
+export function contactHref(kind: "phone" | "email", value: string): string {
+  const v = value.trim();
+  if (kind === "email") return `mailto:${v}`;
+  return `tel:${v.replace(/[^\d+]/g, "")}`;
+}
+
+/** A paragraph whose whole content is one link. */
+export function paragraphLink(label: string, href: string, className: string): string {
+  return `<!-- wp:paragraph {"className":"${className}"} -->
+<p class="${className}"><a href="${escAttr(href)}">${esc(label)}</a></p>
+<!-- /wp:paragraph -->`;
+}
+
+/**
+ * A testimonial, as a real blockquote.
+ *
+ * core/quote rather than a styled group: a customer quote IS a quotation, so
+ * the semantic element is worth having for screen readers and search engines,
+ * and the client can edit it in wp-admin as a normal quote block.
+ */
+export function quote(text: string, attribution: string, className: string): string {
+  const cite = attribution ? `<cite>${esc(attribution)}</cite>` : "";
+  return `<!-- wp:quote {"className":"${className}"} -->
+<blockquote class="wp-block-quote ${className}"><!-- wp:paragraph -->
+<p>${esc(text)}</p>
+<!-- /wp:paragraph -->${cite}</blockquote>
+<!-- /wp:quote -->`;
+}
+
+/**
+ * A disclosure row, using core/details (WordPress 6.3+).
+ *
+ * Deliberately native rather than a custom accordion: <details>/<summary>
+ * expands with no JavaScript at all, is keyboard accessible for free, and stays
+ * editable in the block editor. A hand-rolled accordion would need a script
+ * shipped into every exported site to do worse.
+ */
+export function details(summary: string, body: string, className: string): string {
+  return `<!-- wp:details {"className":"${className}"} -->
+<details class="wp-block-details ${className}"><summary>${esc(summary)}</summary><!-- wp:paragraph -->
+<p>${esc(body)}</p>
+<!-- /wp:paragraph --></details>
+<!-- /wp:details -->`;
 }
 
 /**
@@ -123,90 +243,57 @@ export function image(
  */
 export function buttons(actions: Action[], className: string): string {
   const inner = actions
-    .map(
-      (a) => `<!-- wp:button {"className":"yp-btn--${a.variant}"} -->
-<div class="wp-block-button yp-btn--${a.variant}"><a class="wp-block-button__link wp-element-button" href="${escAttr(a.href)}">${esc(a.label)}</a></div>
-<!-- /wp:button -->`,
-    )
+    .map((a, i) => {
+      /*
+       * The variant, defaulted — NEVER interpolated raw.
+       *
+       * `variant` is not a declared field on any section, so the model never
+       * produces one: every AI-written button came out as
+       * `class="yp-btn--undefined"`, which matches no rule in sections.css and
+       * renders as bare text. It looked correct in the section library only
+       * because samples hard-code variant: "primary", so the one place anyone
+       * checked was the one place it worked.
+       *
+       * First action solid, the rest outlined: a row of identical buttons gives
+       * no clue which one is the intended next step.
+       */
+      const variant = a.variant === "outline" || a.variant === "primary"
+        ? a.variant
+        : i === 0
+          ? "primary"
+          : "outline";
+      return `<!-- wp:button {"className":"yp-btn--${variant}"} -->
+<div class="wp-block-button yp-btn--${variant}"><a class="wp-block-button__link wp-element-button" href="${escAttr(a.href)}">${esc(a.label)}</a></div>
+<!-- /wp:button -->`;
+    })
     .join("");
   return `<!-- wp:buttons {"className":"${className}"} -->
 <div class="wp-block-buttons ${className}">${inner}</div>
 <!-- /wp:buttons -->`;
 }
 
-/* ── section serializers ─────────────────────────────────────────────── */
-
-type HeroProps = {
-  eyebrow?: string;
-  heading?: string;
-  body?: string;
-  features?: string[];
-  actions?: Action[];
-  image?: { url?: string; alt?: string; id?: number; width?: number; height?: number };
-};
-
-function heroSplitToGutenberg(p: HeroProps): string {
-  const copy = group(
-    "yp-hero__copy",
-    [
-      p.eyebrow ? paragraph(p.eyebrow, "yp-hero__eyebrow") : "",
-      p.heading ? heading(p.heading, 1, "yp-hero__heading") : "",
-      p.body ? paragraph(p.body, "yp-hero__body") : "",
-      p.features?.length ? list(p.features, "yp-hero__features") : "",
-      p.actions?.length ? buttons(p.actions, "yp-hero__actions") : "",
-    ]
-      .filter(Boolean)
-      .join(""),
-  );
-
-  // The second grid column. Its absence is why every exported hero was
-  // single-column, and why sections.css's mobile `.yp-hero__media { order: -1 }`
-  // — which puts the photo above the copy on phones — never had anything to
-  // reorder.
-  //
-  // By this point image.url is expected to be a WordPress media-library URL:
-  // exportToWordPressAction sideloads the photo and rewrites the prop before
-  // serializing, so an exported page never hotlinks Pexels.
-  const media = p.image?.url
-    ? group(
-        "yp-hero__media",
-        image(
-          p.image.url,
-          // The heading is the fallback because it describes what the page is
-          // about, which is the next best thing to describing the photo.
-          requireAlt(p.image.alt, p.heading),
-          "yp-hero__frame",
-          { id: p.image.id, width: p.image.width, height: p.image.height },
-        ),
-      )
-    : "";
-
-  return group("yp-hero", group("yp-hero__grid", copy + media), "section");
-}
-
-type SchemaNode = { type?: string; props?: Record<string, unknown> };
-type PageSchema = { nodes?: SchemaNode[] };
-
-/** Serializers keyed by the node `type` stored in the page schema. */
-const SERIALIZERS: Record<string, (props: never) => string> = {
-  HeroSplit: heroSplitToGutenberg as (props: never) => string,
-};
-
 /**
- * Serializes a whole page. Unknown node types are skipped rather than
- * throwing — a page containing one unrecognised section should still
- * export the sections we do understand.
+ * A core/gallery wrapping already-serialised core/image blocks.
+ *
+ * WHY THE NATIVE BLOCK AND NOT OUR OWN GRID
+ *
+ * WordPress's lightbox only offers next/previous between images that share a
+ * `galleryId`, and an image only gets one when it is nested inside a
+ * core/gallery. Wrapping each photo in a core/group — which is what we did —
+ * gives every photo its own lightbox with nothing to navigate to.
+ *
+ * `data-id` on each image is what core reads to detect gallery membership
+ * (see block_core_gallery_data_id_backcompatibility in gallery.php), and it is
+ * the attachment id, so grouping only becomes real once images have been
+ * sideloaded into the media library on export.
  */
-export function schemaToGutenberg(schema: unknown): string {
-  const nodes = (schema as PageSchema)?.nodes;
-  if (!Array.isArray(nodes)) return "";
-
-  return nodes
-    .map((node) => {
-      const serialize = node?.type ? SERIALIZERS[node.type] : undefined;
-      if (!serialize) return "";
-      return serialize((node.props ?? {}) as never);
-    })
-    .filter(Boolean)
-    .join("\n\n");
+export function gallery(
+  innerImages: string,
+  className: string,
+  columns: number,
+): string {
+  const attrs = JSON.stringify({ columns, linkTo: "none", className });
+  return `<!-- wp:gallery ${attrs} -->
+<figure class="wp-block-gallery has-nested-images columns-${columns} ${className}">${innerImages}</figure>
+<!-- /wp:gallery -->`;
 }

@@ -36,7 +36,11 @@ export type PageSyncState =
 export function canonical(value: unknown): string {
   const walk = (v: unknown): unknown => {
     if (v === null || v === undefined) return null;
-    if (Array.isArray(v)) return v.map(walk);
+    // An empty list and an absent one mean the same thing. The parser returns
+    // `features: []` for a hero that has none, where the generator omits the
+    // key entirely — treating those as different would report a change on a
+    // page nobody touched.
+    if (Array.isArray(v)) return v.length === 0 ? null : v.map(walk);
     if (typeof v === "object") {
       const out: Record<string, unknown> = {};
       for (const key of Object.keys(v as Record<string, unknown>).sort()) {

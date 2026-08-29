@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./builder.module.css";
-import { generateHeroContent, heroContentToSchema, type HeroContent } from "@/lib/mock-ai";
-import { generateHeroContentAction } from "@/app/actions/ai-generate";
+import { generatePageAction, type ChromeNode } from "@/app/actions/ai-generate";
 import {
   exportToWordPressAction,
   publishSiteAction,
@@ -20,11 +19,23 @@ import {
   type HistoryState,
 } from "@/app/actions/pages";
 import { detectIntent } from "@/lib/page-intent";
-import { schemaToGutenberg } from "@/lib/wp/blocks";
+import {
+  schemaToGutenberg,
+  sectionToTemplatePart,
+  withPreviewPlaceholders,
+  withSiteLogo,
+} from "@/lib/wp/serialize";
 import { PreviewFrame } from "./PreviewFrame";
+import { WordPressLockNotice } from "./WordPressLockNotice";
+import { SiteDetailsDrawer, type SiteDetails } from "./SiteDetailsDrawer";
+import type { WpEditLock } from "@/lib/wp/local-driver";
+import { IntakeForm } from "./IntakeForm";
+import { loadIntakeAction, type IntakeData } from "@/app/actions/intake";
+import { applyEditAction } from "@/app/actions/edit";
 import { SyncBanner } from "./SyncBanner";
 import {
   detectSyncAction,
+  detectEditLocksAction,
   pullFromWordPressAction,
   resolveConflictAction,
   type PageSyncReport,
@@ -42,10 +53,20 @@ type ChatMessage = {
   steps: string[];
 };
 
-const GENERATION_STEPS = [
-  "Selected section: HeroSplit",
-  "Filled schema from your prompt",
-  "Rendered — fidelity check passed",
+/**
+ * Shown while the model is working, then REPLACED by the real list of sections
+ * that were built.
+ *
+ * These used to be the only steps, and they claimed "Selected section:
+ * HeroSplit" — accurate at the time, since a hero was all generation could
+ * produce, but it read as a report on a page that had been considered rather
+ * than a hardcoded constant. They now describe the phase in progress and make
+ * no claim about the outcome; the outcome comes back from the server.
+ */
+const PLANNING_STEPS = [
+  "Reading your business details",
+  "Planning the page",
+  "Writing the copy",
 ];
 
 let idCounter = 0;
@@ -95,6 +116,56 @@ const RedoIcon = () => (
   </svg>
 );
 
+/*
+ * Viewport and reload icons.
+ *
+ * Drawn rather than typed. These were emoji — 🖥 ▭ 📱 — which render as a
+ * different glyph on every platform, ignore stroke weight, refuse to take the
+ * active colour, and in the toolbar came out as barely-visible grey shapes at
+ * three different optical sizes. An inline SVG inherits currentColor and sits
+ * on the same 24px grid as the undo, redo and pin icons beside it, so the row
+ * finally reads as one set.
+ */
+const HamburgerIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
+    <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
+  </svg>
+);
+
+const DesktopIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+    <rect x="2.5" y="4" width="19" height="12.5" rx="1.8" />
+    <path d="M9 20h6M12 16.5V20" strokeLinecap="round" />
+  </svg>
+);
+
+const TabletIcon = () => (
+  /*
+   * Nearly square, and wider than the phone by a clear margin. At 18px a 14-wide
+   * tablet beside a 10-wide phone were the same shape to the eye — the row read
+   * as one icon repeated. Silhouette is the only thing legible at this size.
+   */
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+    <rect x="3" y="3.5" width="18" height="17" rx="2.2" />
+    <path d="M10.5 17.4h3" strokeLinecap="round" />
+  </svg>
+);
+
+const MobileIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+    <rect x="8" y="2" width="8" height="20" rx="2.2" />
+    <path d="M11 19.2h2" strokeLinecap="round" />
+  </svg>
+);
+
+/* Circular arrow: a full arc with a gap, plus the head on the open end. */
+const ReloadIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+    <path d="M20 12a8 8 0 1 1-2.4-5.7" strokeLinecap="round" />
+    <path d="M20 4.5V10h-5.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 export function BuilderApp({
   siteId,
   smbId,
@@ -106,7 +177,11 @@ export function BuilderApp({
   backPath,
   backLabel,
   siteName,
-  initialContent,
+  initialSchema,
+  initialChrome,
+  initialIntake,
+  previewFacts,
+  siteDetails,
   prompt,
   autostart,
 }: {
@@ -121,7 +196,16 @@ export function BuilderApp({
   backPath: string;
   backLabel: string;
   siteName: string;
-  initialContent: HeroContent | null;
+  /** The stored schema for the page shown on load, so the canvas paints every section. */
+  initialSchema: Record<string, unknown> | null;
+  /** The site's header and footer, so the canvas frames the page as the live site does. */
+  initialChrome: { header: ChromeNode | null; footer: ChromeNode | null };
+  /** Prefilled intake, and whether it has ever been submitted. */
+  initialIntake: { data: IntakeData; completed: boolean };
+  /** phone/email/address/hours, for resolving tokens in the canvas. */
+  previewFacts: Record<string, string>;
+  /** Everything the site-details drawer shows. */
+  siteDetails: SiteDetails;
   prompt: string | null;
   autostart: boolean;
 }) {
@@ -131,7 +215,7 @@ export function BuilderApp({
     // A stored transcript wins: the conversation is the record of how this
     // site got built, and losing it on every reload made the chat feel amnesiac.
     if (initialMessages.length > 0) return initialMessages;
-    if (!initialContent) {
+    if (!initialSchema) {
       return [
         {
           id: nextId(),
@@ -143,7 +227,31 @@ export function BuilderApp({
     }
     return [];
   });
-  const [content, setContent] = useState<HeroContent | null>(initialContent);
+  /**
+   * The full schema for the page on screen — what the canvas renders.
+   *
+   * This replaced a `content: HeroContent` state. The canvas rendered
+   * heroContentToSchema(content), rebuilding a one-node schema from an
+   * extracted hero, so a page of six sections would have shown its first one
+   * and silently hidden the rest.
+   */
+  const [schema, setSchema] = useState<Record<string, unknown> | null>(initialSchema);
+  /*
+   * The site's header and footer. Site-wide rather than per page, so switching
+   * pages leaves them alone — which is the whole point of a template part.
+   */
+  const [chrome, setChrome] = useState(initialChrome);
+  const [intake, setIntake] = useState(initialIntake);
+  /*
+   * Open on a first build, closed afterwards.
+   *
+   * A repeat visit goes straight to the builder: someone who came back to
+   * reword one heading should not be walked through a form to reach it. The
+   * toolbar's "Business details" button reopens it when they do want it.
+   */
+  const [intakeOpen, setIntakeOpen] = useState(!initialIntake.completed);
+  /** Resolved phone/email/address/hours for the {{token}}s in the canvas. */
+  const [facts, setFacts] = useState(previewFacts);
   const [generating, setGenerating] = useState(false);
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
   const [chatOpen, setChatOpen] = useState(true);
@@ -151,6 +259,17 @@ export function BuilderApp({
   const [pinned, setPinned] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState<"export" | "publish" | "wpadmin" | null>(null);
+  const [siteMenuOpen, setSiteMenuOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const siteMenuRef = useRef<HTMLDivElement>(null);
+  /*
+   * Bumped to remount the preview iframe.
+   *
+   * A reload has to rebuild the document, not just re-render: the frame holds
+   * its own scroll position, its own <details> open states and any images that
+   * failed to load, none of which a prop change clears.
+   */
+  const [reloadKey, setReloadKey] = useState(0);
   /** Seeded from the server so an already-exported site shows its links on load. */
   const [wpUrl, setWpUrl] = useState<string | null>(initialWpUrl);
   const [pages, setPages] = useState<PageSummary[]>(initialPages);
@@ -167,6 +286,16 @@ export function BuilderApp({
   const [syncReport, setSyncReport] = useState<PageSyncReport[] | null>(null);
   const [syncBusy, setSyncBusy] = useState<string | null>(null);
   const [syncDismissed, setSyncDismissed] = useState(false);
+  /** Anyone currently in the WordPress editor for this site. */
+  const [locks, setLocks] = useState<WpEditLock[]>([]);
+  /*
+   * Set when the client chooses to work through a lock.
+   *
+   * Deliberately NOT persisted: it lasts for this visit only, so an
+   * override made once because our reading was wrong does not quietly
+   * disable the protection for every future session.
+   */
+  const [lockOverridden, setLockOverridden] = useState(false);
   const ran = useRef(false);
   const syncRan = useRef(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -198,6 +327,89 @@ export function BuilderApp({
     void refreshSync();
   }, [refreshSync]);
 
+  /*
+   * Watch WordPress for someone editing the same site.
+   *
+   * ─────────────────────────────────────────────────────────────────────
+   * WHY A POLL AND NOT A ONE-OFF CHECK
+   *
+   * Everything above this used to run exactly once per page load, which is why
+   * a change made in WordPress showed up in VibeWP "very late": nothing was
+   * looking. It was not slow, it had stopped checking. A lock is worth even
+   * less as a one-off — it exists precisely to appear while you are already
+   * sitting in the builder.
+   */
+  const hadLockRef = useRef(false);
+
+  const checkLocks = useCallback(async () => {
+    try {
+      const result = await detectEditLocksAction(smbId);
+
+      /*
+       * FAIL OPEN.
+       *
+       * This used to `return` when a check failed, leaving whatever locks were
+       * last seen on screen — so a single WP-CLI hiccup while locked would have
+       * held the builder shut permanently, with no way back but a reload. A
+       * check that cannot reach WordPress has learned nothing about whether
+       * anyone is editing, and "nothing" must not read as "still locked".
+       */
+      if (!result.ok) {
+        setLocks([]);
+        return;
+      }
+      setLocks(result.locks);
+
+      /*
+       * The moment the last lock clears, re-run the expensive comparison.
+       * Someone has just finished editing in WordPress, so this is exactly
+       * when VibeWP is most likely to be out of date — and waiting for the
+       * client to reload to find that out is the behaviour being fixed.
+       */
+      if (hadLockRef.current && result.locks.length === 0) void refreshSync();
+      hadLockRef.current = result.locks.length > 0;
+
+      /*
+       * An override lasts for the lock that prompted it, not for the visit.
+       * Once WordPress is clear again the protection arms itself, so someone
+       * who worked through a stuck cover this morning is still warned when a
+       * colleague genuinely opens the editor this afternoon.
+       */
+      if (result.locks.length === 0) setLockOverridden(false);
+    } catch {
+      setLocks([]);
+    }
+  }, [smbId, refreshSync]);
+
+  /*
+   * Polled faster while locked than while free.
+   *
+   * WordPress does not delete a lock when someone leaves the editor, it lets it
+   * EXPIRE — the meta sits there until it is 150 seconds old. So the wait after
+   * a colleague closes their tab is mostly WordPress's window, and any polling
+   * gap of ours is added on top of it. Checking every five seconds while the
+   * cover is up keeps us from adding a further twenty to a wait that is already
+   * long enough to feel broken; twenty is plenty when nothing is happening.
+   */
+  const locked = locks.length > 0;
+  useEffect(() => {
+    void checkLocks();
+    const timer = setInterval(() => void checkLocks(), locked ? 5_000 : 20_000);
+    return () => clearInterval(timer);
+  }, [checkLocks, locked]);
+
+  // Closes the site menu on any click elsewhere, the behaviour every menu has.
+  useEffect(() => {
+    if (!siteMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (siteMenuRef.current && !siteMenuRef.current.contains(e.target as Node)) {
+        setSiteMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [siteMenuOpen]);
+
   async function onPull(slug: string) {
     setSyncBusy(slug);
     try {
@@ -206,7 +418,7 @@ export function BuilderApp({
         say(`Pulled the WordPress version of "${slug}" into VibeWP.`);
         const refreshed = await listPagesAction(siteId);
         setPages(refreshed);
-        setContent(refreshed.find((p) => p.slug === activeSlug)?.content ?? null);
+        paintFrom(refreshed, activeSlug);
         await refreshHistory(activeSlug);
       } else {
         say(result.error);
@@ -227,7 +439,7 @@ export function BuilderApp({
         say(`Kept the WordPress version of "${slug}".`);
         const refreshed = await listPagesAction(siteId);
         setPages(refreshed);
-        setContent(refreshed.find((p) => p.slug === activeSlug)?.content ?? null);
+        paintFrom(refreshed, activeSlug);
         await refreshHistory(activeSlug);
       } else {
         say(`Kept the VibeWP version of "${slug}". Export to push it to WordPress.`);
@@ -267,15 +479,34 @@ export function BuilderApp({
         /*
          * Re-read the content and repaint from local state. router.refresh()
          * alone is NOT enough and used to be all this did: `content` is
-         * useState(initialContent), so a new initialContent prop from the
+         * useState(initialSchema), so a new initialSchema prop from the
          * refreshed server component is ignored after mount. The step landed
          * in the database while the canvas kept showing the old version —
          * the buttons flipped, nothing visibly changed.
          */
         const refreshed = await listPagesAction(siteId);
         setPages(refreshed);
-        setContent(refreshed.find((p) => p.slug === activeSlug)?.content ?? null);
-        say(direction === "undo" ? "Stepped back one version." : "Stepped forward one version.");
+        paintFrom(refreshed, activeSlug);
+
+        /*
+         * A step that restored the header or footer repaints it, and SAYS so.
+         *
+         * Both halves matter. The canvas keeps chrome in its own state, so
+         * without the repaint the restored header would sit in the database
+         * behind the old one on screen. And "Stepped back one version" gave no
+         * clue what had moved — the message that accompanied undo silently
+         * failing to touch the header at all.
+         */
+        if (result.chrome) {
+          setChrome(result.chrome as typeof chrome);
+          say(
+            direction === "undo"
+              ? "Put your header and footer back to how they were."
+              : "Restored the header and footer change.",
+          );
+        } else {
+          say(direction === "undo" ? "Stepped back one version." : "Stepped forward one version.");
+        }
       } else {
         setHistory(await getHistoryStateAction({ siteId, slug: activeSlug }));
         say(result.error);
@@ -283,6 +514,18 @@ export function BuilderApp({
     } finally {
       setStepping(false);
     }
+  }
+
+  /**
+   * Repaints the canvas from a freshly-read page list.
+   *
+   * One function so the schema and the hero summary can never disagree —
+   * every caller that re-reads pages after a write (undo, redo, pull, conflict
+   * resolution, generation) has to update both, and doing that inline in five
+   * places is how one of them ends up updating only the hero.
+   */
+  function paintFrom(list: PageSummary[], slug: string) {
+    setSchema(list.find((p) => p.slug === slug)?.schema ?? null);
   }
 
   /**
@@ -294,9 +537,7 @@ export function BuilderApp({
    */
   function switchToPage(slug: string, known?: PageSummary[]) {
     setActiveSlug(slug);
-    const list = known ?? pages;
-    const page = list.find((p) => p.slug === slug);
-    setContent(page?.content ?? null);
+    paintFrom(known ?? pages, slug);
     // History is per page, so the buttons have to follow the switch.
     void refreshHistory(slug);
   }
@@ -310,16 +551,8 @@ export function BuilderApp({
     userPrompt: string,
     replaceHistory: boolean,
     target?: { slug: string; title?: string },
-    /**
-     * What actually goes to the model, when it differs from what the user
-     * typed. "create services page" is an instruction, not a description of
-     * the business — sending it verbatim produced a page about building
-     * service pages. The caller supplies real context instead.
-     */
-    promptOverride?: string,
   ) {
     const slug = target?.slug ?? activeSlug;
-    const aiPrompt = promptOverride ?? userPrompt;
     setGenerating(true);
     const userMessage: ChatMessage = { id: nextId(), role: "user", text: userPrompt, steps: [] };
     setMessages((prev) => (replaceHistory ? [userMessage] : [...prev, userMessage]));
@@ -328,10 +561,10 @@ export function BuilderApp({
     const aiMessageId = nextId();
     setMessages((prev) => [
       ...prev,
-      { id: aiMessageId, role: "ai", text: "Building your homepage…", steps: [] },
+      { id: aiMessageId, role: "ai", text: "Building your page…", steps: [] },
     ]);
 
-    GENERATION_STEPS.forEach((step, i) => {
+    PLANNING_STEPS.forEach((step, i) => {
       setTimeout(() => {
         setMessages((prev) =>
           prev.map((m) =>
@@ -341,21 +574,41 @@ export function BuilderApp({
       }, 500 * (i + 1));
     });
 
-    // Kick off real generation in parallel with the step-reveal animation —
-    // Promise.all so the steps always finish playing out even if the AI
-    // call resolves faster, and we still wait for the AI call even if it's
-    // slower than the canned ~2s animation. The action itself already falls
-    // back to the keyword mock internally on any provider error; this catch
-    // is a second safety net in case the client-to-server call itself fails.
+    /*
+     * Run generation alongside the step animation. A whole page takes longer
+     * than a single hero did, so the animation now usually finishes first —
+     * minDelay only guarantees the steps are never cut off mid-reveal.
+     *
+     * The instruction goes over as the instruction. The business is loaded
+     * server-side from the site record, which is the fix for the bug where
+     * "build home page" WAS the business description.
+     */
     const minDelay = new Promise<void>((resolve) =>
-      setTimeout(resolve, 500 * (GENERATION_STEPS.length + 1)),
+      setTimeout(resolve, 500 * (PLANNING_STEPS.length + 1)),
     );
-    const [generated] = await Promise.all([
-      generateHeroContentAction(aiPrompt).catch(() => generateHeroContent(aiPrompt)),
-      minDelay,
-    ]);
+    let result;
+    try {
+      [result] = await Promise.all([
+        generatePageAction({ siteId, slug, title: target?.title, instruction: userPrompt }),
+        minDelay,
+      ]);
+    } catch {
+      const failed = "I couldn't reach the generator. Nothing was changed — try again in a moment.";
+      setMessages((prev) => prev.map((m) => (m.id === aiMessageId ? { ...m, text: failed, steps: [] } : m)));
+      remember("ai", failed);
+      setGenerating(false);
+      return;
+    }
 
-    setContent(generated);
+    // Generation settles the header and footer on the first run; adopt them so
+    // the canvas frames the page without waiting for a reload.
+    if (result.chrome.header || result.chrome.footer) setChrome(result.chrome);
+
+    // Replace the planning steps with what was actually built, section by
+    // section, so the report describes the page rather than the process.
+    setMessages((prev) =>
+      prev.map((m) => (m.id === aiMessageId ? { ...m, steps: result.steps } : m)),
+    );
 
     // Persist before telling the user it worked, so the message reflects
     // what actually happened rather than optimism — a failed save here used
@@ -366,7 +619,7 @@ export function BuilderApp({
         siteId,
         slug,
         title: target?.title,
-        schema: heroContentToSchema(generated),
+        schema: result.schema,
         reason: userPrompt,
       });
       // Refresh the list first so the freshly written content is what the
@@ -381,24 +634,90 @@ export function BuilderApp({
     }
 
     const pageLabel = slug === "home" ? "homepage" : `${slug} page`;
-    const replyText = saved
+    const count = result.schema.nodes.length;
+    const built = `${count} section${count === 1 ? "" : "s"}`;
+
+    const base = saved
       ? target
-        ? `Created your ${pageLabel}. You're now editing it — say "go to home page" to switch back.`
+        ? `Created your ${pageLabel} — ${built}. You're now editing it — say "go to home page" to switch back.`
         : replaceHistory
-          ? "Here's a first pass at your homepage."
-          : `Updated your ${pageLabel}. Say "undo" to put back the previous version.`
+          ? `Here's a first pass at your homepage — ${built}.`
+          : `Updated your ${pageLabel} — ${built}. Say "undo" to put back the previous version.`
       : "I built this, but couldn't save it. Your changes may be lost if you reload.";
+
+    /*
+     * A degraded build says so. Without this the fallback hero was reported in
+     * exactly the same words as a full page, so an expired API key looked like
+     * a finished homepage that had simply come out short.
+     */
+    const replyText = saved && result.degraded ? `${base} ${result.degraded}` : base;
 
     setMessages((prev) =>
       prev.map((m) => (m.id === aiMessageId ? { ...m, text: replyText } : m)),
     );
-    remember("ai", replyText, GENERATION_STEPS);
+    remember("ai", replyText, result.steps);
     setGenerating(false);
     router.replace(builderPath);
   }
 
   function runAutostart(userPrompt: string) {
     return generate(userPrompt, true);
+  }
+
+  /**
+   * Intake submitted: close the cover and build.
+   *
+   * `summary` is a human sentence describing what was saved, NOT the form's
+   * contents. The facts themselves reach generation from the database, so a
+   * phone number is never text the model can reword — see the note on
+   * summarise() in app/actions/intake.ts.
+   */
+  async function onIntakeDone(
+    summary: string,
+    rebuild: boolean,
+    savedFacts: Record<string, string>,
+  ) {
+    setIntakeOpen(false);
+    const wasFirstBuild = !intake.completed;
+
+    /*
+     * Repaint the canvas with the new details immediately.
+     *
+     * Contact fields in generated content are {{phone}}-style tokens, so
+     * updating the facts is enough to change what the page shows — no
+     * regeneration, and nothing already written gets touched.
+     */
+    setFacts(savedFacts);
+
+    // Re-read rather than trusting the form's local copy, so what the builder
+    // holds is what was actually stored.
+    try {
+      const fresh = await loadIntakeAction(siteId);
+      setIntake(fresh);
+      setFacts(fresh.facts);
+    } catch {
+      setIntake((prev) => ({ ...prev, completed: true }));
+    }
+
+    if (rebuild) {
+      void generate(summary, wasFirstBuild);
+      return;
+    }
+
+    /*
+     * Saving is NOT building. Correcting a phone number used to regenerate the
+     * whole page, which threw away any copy the client had already edited and
+     * spent an AI call to do it.
+     *
+     * The WordPress caveat is stated rather than left to be discovered: the
+     * live site reads these from its own options, which are only updated by an
+     * export.
+     */
+    say(
+      wpUrl
+        ? "Saved your business details. Contact details on the page follow them automatically — export to update the live WordPress site."
+        : "Saved your business details. Contact details on the page follow them automatically.",
+    );
   }
 
   useEffect(() => {
@@ -427,6 +746,17 @@ export function BuilderApp({
     e.preventDefault();
     const text = draft.trim();
     if (!text || generating) return;
+
+    /*
+     * Checked here as well as covered by the lock notice.
+     *
+     * The overlay stops the mouse, but not the keyboard: if the caret was
+     * already in the chat box when the lock appeared, Enter would still submit
+     * straight past it. A cover that only blocks one input device is not a
+     * lock, so the guard belongs on the action itself.
+     */
+    if (locks.length > 0 && !lockOverridden) return;
+
     setDraft("");
 
     // "undo"/"redo" are handled here rather than as intents, because they must
@@ -475,18 +805,76 @@ export function BuilderApp({
         say(`That page already exists — switched to it rather than overwriting it.`);
         return;
       }
-      // Describe the business to the model, not the command that was typed.
-      // Whatever is on the current page is the best available summary of
-      // what this business actually does.
-      const businessContext = content?.body ?? content?.heading ?? "";
-      const contextualPrompt = businessContext
-        ? `Write the "${intent.title}" page for ${siteName}. The business is described as: ${businessContext}. Focus the copy on what this page is for, not on website building.`
-        : `Write the "${intent.title}" page for ${siteName}.`;
-      void generate(text, false, { slug: intent.slug, title: intent.title }, contextualPrompt);
+      /*
+       * No prompt rewriting here any more. This used to splice the current
+       * page's body copy into the prompt as a stand-in business description,
+       * because the generator had no other way to learn what the business was.
+       * It now loads the real site record server-side, so the instruction can
+       * be passed through as what it is.
+       */
+      void generate(text, false, { slug: intent.slug, title: intent.title });
       return;
     }
 
-    void generate(text, false);
+    void runEdit(text);
+  }
+
+  /**
+   * A change to the page that already exists.
+   *
+   * Routed to a targeted operation rather than a rebuild. Every edit used to
+   * regenerate the whole page, so "create a gallery above the testimonials"
+   * produced the same six sections and reported success — work claimed but not
+   * done. If the instruction cannot be carried out, this now says so instead.
+   */
+  async function runEdit(text: string) {
+    setGenerating(true);
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
+    remember("user", text);
+
+    const aiId = nextId();
+    setMessages((prev) => [...prev, { id: aiId, role: "ai", text: "Making that change…", steps: [] }]);
+
+    let result;
+    try {
+      result = await applyEditAction({ siteId, slug: activeSlug, instruction: text });
+    } catch {
+      const failed = "I couldn't reach the builder. Nothing was changed.";
+      setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: failed } : m)));
+      remember("ai", failed);
+      setGenerating(false);
+      return;
+    }
+
+    /*
+     * A header or footer change repaints the canvas straight away.
+     *
+     * Chrome is site-wide, so none of the page-level refreshes below carry it —
+     * swapping in a header with a button changed the database and left the
+     * canvas showing the old one, which reads as the instruction being ignored.
+     */
+    if (result.ok && "chrome" in result && result.chrome) {
+      setChrome(result.chrome as typeof chrome);
+    }
+
+    // The instruction genuinely asked for the page to be written again.
+    if (result.ok && "regenerate" in result && result.regenerate) {
+      setMessages((prev) => prev.filter((m) => m.id !== aiId));
+      setGenerating(false);
+      void generate(text, false);
+      return;
+    }
+
+    if (result.ok) {
+      const refreshed = await listPagesAction(siteId);
+      setPages(refreshed);
+      paintFrom(refreshed, activeSlug);
+      await refreshHistory(activeSlug);
+    }
+
+    setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: result.message } : m)));
+    remember("ai", result.message);
+    setGenerating(false);
   }
 
   /**
@@ -582,11 +970,37 @@ export function BuilderApp({
        document to the viewport for this screen only, so the panes scroll
        internally instead of the page scrolling. */
     <div className={`${styles.builder} vibewp-fullscreen`}>
+      <SiteDetailsDrawer
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        details={siteDetails}
+      />
+      {intakeOpen && (
+        <IntakeForm
+          siteId={siteId}
+          initial={intake.data}
+          isFirstBuild={!intake.completed}
+          onDone={(summary, rebuild, savedFacts) =>
+            void onIntakeDone(summary, rebuild, savedFacts)
+          }
+          onCancel={() => setIntakeOpen(false)}
+        />
+      )}
+
       <div className={styles.topbar}>
         <div className={styles.brand}>
           <span className={styles.brandMark} />
           VibeWP
         </div>
+        <button
+          type="button"
+          className={styles.menuIconBtn}
+          onClick={() => setDetailsOpen(true)}
+          title="Site details"
+          aria-label="Site details"
+        >
+          <HamburgerIcon />
+        </button>
         <a className={styles.backLink} href={backPath}>
           ← {backLabel}
         </a>
@@ -613,6 +1027,19 @@ export function BuilderApp({
               ))}
             </select>
           )}
+          {/*
+            Reopens the intake form. The details it holds drive every generated
+            page, so it belongs beside the page being edited rather than buried
+            in a settings screen the client would have to leave the builder for.
+          */}
+          <button
+            type="button"
+            className={styles.detailsBtn}
+            onClick={() => setIntakeOpen(true)}
+            title="Business name, contact details, services and colours"
+          >
+            Business details
+          </button>
         </div>
 
         {/*
@@ -644,53 +1071,107 @@ export function BuilderApp({
           </button>
         </div>
 
+        {/*
+          Icons only. title and aria-label carry the name that used to be
+          visible — dropping the text from the screen must not drop it from the
+          accessibility tree, or the control becomes unusable with a reader.
+        */}
         <div className={styles.viewportToggle}>
+          {([
+            ["desktop", <DesktopIcon key="d" />, "Desktop"],
+            ["tablet", <TabletIcon key="t" />, "Tablet"],
+            ["mobile", <MobileIcon key="m" />, "Mobile"],
+          ] as const).map(([key, icon, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={viewport === key ? styles.active : ""}
+              onClick={() => setViewport(key)}
+              title={label}
+              aria-label={label}
+              aria-pressed={viewport === key}
+            >
+              {icon}
+            </button>
+          ))}
           <button
             type="button"
-            className={viewport === "desktop" ? styles.active : ""}
-            onClick={() => setViewport("desktop")}
+            className={styles.reloadBtn}
+            onClick={() => setReloadKey((k) => k + 1)}
+            title="Reload the preview"
+            aria-label="Reload the preview"
           >
-            🖥 Desktop
-          </button>
-          <button
-            type="button"
-            className={viewport === "tablet" ? styles.active : ""}
-            onClick={() => setViewport("tablet")}
-          >
-            ▭ Tablet
-          </button>
-          <button
-            type="button"
-            className={viewport === "mobile" ? styles.active : ""}
-            onClick={() => setViewport("mobile")}
-          >
-            📱 Mobile
+            <ReloadIcon />
           </button>
         </div>
         <div className={styles.topActions}>
-          {wpUrl && (
-            <a className={styles.btn} href={wpUrl} target="_blank" rel="noreferrer">
-              View site ↗
-            </a>
-          )}
-          {wpUrl && (
-            <button type="button" className={styles.btn} onClick={onOpenWpAdmin} disabled={busy !== null}>
-              {busy === "wpadmin" ? "Opening…" : "WP Admin ↗"}
+          {/*
+            Publish stays outside. It is the one irreversible, outward-facing
+            action here, and burying it a click deep alongside three routine
+            ones would make it easier to reach by accident than on purpose.
+          */}
+          <div className={styles.menuWrap} ref={siteMenuRef}>
+            <button
+              type="button"
+              className={styles.btn}
+              onClick={() => setSiteMenuOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={siteMenuOpen}
+              disabled={busy !== null}
+            >
+              {busy === "wpadmin"
+                ? "Opening…"
+                : busy === "export"
+                  ? "Exporting…"
+                  : "Preview"}{" "}
+              ▾
             </button>
-          )}
-          <button
-            type="button"
-            className={styles.btn}
-            /*
-             * Must NOT be `onClick={onExport}`: React would pass the click
-             * event as the `force` argument, and a MouseEvent is truthy — so
-             * every ordinary click would have bypassed the overwrite guard.
-             */
-            onClick={() => void onExport(false)}
-            disabled={busy !== null}
-          >
-            {busy === "export" ? "Exporting…" : "Export to WordPress"}
-          </button>
+            {siteMenuOpen && (
+              <div className={styles.menu} role="menu">
+                {wpUrl && (
+                  <a
+                    className={styles.menuItem}
+                    role="menuitem"
+                    href={wpUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => setSiteMenuOpen(false)}
+                  >
+                    View site ↗
+                  </a>
+                )}
+                {wpUrl && (
+                  <button
+                    type="button"
+                    className={styles.menuItem}
+                    role="menuitem"
+                    onClick={() => {
+                      setSiteMenuOpen(false);
+                      void onOpenWpAdmin();
+                    }}
+                  >
+                    WP Admin ↗
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={styles.menuItem}
+                  role="menuitem"
+                  /*
+                   * Must NOT be `onClick={onExport}`: React would pass the click
+                   * event as the `force` argument, and a MouseEvent is truthy —
+                   * so every ordinary click would bypass the overwrite guard.
+                   */
+                  onClick={() => {
+                    setSiteMenuOpen(false);
+                    void onExport(false);
+                  }}
+                >
+                  Export to WordPress
+                </button>
+              </div>
+            )}
+          </div>
           <button
             type="button"
             className={`${styles.btn} ${styles.btnPrimary}`}
@@ -714,6 +1195,19 @@ export function BuilderApp({
       )}
 
       <div className={styles.panes}>
+        {/*
+          Inside .panes, which is already positioned, so the cover stops at the
+          chat and canvas and leaves the toolbar reachable. "Back to dashboard"
+          and "Open WordPress admin" are the two things someone actually wants
+          while locked out — blocking them would leave the message with no way
+          to act on it.
+        */}
+        <WordPressLockNotice
+          locks={lockOverridden ? [] : locks}
+          onRecheck={checkLocks}
+          onOverride={() => setLockOverridden(true)}
+        />
+
         <div
           className={`${styles.chatPane} ${chatOpen ? "" : styles.collapsed} ${
             pinned ? styles.pinned : ""
@@ -803,26 +1297,60 @@ export function BuilderApp({
                     : ""
               }`}
             >
-              <div className={styles.pvNav}>
-                <div className={styles.pvBrand}>{siteName}</div>
-                <div className={styles.pvLinks}>
-                  <span>Services</span>
-                  <span>About</span>
-                  <span>Contact</span>
-                </div>
-              </div>
-
-              {content ? (
+              {schema ? (
                 /*
-                 * The selection outline and section label stay OUT here as app
-                 * chrome; only the page itself goes in the frame. The markup is
-                 * the serializer's, byte for byte what Export writes to
-                 * WordPress, so the canvas can no longer disagree with the
-                 * exported site.
+                 * Header, page, footer — one document, so the canvas is the
+                 * whole site rather than a page floating on its own.
+                 *
+                 * The chrome used to be app furniture: a hardcoded brand name
+                 * beside the words Services/About/Contact, and no footer at
+                 * all. It could not match the exported site because it was not
+                 * made of the same thing. This renders the SAME markup export
+                 * writes into parts/header.html and parts/footer.html.
+                 *
+                 * withPreviewPlaceholders substitutes the blocks WordPress
+                 * renders in PHP — site title, navigation, social links — which
+                 * carry no inner HTML and would otherwise show as nothing, and
+                 * resolves the {{year}} token in the copyright line.
                  */
-                <div className={styles.pvSelected}>
-                  <PreviewFrame html={schemaToGutenberg(heroContentToSchema(content))} />
-                </div>
+                <PreviewFrame
+                  key={reloadKey}
+                  html={withPreviewPlaceholders(
+                    // The same swap export performs when writing the header
+                    // template part, so the canvas shows the logo exactly where
+                    // the live site will.
+                    withSiteLogo(
+                      chrome.header
+                        ? sectionToTemplatePart(chrome.header.type, chrome.header.props)
+                        : "",
+                      Boolean(intake.data.logoUrl),
+                    ) +
+                      schemaToGutenberg(schema) +
+                      (chrome.footer
+                        ? sectionToTemplatePart(chrome.footer.type, chrome.footer.props)
+                        : ""),
+                    siteName,
+                    facts,
+                    intake.data.logoUrl,
+                    // The real pages, so the canvas menu lists what the site
+                    // actually has. The exported site's navigation falls back
+                    // to exactly this list.
+                    pages.map((p) => ({ slug: p.slug, title: p.title })),
+                  )}
+                  // The palette the client chose, so the canvas is that site's
+                  // colours rather than the theme's defaults.
+                  colors={intake.data.colors}
+                  /*
+                   * Clicking the canvas menu edits that page, which is the
+                   * nearest honest equivalent to what the link does on the live
+                   * site. Guarded: a menu can name a page that has not been
+                   * built yet, and switching to one would show an empty canvas
+                   * with no way back.
+                   */
+                  onNavigate={(slug) => {
+                    if (pages.some((p) => p.slug === slug)) switchToPage(slug);
+                  }}
+                />
               ) : (
                 <div className={styles.emptyCanvas}>
                   {generating

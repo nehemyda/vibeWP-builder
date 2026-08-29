@@ -28,7 +28,7 @@ export default async function SmbDashboardPage({
   searchParams,
 }: {
   params: Promise<{ slug: string[] }>;
-  searchParams: Promise<{ page?: string; saved?: string; error?: string }>;
+  searchParams: Promise<{ page?: string; tab?: string; saved?: string; error?: string }>;
 }) {
   const { slug } = await params;
   if (slug.length < 1 || slug.length > 3) notFound();
@@ -72,7 +72,16 @@ export default async function SmbDashboardPage({
   }
 
   if (subPage === "leads") {
-    return <LeadsView profile={profile} role={role} site={site} paths={paths} page={parsePage(sp.page)} />;
+    return (
+      <LeadsView
+        profile={profile}
+        role={role}
+        site={site}
+        paths={paths}
+        page={parsePage(sp.page)}
+        tab={typeof sp.tab === "string" ? sp.tab : undefined}
+      />
+    );
   }
   if (subPage === "team") {
     return <TeamView profile={profile} role={role} site={site} paths={paths} error={sp.error} />;

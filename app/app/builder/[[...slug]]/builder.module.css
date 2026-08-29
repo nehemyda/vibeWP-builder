@@ -81,15 +81,31 @@
 .viewportToggle button {
   border: none;
   background: transparent;
-  padding: 0.4rem 0.6rem;
+  /* Square-ish, since the icon no longer has a text label setting the width. */
+  padding: 0.4rem;
+  min-width: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 8px;
-  font-size: 0.85rem;
   cursor: pointer;
-  color: var(--muted);
+  /* Darker than --muted: at 18px an outline icon carries far less ink than a
+     word did, so the old grey read as disabled rather than simply inactive. */
+  color: var(--ink-2, #4a5160);
+}
+.viewportToggle button svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.viewportToggle button:hover {
+  color: var(--ink);
 }
 .viewportToggle button.active {
   background: #fff;
-  color: var(--ink);
+  /* The brand colour marks the selected viewport, so which one is active is
+     readable at a glance rather than needing the white pill to be noticed. */
+  color: var(--primary, #f54900);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 .topActions {
@@ -440,23 +456,15 @@
   max-width: 390px;
 }
 
-.pvNav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 2rem;
-  border-bottom: 1px solid #eee;
-}
-.pvBrand {
-  font-weight: 800;
-  font-size: 0.95rem;
-}
-.pvLinks {
-  display: flex;
-  gap: 1.4rem;
-  font-size: 0.82rem;
-  color: #555;
-}
+/*
+ * The hand-drawn header (.pvNav/.pvBrand/.pvLinks) is gone.
+ *
+ * It printed the site name beside the fixed words Services/About/Contact and
+ * had no footer at all, so the canvas showed chrome the exported site never
+ * had, and omitted the footer the exported site did have. The canvas now
+ * renders the site's real header and footer sections — the same markup export
+ * writes into parts/header.html and parts/footer.html.
+ */
 /*
  * The hand-written hero approximation that used to live here is gone.
  *
@@ -467,29 +475,15 @@
  * sections.css inside an iframe — see PreviewFrame.tsx — so there is nothing
  * left here to keep in sync.
  *
- * What remains below is genuine app chrome: the mock site header, and the
- * selection outline drawn around the frame.
+ * Nothing site-shaped remains here at all: the canvas is now entirely the
+ * theme's own stylesheet applied to the serializer's own markup, header and
+ * footer included.
  */
-.canvasFrame.mobile .pvLinks {
-  display: none;
-}
-.pvSelected {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-  position: relative;
-}
-.pvSelected::before {
-  content: "HeroSplit";
-  position: absolute;
-  top: -1.5rem;
-  left: 0;
-  background: var(--accent);
-  color: #fff;
-  font-size: 0.68rem;
-  font-weight: 700;
-  padding: 0.15rem 0.5rem;
-  border-radius: 5px 5px 0 0;
-}
+/*
+ * The selection outline and its badge are gone too. The badge's text was the
+ * literal string "HeroSplit" in CSS content — correct when a page could only
+ * hold a hero, and wrong the moment a page held six sections.
+ */
 .emptyCanvas {
   padding: 3rem 2rem;
   text-align: center;
@@ -575,12 +569,6 @@
     grid-template-columns: 1fr;
     padding: 1.6rem 1.3rem;
   }
-  .pvLinks {
-    display: none;
-  }
-  .pvNav {
-    padding: 1rem 1.3rem;
-  }
 }
 
 /* ---- WordPress sync notice ---- */
@@ -656,3 +644,257 @@
   font-size: 0.8rem;
   padding: 0.4rem 0.7rem;
 }
+
+/* Reopens the intake form from the toolbar. Quiet by default — it is a
+   reference the client returns to, not a primary action. */
+.detailsBtn {
+  margin-left: 0.6rem;
+  border: 1px solid var(--line, #dbdee3);
+  background: transparent;
+  border-radius: 8px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted, #757b83);
+  cursor: pointer;
+}
+.detailsBtn:hover {
+  border-color: var(--ink, #131922);
+  color: var(--ink, #131922);
+}
+
+/* ── Toolbar dropdown ──
+   Anchors the menu to its trigger, so it opens under the button rather than
+   at the edge of the toolbar. */
+.menuWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 13rem;
+  display: flex;
+  flex-direction: column;
+  padding: 0.3rem;
+  border-radius: 10px;
+  border: 1px solid var(--line, #dbdee3);
+  background: var(--surface, #fff);
+  box-shadow: 0 18px 40px -18px rgba(12, 16, 25, 0.35);
+}
+
+/* Right-aligned: the trigger sits at the right of the toolbar, so a
+   left-aligned menu would hang off the edge of the window. */
+.menuItem {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  font: inherit;
+  font-size: 0.85rem;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.menuItem:hover {
+  background: var(--wash, #f2f4f7);
+}
+
+
+/* ══ Builder on small screens ══
+   Appended last deliberately: these override the earlier breakpoints at equal
+   specificity, so the desktop layout above is untouched. */
+
+@media (max-width: 900px) {
+  /*
+   * Reload survives the viewport toggle being hidden.
+   *
+   * The device buttons are meaningless on a phone — the viewport IS the
+   * viewport — but reload is not, and it had been swept away with them because
+   * it shares their container.
+   */
+  .viewportToggle {
+    display: flex;
+    background: transparent;
+    padding: 0;
+  }
+  .viewportToggle button:not(.reloadBtn) {
+    display: none;
+  }
+
+  /* The topbar wraps rather than crushing its children onto one line. */
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+    padding: 0.6rem 0.8rem;
+  }
+  .topMid {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  /*
+   * The Preview menu stays.
+   *
+   * The earlier rule hides every non-primary action at this width, which was
+   * right when those were three separate wide buttons. They are now one compact
+   * dropdown — the thing that makes them fit — so hiding it removes View site,
+   * WP Admin and Export from phones altogether with no way to reach them.
+   */
+  .topActions .menuWrap .btn {
+    display: inline-flex;
+  }
+  /* Never wider than the screen it drops onto. */
+  .menu {
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  .topActions {
+    margin-left: auto;
+  }
+  .siteName {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 420px) {
+  /* Below this the label and the caret no longer both fit beside Publish. */
+  .topActions .menuWrap .btn {
+    padding: 0.5rem 0.55rem;
+  }
+  .historyBtn {
+    padding: 0.4rem;
+  }
+}
+
+/* ══ Chat as an overlay on small screens ══
+
+   The stylesheet carried rules for a .paneTabs switcher that no JSX ever
+   rendered — dead CSS for a mobile layout that was never built. The result was
+   two panes each asking for 100% width in one flex row.
+
+   Rather than add a switcher, this reuses the collapse the builder already
+   has: the assistant becomes a full-screen sheet over the canvas, opened by
+   the floating button and closed by its own X. Same state, same controls, no
+   new way for the two to disagree. */
+@media (max-width: 900px) {
+  .chatPane {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    width: 100%;
+    max-width: none;
+    border-left: none;
+  }
+  /* Pinning is a desktop idea — floating over a canvas you can still see.
+     Here the sheet always covers it, so the pinned variant must not add a
+     second, differently-positioned copy of those rules. */
+  .chatPane.pinned {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    box-shadow: none;
+  }
+  .canvasPane {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+  /* Above the sheet, so it stays reachable to reopen the assistant. */
+  .chatFab {
+    z-index: 41;
+  }
+}
+
+/* ══ Site details drawer ══ */
+.menuIconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem;
+  margin-right: 0.1rem;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: var(--ink-2, #4a5160);
+  cursor: pointer;
+  flex: none;
+}
+.menuIconBtn:hover { background: var(--bg); color: var(--ink); }
+.menuIconBtn svg { width: 18px; height: 18px; display: block; }
+
+.sdScrim {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(12, 16, 24, 0.42);
+}
+.sdPanel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 121;
+  width: min(420px, 92vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface, #fff);
+  border-right: 1px solid var(--line, #dbdee3);
+  box-shadow: 18px 0 44px -22px rgba(12, 16, 25, 0.4);
+}
+.sdHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.sdTitle { margin: 0; font-size: 1rem; font-weight: 700; }
+.sdClose {
+  border: none; background: transparent; cursor: pointer;
+  font-size: 0.95rem; color: var(--muted); padding: 0.3rem 0.4rem; border-radius: 7px;
+}
+.sdClose:hover { background: var(--bg); color: var(--ink); }
+
+/* Scrolls internally: the panel is full height and the list can outgrow it. */
+.sdBody { overflow-y: auto; padding: 0.4rem 1.1rem 1.4rem; }
+
+.sdSection { padding: 0.9rem 0; border-bottom: 1px solid var(--line); }
+.sdSection:last-child { border-bottom: none; }
+.sdSectionTitle {
+  margin: 0 0 0.6rem;
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--muted);
+}
+.sdRow {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 0.8rem; padding: 0.32rem 0; font-size: 0.85rem;
+}
+.sdLabel { color: var(--ink-2, #4a5160); flex: none; }
+/* Values wrap and break: a URL or long ID must not widen the panel. */
+.sdValue {
+  display: flex; align-items: center; gap: 0.45rem;
+  min-width: 0; text-align: right; word-break: break-all;
+}
+.sdValue code { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.8rem; }
+.sdCopy {
+  border: 1px solid var(--line); background: transparent; cursor: pointer;
+  font: inherit; font-size: 0.7rem; padding: 0.1rem 0.35rem; border-radius: 6px;
+  color: var(--muted); flex: none;
+}
+.sdCopy:hover { color: var(--ink); }
+.sdEmpty { color: var(--faint, #9aa1ad); font-style: italic; }
+.sdHint { margin: 0 0 0.6rem; font-size: 0.8rem; line-height: 1.5; color: var(--ink-2, #4a5160); }
+.sdLink { display: inline-block; margin-top: 0.5rem; font-size: 0.83rem; }

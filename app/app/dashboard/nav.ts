@@ -9,6 +9,17 @@ export function smbNav(
     billingPath?: string;
     settingsPath?: string;
   } | null,
+  /**
+   * Whether the intake form has ever been submitted for this site.
+   *
+   * Drives the label: a client who has never told us anything is being offered
+   * something quite different from one coming back to adjust a heading, and
+   * "Edit site" on an empty site invites the question "edit what?".
+   *
+   * Deliberately not inferred from page count — a site can hold pages from a
+   * WordPress pull without anyone having filled the form.
+   */
+  intakeCompleted = true,
 ): NavGroup[] {
   const overviewHref = paths?.dashboardPath ?? "/dashboard";
   const editHref = paths?.builderPath ?? "/dashboard";
@@ -21,7 +32,11 @@ export function smbNav(
       label: "My site",
       items: [
         { icon: "◆", label: "Overview", href: overviewHref },
-        { icon: "✏", label: "Edit site", href: editHref },
+        {
+          icon: intakeCompleted ? "✏" : "✨",
+          label: intakeCompleted ? "Edit my site" : "Build my site",
+          href: editHref,
+        },
         { icon: "📈", label: "Visitors", href: overviewHref },
         { icon: "✉", label: "Leads & forms", href: leadsHref },
         { icon: "👥", label: "Team", href: teamHref },

@@ -97,6 +97,25 @@ export const sites = pgTable("sites", {
    * agency price list, then the platform list price. See lib/billing.ts.
    */
   customPriceMonthlyCents: integer("custom_price_monthly_cents"),
+  /**
+   * The site's header and footer, one section node each.
+   *
+   * Site-wide rather than per page, because that is what a template part is:
+   * every template pulls parts/header.html in, so one header serves every page
+   * and editing it is a single edit. Null until the first generation chooses
+   * one, at which point export writes them into the theme.
+   */
+  headerSchemaJson: jsonb("header_schema_json"),
+  footerSchemaJson: jsonb("footer_schema_json"),
+  /**
+   * Brand palette. The key records which preset was chosen; the colours are
+   * stored resolved, so editing a preset later never silently restyles a site
+   * that was already built and signed off.
+   */
+  brandPaletteKey: text("brand_palette_key"),
+  brandColors: jsonb("brand_colors"),
+  /** Set when the intake form is first submitted — drives Build vs Edit. */
+  intakeCompletedAt: timestamp("intake_completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -105,6 +124,13 @@ export const sites = pgTable("sites", {
     .defaultNow(),
   /** Soft delete — hidden from listings when set, recoverable. */
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  /**
+   * Public identifier a website's form posts with.
+   *
+   * Visible in page source by design — it says WHICH site is submitting and
+   * proves nothing. Per site so a leak exposes one site and rotates alone.
+   */
+  formToken: text("form_token"),
 });
 
 /** Page schema shaped like docs/hybrid-renderer.md so a real renderer can read it later. */
@@ -131,7 +157,7 @@ export const sitePages = pgTable("site_pages", {
    * A schema rather than a markup hash on purpose: WordPress re-serializes on
    * every editor save (escaping hyphens in block attributes, inserting blank
    * lines, leaving empty paragraphs), so byte comparison would report a
-   * conflict on every page a client had merely opened. See lib/wp/parse-blocks.ts.
+   * conflict on every page a client had merely opened. See lib/wp/serialize.ts.
    */
   syncedSchemaJson: jsonb("synced_schema_json"),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
@@ -169,6 +195,28 @@ export const builderMessages = pgTable("builder_messages", {
  * mistaken prompt destroys work with no way back. Every write records what
  * was there first, which is what makes undo possible.
  */
+/**
+ * Undo/redo for the header and footer.
+ *
+ * Separate from pageRevisions because chrome belongs to the site, not a page —
+ * page_revisions.page_id is NOT NULL and there is no page to point at. Header
+ * and footer share one row so they are always restored as the pair the client
+ * actually saw.
+ */
+export const siteRevisions = pgTable("site_revisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  siteId: uuid("site_id")
+    .notNull()
+    .references(() => sites.id),
+  headerSchemaJson: jsonb("header_schema_json"),
+  footerSchemaJson: jsonb("footer_schema_json"),
+  /** "undo" or "redo" — the same two stacks pageRevisions uses. */
+  kind: text("kind").notNull(),
+  reason: text("reason"),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const pageRevisions = pgTable("page_revisions", {
   id: uuid("id").primaryKey().defaultRandom(),
   pageId: uuid("page_id")
@@ -316,6 +364,49 @@ export const rolePermissions = pgTable(
   (t) => [primaryKey({ columns: [t.role, t.permissionKey] })],
 );
 
+/**
+ * A form's fields, as data.
+ *
+ * The drag-and-drop builder edits THIS, never markup — same reason sections
+ * own their serializer: a definition can be validated, previewed, exported to
+ * Gutenberg and parsed back, and free-form HTML can do none of those.
+ */
+export const formDefinitions = pgTable("form_definitions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  siteId: uuid("site_id")
+    .notNull()
+    .references(() => sites.id),
+  name: text("name").notNull().default("Contact form"),
+  /** Ordered field specs: type, label, name, required, width, options. */
+  fields: jsonb("fields").notNull().default([]),
+  notifyEmails: text("notify_emails"),
+  successMessage: text("success_message"),
+  redirectUrl: text("redirect_url"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * One person who filled the form in.
+ *
+ * `formId` is nullable and set null on delete: a lead is someone who asked to
+ * be contacted, and removing the form they used must never remove them.
+ */
+export const formSubmissions = pgTable("form_submissions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  siteId: uuid("site_id")
+    .notNull()
+    .references(() => sites.id),
+  formId: uuid("form_id").references(() => formDefinitions.id, { onDelete: "set null" }),
+  /** Answers keyed by field name — arbitrary, so a new field needs no migration. */
+  data: jsonb("data").notNull().default({}),
+  /** Page, referrer, user agent, IP: context for judging a lead, and for spam. */
+  meta: jsonb("meta").notNull().default({}),
+  spamScore: integer("spam_score").notNull().default(0),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const leads = pgTable("leads", {
   id: uuid("id").primaryKey().defaultRandom(),
   siteId: uuid("site_id")
@@ -350,6 +441,16 @@ export const businessProfiles = pgTable(
     tags: text("tags"),
     timezone: text("timezone"),
     phoneNumber: text("phone_number"),
+    email: text("email"),
+    /** Structured week: [{ day, open, close, closed }] — see lib/business/hours.ts. */
+    openingHours: jsonb("opening_hours"),
+    /** What the business does, in the owner's own words. */
+    aboutText: text("about_text"),
+    /** Authoritative service names: [{ name }]. Generation describes, never invents. */
+    services: jsonb("services"),
+    seoKeywords: text("seo_keywords"),
+    /** The business logo as a data URL — see migrate-batch19.ts for why. */
+    logoUrl: text("logo_url"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -440,6 +541,25 @@ export const sections = pgTable("sections", {
   componentType: text("component_type").notNull(),
   isActive: boolean("is_active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
+  /**
+   * ─────────────────────────────────────────────────────────────────
+   * This table OVERLAYS lib/sections/*, it does not define sections.
+   *
+   * Structure — fields, markup, parsing, CSS — lives in code, because it needs
+   * review and a matching stylesheet. This row carries only what an admin
+   * changes without a deploy. A row whose `key` has no registry entry is an
+   * orphan: it can be shown, but nothing will render it.
+   * ─────────────────────────────────────────────────────────────────
+   */
+  /** Replaces the section's built-in generation guidance. Null = use the code default. */
+  aiPromptOverride: text("ai_prompt_override"),
+  /** Thumbnail for the library grid; the detail view renders live instead. */
+  previewImageUrl: text("preview_image_url"),
+  /**
+   * Plan slugs allowed to use this section. Empty = available on every plan,
+   * which is the sane default for a brand-new section.
+   */
+  allowedPlans: jsonb("allowed_plans").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -470,6 +590,15 @@ export const platformSettings = pgTable("platform_settings", {
   supportEmail: text("support_email"),
   defaultTimezone: text("default_timezone").notNull().default("America/New_York"),
   maintenanceMode: boolean("maintenance_mode").notNull().default(false),
+  /**
+   * What clients point their domain at. Null until an administrator sets them.
+   *
+   * Shown in the builder's site panel as the records to enter at a registrar,
+   * so they must be the real targets for this platform's hosting — never a
+   * placeholder, which would send a live domain to the wrong server.
+   */
+  hostingIpv4: text("hosting_ipv4"),
+  hostingCname: text("hosting_cname"),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

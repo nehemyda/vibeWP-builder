@@ -51,7 +51,7 @@ export async function SettingsView({
 
   return (
     <DashboardShell
-      navGroups={smbNav(paths)}
+      navGroups={smbNav(paths, Boolean(site.intakeCompletedAt))}
       activeHref={paths.settingsPath}
       userName={profile.fullName}
       userRole={site.name}
