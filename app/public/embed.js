@@ -248,6 +248,21 @@
 
     mount.textContent = "";
     mount.appendChild(form);
+
+    /*
+     * Tell the opener we are ready to be restyled.
+     *
+     * The editor used to push its definition on the iframe's load event, but
+     * this script FETCHES before it renders — so that push landed while there
+     * was nothing mounted, was dropped, and the stored version stayed on screen
+     * looking like a save that had not worked. Announcing readiness inverts it:
+     * the editor answers a fact instead of guessing at a moment.
+     */
+    if (window.parent && window.parent !== window) {
+      try {
+        window.parent.postMessage({ type: "vibewp:ready" }, ORIGIN || "*");
+      } catch (e) { /* not embedded, or a stricter parent — harmless */ }
+    }
   }
 
   /*

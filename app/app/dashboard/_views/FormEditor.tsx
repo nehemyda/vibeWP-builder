@@ -251,7 +251,18 @@ export function FormEditor({
   /** Set while dragging a NEW field in from the palette. */
   const [incoming, setIncoming] = useState<FormFieldSpec["type"] | null>(null);
   const [saved, setSaved] = useState(false);
+  /*
+   * What is actually stored, as far as this screen knows.
+   *
+   * `dirty` compared against the `initial` PROP, which a successful save does
+   * not change — so the header kept saying "Not published yet" after
+   * publishing, until a reload replaced the prop. The baseline moves on save
+   * instead, which is the moment the claim becomes true.
+   */
+  const [baseline, setBaseline] = useState(initial);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [embedOpen, setEmbedOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [style, setStyle] = useState<Record<string, string>>(initial.style ?? {});
   const frameRef = useRef<HTMLIFrameElement>(null);
 
@@ -296,6 +307,7 @@ export function FormEditor({
         style,
       });
       if (res.ok) {
+        setBaseline({ name, fields, successMessage, notifyEmails, style });
         setSaved(true);
         router.refresh();
       }
@@ -313,11 +325,11 @@ export function FormEditor({
   const [pending, start] = useTransition();
 
   const dirty =
-    name !== initial.name ||
-    successMessage !== initial.successMessage ||
-    notifyEmails !== initial.notifyEmails ||
-    JSON.stringify(fields) !== JSON.stringify(initial.fields) ||
-    JSON.stringify(style) !== JSON.stringify(initial.style ?? {});
+    name !== baseline.name ||
+    successMessage !== baseline.successMessage ||
+    notifyEmails !== baseline.notifyEmails ||
+    JSON.stringify(fields) !== JSON.stringify(baseline.fields) ||
+    JSON.stringify(style) !== JSON.stringify(baseline.style ?? {});
 
   function addField(type: FormFieldSpec["type"], at?: number) {
     const label = PALETTE.find((p) => p.type === type)?.label ?? "Field";
@@ -366,6 +378,25 @@ export function FormEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fields, previewOpen]);
 
+  /*
+   * The embed announces when it has rendered; only then can it accept a
+   * definition. Listening beats guessing at the right moment.
+   */
+  useEffect(() => {
+    const onReady = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      if ((e.data as { type?: string })?.type === "vibewp:ready") pushToPreview();
+    };
+    window.addEventListener("message", onReady);
+    return () => window.removeEventListener("message", onReady);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields, style, successMessage]);
+
+  /* Built from the running origin, so a self-hosted deploy needs no edit. */
+  const embedSnippet =
+    `<div data-vibewp-form="${embedToken ?? ""}"></div>\n` +
+    `<script src="${typeof window === "undefined" ? "" : window.location.origin}/embed.js" async></script>`;
+
   const active = selected !== null ? fields[selected] : undefined;
 
 
@@ -395,6 +426,14 @@ export function FormEditor({
           style={{ ...input, maxWidth: "18rem", fontWeight: 700 }}
         />
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          <button
+            type="button"
+            className={shell.btn}
+            disabled={!embedToken}
+            onClick={() => setEmbedOpen(true)}
+          >
+            Embed code
+          </button>
           <button
             type="button"
             className={shell.btn}
@@ -696,6 +735,81 @@ export function FormEditor({
           )}
         </div>
       </div>
+
+      {embedOpen && embedToken && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Embed code"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 210,
+            background: "rgba(12,16,24,.5)",
+            display: "grid",
+            placeItems: "center",
+            padding: "2rem",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setEmbedOpen(false);
+          }}
+        >
+          <div
+            style={{
+              width: "min(620px, 94vw)",
+              background: "var(--surface, #fff)",
+              borderRadius: 14,
+              padding: "1.4rem 1.5rem",
+              boxShadow: "0 40px 90px -30px rgba(10,14,25,.55)",
+            }}
+          >
+            <h2 style={{ margin: "0 0 0.4rem", fontSize: "1.05rem" }}>Embed this form</h2>
+            <p style={{ margin: "0 0 1rem", fontSize: "0.88rem", color: "var(--ink-2, #4a5160)", lineHeight: 1.55 }}>
+              Paste this wherever the form should appear. It works on any website —
+              WordPress, Squarespace, Wix, or plain HTML.
+            </p>
+
+            <textarea
+              readOnly
+              rows={3}
+              value={embedSnippet}
+              onFocus={(e) => e.currentTarget.select()}
+              style={{
+                ...input,
+                width: "100%",
+                fontFamily: "ui-monospace, monospace",
+                fontSize: "0.78rem",
+                resize: "vertical",
+                background: "var(--bg, #f7f8fa)",
+              }}
+            />
+
+            {dirty && (
+              /* Said plainly: the snippet is fine, the FORM is not live yet. */
+              <p style={{ margin: "0.6rem 0 0", fontSize: "0.82rem", color: "var(--primary, #f54900)" }}>
+                Save first — the pasted form will show the last published version.
+              </p>
+            )}
+
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+              <button
+                type="button"
+                className={`${shell.btn} ${shell.btnPrimary}`}
+                onClick={() => {
+                  void navigator.clipboard.writeText(embedSnippet);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1600);
+                }}
+              >
+                {copied ? "Copied" : "Copy code"}
+              </button>
+              <button type="button" className={shell.btn} onClick={() => setEmbedOpen(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {previewOpen && embedToken && (
         <div
