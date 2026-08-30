@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { eq, sql, and, gte, isNull } from "drizzle-orm";
+import { eq, sql, and, gte, isNull, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { agencyMembers, sites } from "@/lib/db/schema";
+import { agencyMembers, sites, businessProfiles } from "@/lib/db/schema";
 import { requireAgency } from "@/lib/auth/require-agency";
 import { startImpersonationAction } from "@/app/actions/impersonation";
 import { daysAgo } from "@/lib/time";
@@ -84,6 +84,31 @@ export default async function AgencyDashboardPage({
   const seatCount = teamCount[0]?.count ?? 0;
   const basePath = `/agency/${agency.partnerId}`;
 
+  /*
+   * Thumbnails from the logo we already hold.
+   *
+   * The cell was an empty <div> — a styled grey box never wired to anything, so
+   * "the preview is not showing" was really "there is no preview". A real
+   * screenshot needs a headless browser per site and somewhere to keep the
+   * images; the logo is already stored and is what makes a row recognisable at
+   * a glance. Fetched only for the rows on screen.
+   */
+  const logos = new Map<string, string>();
+  if (siteList.length > 0) {
+    /* Business profiles are polymorphic — an agency has one too — so the owner
+       TYPE has to be part of the filter, not just the id. */
+    const logoRows = await db
+      .select({ ownerId: businessProfiles.ownerId, logoUrl: businessProfiles.logoUrl })
+      .from(businessProfiles)
+      .where(
+        and(
+          eq(businessProfiles.ownerType, "site"),
+          inArray(businessProfiles.ownerId, siteList.map((row) => row.id)),
+        ),
+      );
+    for (const r of logoRows) if (r.logoUrl) logos.set(r.ownerId, r.logoUrl);
+  }
+
   return (
     <DashboardShell
       navGroups={agencyNav(agency.name, agency.partnerId)}
@@ -153,7 +178,17 @@ export default async function AgencyDashboardPage({
                   <tr key={site.id}>
                     <td>
                       <div className={styles.nameCell}>
-                        <div className={styles.siteThumb} />
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        {logos.get(site.id) ? (
+                          <img
+                            className={styles.siteThumb}
+                            src={logos.get(site.id)}
+                            alt=""
+                            style={{ objectFit: "contain" }}
+                          />
+                        ) : (
+                          <div className={styles.siteThumb} />
+                        )}
                         <div>
                           <div className={shell.rowName}>
                             {site.name}
