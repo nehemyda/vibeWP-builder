@@ -95,6 +95,13 @@
 }
 .who {
   line-height: 1.25;
+  /* It is a Link to the profile, so it arrives underlined and blue. The row
+     reads as an identity, not a piece of running text with a hyperlink in it. */
+  text-decoration: none;
+  color: inherit;
+}
+.who:hover .name {
+  text-decoration: underline;
 }
 .who .name {
   font-size: 0.85rem;
