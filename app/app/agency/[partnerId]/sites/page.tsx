@@ -112,7 +112,34 @@ export default async function AgencySitesPage({
                         <div className={styles.siteThumb} />
                         <div>
                           <CopyableText value={site.name}>
-                            <div className={shell.rowName}>{site.name}</div>
+                            <div className={shell.rowName}>
+                            {site.name}
+                            {/*
+                              Which sites are the agency's own.
+                              The distinction existed only in behaviour — the
+                              Dashboard button linked rather than impersonated —
+                              which is invisible until you click. A site you own
+                              and a client's site are managed identically and
+                              billed identically; the only difference is whose
+                              dashboard it is, so that is what the label says.
+                            */}
+                            {site.ownerUserId === user.id && (
+                              <span
+                                style={{
+                                  marginLeft: "0.5rem",
+                                  padding: "0.1rem 0.4rem",
+                                  borderRadius: 999,
+                                  border: "1px solid var(--line, #dbdee3)",
+                                  fontSize: "0.68rem",
+                                  fontWeight: 600,
+                                  color: "var(--muted, #79808f)",
+                                  verticalAlign: "middle",
+                                }}
+                              >
+                                Your site
+                              </span>
+                            )}
+                          </div>
                           </CopyableText>
                           <div className={shell.rowSub}>{site.domain ?? "not yet published"}</div>
                         </div>
@@ -136,7 +163,20 @@ export default async function AgencySitesPage({
                         >
                           Open in builder
                         </a>
-                        {site.ownerUserId !== user.id && (
+                        {/*
+                          Every site has a dashboard. A client's needs
+                          impersonation; one you own is a plain link, now that
+                          agency roles may open a managed site's dashboard
+                          scoped to their own agency.
+                        */}
+                        {site.ownerUserId === user.id ? (
+                          <a
+                            className={`${shell.btn} ${shell.btnSmall}`}
+                            href={`/dashboard/${partnerId}/${site.smbId}`}
+                          >
+                            Dashboard
+                          </a>
+                        ) : (
                           <form action={startImpersonationAction.bind(null, site.ownerUserId)}>
                             <button type="submit" className={`${shell.btn} ${shell.btnSmall}`}>
                               Dashboard

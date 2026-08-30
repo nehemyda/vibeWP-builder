@@ -40,7 +40,12 @@ export default async function SmbDashboardPage({
 
   /* TEMPORARY TIMING — remove once the slow step is found. */
   const __t0 = Date.now();
-  const { profile, role, site } = await requireSmbSite();
+  /*
+   * The SMB id from the URL is passed through, and matters only for an agency
+   * opening a site it manages — an SMB's own site is resolved from their
+   * session regardless of what the URL says.
+   */
+  const { profile, role, site } = await requireSmbSite(siteSlug[siteSlug.length - 1]);
   console.log("[timing] requireSmbSite", Date.now() - __t0, "ms");
   const __t1 = Date.now();
   const sp = await searchParams;
