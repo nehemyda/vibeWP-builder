@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { eq, desc, sql, and, isNull } from "drizzle-orm";
+import { eq, desc, sql, and, isNull, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { sites } from "@/lib/db/schema";
 import { requireAgency } from "@/lib/auth/require-agency";
@@ -10,6 +10,7 @@ import { CopyableText } from "@/components/dashboard/CopyableText";
 import { ConfirmSubmitButton } from "@/components/dashboard/ConfirmSubmitButton";
 import { startImpersonationAction } from "@/app/actions/impersonation";
 import { deleteSiteAction } from "@/app/actions/sites";
+import { restoreSiteFormAction, purgeSiteFormAction } from "@/app/actions/site-lifecycle";
 import { parsePage, pageOffset, totalPages, PAGE_SIZE } from "@/lib/pagination";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
 import styles from "../../agency.module.css";
@@ -26,11 +27,21 @@ export default async function AgencySitesPage({
   searchParams,
 }: {
   params: Promise<{ partnerId: string }>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; tab?: string }>;
 }) {
   const { partnerId } = await params;
   const { user, profile, agency } = await requireAgency();
-  const page = parsePage((await searchParams).page);
+  const sp = await searchParams;
+  const page = parsePage(sp.page);
+  /*
+   * Deleted sites live behind a tab, not mixed into the list.
+   *
+   * They are recoverable, not gone, so hiding them entirely would make a soft
+   * delete feel like a real one — and every irreversible action belongs on a
+   * screen someone chose to open, not next to the everyday ones.
+   */
+  const showDeleted = sp.tab === "deleted";
+  const scope = showDeleted ? isNotNull(sites.deletedAt) : isNull(sites.deletedAt);
 
   if (!agency) {
     return (
@@ -61,14 +72,14 @@ export default async function AgencySitesPage({
     db
       .select()
       .from(sites)
-      .where(and(eq(sites.agencyId, agency.id), isNull(sites.deletedAt)))
+      .where(and(eq(sites.agencyId, agency.id), scope))
       .orderBy(desc(sites.lastEditedAt))
       .limit(PAGE_SIZE)
       .offset(pageOffset(page)),
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(sites)
-      .where(and(eq(sites.agencyId, agency.id), isNull(sites.deletedAt))),
+      .where(and(eq(sites.agencyId, agency.id), scope)),
   ]);
 
   return (
@@ -85,6 +96,28 @@ export default async function AgencySitesPage({
         </Link>
       }
     >
+      <nav style={{ display: "flex", gap: "1.3rem", borderBottom: "1px solid var(--line, #e6e8ee)", marginBottom: "1.1rem" }}>
+        {([["Active", ""], ["Deleted", "?tab=deleted"]] as const).map(([label, q]) => {
+          const on = (q === "?tab=deleted") === showDeleted;
+          return (
+            <Link
+              key={label}
+              href={`${basePath}/sites${q}`}
+              style={{
+                padding: "0.55rem 0.1rem",
+                fontSize: "0.9rem",
+                fontWeight: on ? 700 : 500,
+                color: on ? "var(--ink, #12151c)" : "var(--muted, #79808f)",
+                borderBottom: `2px solid ${on ? "var(--ink, #12151c)" : "transparent"}`,
+                textDecoration: "none",
+              }}
+            >
+              {label}
+            </Link>
+          );
+        })}
+      </nav>
+
       <div className={shell.panel}>
         <div className={shell.tableWrap}>
           <table className={shell.table}>
@@ -183,14 +216,36 @@ export default async function AgencySitesPage({
                             </button>
                           </form>
                         )}
-                        <form action={deleteSiteAction.bind(null, site.id, `${basePath}/sites`)}>
-                          <ConfirmSubmitButton
-                            confirmMessage={`Delete ${site.name}? This hides it but keeps all leads and builder content — recoverable by a super admin.`}
-                            className={`${shell.btn} ${shell.btnSmall}`}
-                          >
-                            Delete
-                          </ConfirmSubmitButton>
-                        </form>
+                        {showDeleted ? (
+                          <>
+                            <form action={restoreSiteFormAction.bind(null, site.smbId ?? "")}>
+                              <button type="submit" className={`${shell.btn} ${shell.btnSmall}`}>
+                                Restore
+                              </button>
+                            </form>
+                            <form action={purgeSiteFormAction.bind(null, site.smbId ?? "")}>
+                              <ConfirmSubmitButton
+                                /* Names what goes, and that nothing brings it
+                                   back. "Are you sure?" leaves someone guessing
+                                   whether their enquiries survive — they do
+                                   not, and that is the whole decision. */
+                                confirmMessage={`Permanently delete ${site.name}? Its pages, form submissions, builder history and settings are destroyed. This cannot be undone.`}
+                                className={`${shell.btn} ${shell.btnSmall}`}
+                              >
+                                Delete permanently
+                              </ConfirmSubmitButton>
+                            </form>
+                          </>
+                        ) : (
+                          <form action={deleteSiteAction.bind(null, site.id, `${basePath}/sites`)}>
+                            <ConfirmSubmitButton
+                              confirmMessage={`Delete ${site.name}? This hides it but keeps all leads and builder content — you can restore it from the Deleted tab.`}
+                              className={`${shell.btn} ${shell.btnSmall}`}
+                            >
+                              Delete
+                            </ConfirmSubmitButton>
+                          </form>
+                        )}
                       </div>
                     </td>
                   </tr>

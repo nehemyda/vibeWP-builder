@@ -123,3 +123,19 @@ export async function purgeSiteAction(smbId: string) {
   revalidatePath("/agency", "layout");
   return { ok: true as const };
 }
+
+/*
+ * Form-shaped wrappers.
+ *
+ * A server action bound to <form action={…}> must resolve to void; the ones
+ * above return a result so callers can react to failure. Rather than weaken
+ * those return types for the sake of the markup, the markup gets its own thin
+ * entry points.
+ */
+export async function restoreSiteFormAction(smbId: string): Promise<void> {
+  await restoreSiteAction(smbId);
+}
+
+export async function purgeSiteFormAction(smbId: string): Promise<void> {
+  await purgeSiteAction(smbId);
+}
