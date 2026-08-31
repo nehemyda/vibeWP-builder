@@ -18,6 +18,7 @@ import { getSectionByKey, getSectionByNodeType } from "@/lib/sections";
 import { isOptionField } from "@/lib/sections/types";
 import { plainRefusal } from "@/lib/ai/refusal";
 import { logEdit } from "@/lib/ai/edit-log";
+import { ensureSiteForm } from "@/lib/forms/ensure";
 import { writeChromeWithHistory } from "@/lib/history/chrome";
 
 /**
@@ -467,6 +468,19 @@ async function runEdit(
         newProps[field] = `{{${field}}}`;
       }
     }
+    /*
+     * A form added by chat needs a real form behind it.
+     *
+     * add_section produces a FormEmbed with an empty token, which renders as
+     * nothing on the live site — the same dead pointer generation had to solve.
+     * Reuses the site's existing form, so asking for a form on a second page
+     * does not create a second inbox.
+     */
+    if (op.kind === "add_section" && resolved.definition.nodeType === "FormEmbed") {
+      const token = await ensureSiteForm(siteId, business.businessName);
+      if (token) newProps.formToken = token;
+    }
+
     if (op.kind === "add_section" && op.columns && "columns" in resolved.definition.fields) {
       newProps.columns = op.columns;
     }

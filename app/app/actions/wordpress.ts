@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { sites, sitePages, siteInstallations, profiles } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
 import { requireAlt } from "@/lib/wp/blocks";
+import { withStaticForms } from "@/lib/forms/inject";
 import { schemaToGutenberg, sectionToTemplatePart, withSiteLogo } from "@/lib/wp/serialize";
 import { resolveBrandColors } from "@/lib/brand/palettes";
 import { loadBusinessContext, contactFactsFor } from "@/lib/ai/business-context";
@@ -379,12 +380,23 @@ export async function exportToWordPressAction(
       }
     }
 
+    const formEndpoint = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/forms/submit`;
+
     // Every page is reconciled by slug — created if absent, updated if not.
     let frontPageUrl = "";
     for (const page of exportable) {
       const isHome = page.slug === "home";
       const schema = await sideloadSchemaImages(page.schemaJson, installation.installPath);
-      const markup = schemaToGutenberg(schema);
+      /*
+       * Fill every form mount with a working, script-free form.
+       *
+       * An embed makes the client's site depend on VibeWP being reachable; if
+       * the script cannot load their contact page silently has no form, and a
+       * lost enquiry is invisible in a way a missing image is not. embed.js
+       * clears the mount before rendering, so the enhanced form replaces this
+       * one whenever the script does load.
+       */
+      const markup = await withStaticForms(schemaToGutenberg(schema), formEndpoint);
       const pushed = await upsertPage({
         installPath: installation.installPath,
         slug: page.slug,
