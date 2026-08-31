@@ -102,6 +102,19 @@ function indexOfSection(nodes: SchemaNode[], ref: string | undefined): number {
   const wanted = ref.trim().toLowerCase().replace(/^["“”']|["“”']$/g, "");
   if (!wanted) return -1;
 
+  /*
+   * The reference may be COMPOUND.
+   *
+   * Asked to place something, the planner returned
+   * `ContactBlock "Visit Our Bakery in Bath"` — the node type and the heading
+   * joined into one string. Compared whole, that matched nothing, and the
+   * client was told their own page had no such section. Splitting on the quote
+   * lets either half identify the node, which is what the model was expressing.
+   */
+  const candidates = [wanted, ...wanted.split(/["“”']/).map((part) => part.trim())]
+    .map((part) => part.replace(/^["“”']|["“”']$/g, "").trim())
+    .filter(Boolean);
+
   return nodes.findIndex((n) => {
     const def = getSectionByNodeType(n.type);
     const heading = (n.props as Record<string, unknown> | undefined)?.heading;
@@ -111,7 +124,10 @@ function indexOfSection(nodes: SchemaNode[], ref: string | undefined): number {
       def?.name,
       typeof heading === "string" ? heading : undefined,
     ];
-    return names.some((name) => name?.trim().toLowerCase() === wanted);
+    return names.some((name) => {
+      const lower = name?.trim().toLowerCase();
+      return lower ? candidates.includes(lower) : false;
+    });
   });
 }
 

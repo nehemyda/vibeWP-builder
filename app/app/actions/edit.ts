@@ -500,7 +500,9 @@ async function runEdit(
     describe = `Rewrote the ${getSectionByNodeType(nodes[at].type)?.name ?? "section"}.`;
   } else {
     const result = applyOp(schema, op, newProps);
-    if (!result.ok) return { ok: false, message: result.error };
+    if (!result.ok) // Applied-op failures reach the client too, so they are cleaned like
+    // any other refusal — this is where "ContactBlock" leaked through.
+    return { ok: false, message: plainRefusal(result.error) };
     next = result.schema;
     describe = result.describe;
   }
