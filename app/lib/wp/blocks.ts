@@ -297,3 +297,19 @@ export function gallery(
 <figure class="wp-block-gallery has-nested-images columns-${columns} ${className}">${innerImages}</figure>
 <!-- /wp:gallery -->`;
 }
+
+/**
+ * Raw markup as a core/html block.
+ *
+ * Used ONLY where core genuinely has no block for the thing. Today that is one
+ * case: an embedded form, which is a script and a mount point rather than
+ * content. Reaching for this elsewhere gives up the parsing, styling and
+ * round-trip guarantees the registry exists to provide.
+ *
+ * core/html rather than a plugin's custom block: it is core, so it needs
+ * nothing installed, survives a theme change, and WordPress shows it as an
+ * editable HTML block instead of "this block contains unexpected content".
+ */
+export function htmlBlock(markup: string): string {
+  return `<!-- wp:html -->\n${markup}\n<!-- /wp:html -->`;
+}

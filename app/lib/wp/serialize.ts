@@ -193,6 +193,22 @@ export function withPreviewPlaceholders(
         navLinks +
         "</div></div></details>",
     )
+    /*
+     * The embedded form, drawn rather than run.
+     *
+     * The canvas has no JavaScript, so embed.js never executes and the mount
+     * stays empty — the section would render as blank space and read as broken.
+     * A skeleton says "a form belongs here" honestly, without pretending to be
+     * the real fields, which are defined in Leads & forms and can change
+     * without this knowing.
+     */
+    .replace(
+      /<div class="yp-embed__mount"[^>]*><\/div>\s*<script[^>]*><\/script>/g,
+      '<div class="yp-embed__ph">' +
+        "<span></span><i></i><span></span><i></i><span></span><i class=\"tall\"></i>" +
+        "<b>Send</b><em>Your form appears here on the live site</em>" +
+        "</div>",
+    )
     .replace(
       /<!--\s*wp:social-links[^>]*?\/-->/g,
       '<p class="yp-ph-social"><span>Facebook</span><span>Instagram</span></p>',

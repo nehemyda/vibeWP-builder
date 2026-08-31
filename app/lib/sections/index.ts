@@ -22,6 +22,7 @@ import { HeroGlass } from "./hero-glass";
 import { HeroPattern } from "./hero-pattern";
 import { FeaturesGrid } from "./features-grid";
 import { Testimonials } from "./testimonials";
+import { FormEmbed } from "./form-embed";
 import { CtaBand } from "./cta-band";
 import { Faq } from "./faq";
 import { ContactBlock } from "./contact-block";
@@ -81,6 +82,7 @@ export { HeroGlass } from "./hero-glass";
 export { HeroPattern } from "./hero-pattern";
 export { FeaturesGrid } from "./features-grid";
 export { Testimonials } from "./testimonials";
+export { FormEmbed } from "./form-embed";
 export { CtaBand } from "./cta-band";
 export { Faq } from "./faq";
 export { ContactBlock } from "./contact-block";
@@ -132,6 +134,7 @@ export { CtaStrip } from "./cta-strip";
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a registry is heterogeneous by nature; each definition is strongly typed at its own declaration site.
 export const SECTIONS: Array<SectionDefinition<any>> = [
+  FormEmbed,
   HeaderSimple,
   HeaderCta,
   HeaderTopbar,

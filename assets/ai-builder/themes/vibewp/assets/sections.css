@@ -3010,3 +3010,52 @@ body.yp-page {
   .yp-page .yp-svcp__row { grid-template-columns: minmax(0, 1fr) auto; column-gap: 1rem; }
   .yp-page .yp-svcp__row::before { display: none; }
 }
+
+/* ── Embedded form ── */
+.yp-page .yp-embed {
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+}
+.yp-page .yp-embed__heading {
+  margin: 0 0 0.6rem;
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  line-height: 1.1; letter-spacing: -0.02em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-embed__body {
+  margin: 0 0 1.8rem; max-width: 46ch; color: var(--ink-2); font-size: 1.02rem;
+}
+/* The script renders into this. Reserving a minimum height keeps the page from
+   jumping as the form arrives — the same reason images carry dimensions. */
+.yp-page .yp-embed__mount { min-height: 12rem; }
+
+/* ── Its stand-in in the builder canvas ──
+   The canvas runs no JavaScript, so the real form cannot appear there. A
+   skeleton is drawn instead: without it the section renders as blank space and
+   reads as a section that failed, which is exactly how the navigation
+   placeholder misled before it was built. */
+.yp-page .yp-embed__ph {
+  display: grid;
+  gap: 0.9rem;
+  max-width: 34rem;
+  padding: 1.2rem;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+}
+.yp-page .yp-embed__ph span {
+  display: block; height: 0.62rem; width: 6.5rem; border-radius: 4px; background: var(--line);
+}
+.yp-page .yp-embed__ph i {
+  display: block; height: 2.6rem; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--surface);
+}
+.yp-page .yp-embed__ph i.tall { height: 6rem; }
+.yp-page .yp-embed__ph b {
+  display: inline-block; justify-self: start;
+  padding: 0.7rem 1.4rem; border-radius: 9px;
+  background: var(--primary); color: #fafafa; font-size: 0.9rem;
+}
+.yp-page .yp-embed__ph em {
+  font-style: normal; font-size: 0.78rem; color: var(--muted);
+}
