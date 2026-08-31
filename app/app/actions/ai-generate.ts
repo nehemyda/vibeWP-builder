@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { sites } from "@/lib/db/schema";
 import { canEditSite } from "@/app/actions/sites";
+import { ensureSiteForm } from "@/lib/forms/ensure";
 import { getAiProviderSettings } from "@/lib/ai-provider-settings";
 import { generatePageWithGemini } from "@/lib/ai/generate-page";
 import {
@@ -205,6 +206,25 @@ export async function generatePageAction(opts: {
   // is legitimately empty. A hero is better than a blank canvas.
   if (nodes.length === 0) {
     return degradedHero(instruction, "the AI returned nothing usable", business.businessName);
+  }
+
+  /*
+   * Put a real form behind any FormEmbed the plan produced.
+   *
+   * The node is only a pointer; without this the exported Contact page shows an
+   * empty space where the form should be. Done after the sections are built so
+   * a site that never got a contact slot never gets a form it did not ask for.
+   */
+  const needsForm = nodes.some((n) => n.type === "FormEmbed" && !(n.props as { formToken?: string })?.formToken);
+  if (needsForm && site?.id) {
+    const token = await ensureSiteForm(site.id, business.businessName);
+    if (token) {
+      for (const node of nodes) {
+        if (node.type !== "FormEmbed") continue;
+        node.props = { ...(node.props as Record<string, unknown>), formToken: token };
+      }
+      steps.push("Created a contact form for the enquiries page");
+    }
   }
 
   return {
