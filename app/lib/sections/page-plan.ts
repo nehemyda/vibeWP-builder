@@ -69,6 +69,20 @@ const INNER: Slot[] = [
   { job: "The ask", candidates: ["cta-band", "cta-split"] },
 ];
 
+/**
+ * A contact page, which had no plan of its own.
+ *
+ * It fell through to INNER and came out as a hero, a block of prose and a
+ * call-to-action — a page inviting people to get in touch with nothing to get
+ * in touch through. The form is the point of the page, so it is a required
+ * slot, and the details sit beside it for anyone who would rather phone.
+ */
+const CONTACT: Slot[] = [
+  { job: "Page opening", candidates: ["hero-centered"] },
+  { job: "The form", candidates: ["form-embed"] },
+  { job: "Other ways to reach you", candidates: ["contact-block", "contact-cards", "contact-band"] },
+];
+
 /** A services page is the one place the photo-led and price layouts belong. */
 const SERVICES: Slot[] = [
   { job: "Page opening", candidates: ["hero-centered", "hero-split"] },
@@ -111,6 +125,8 @@ export function planChrome(available: ResolvedSection[]): PlannedSection[] {
 function slotsFor(slug: string): Slot[] {
   if (slug === "home") return HOME;
   if (/^(services|our-services|what-we-do|treatments|pricing|prices)$/.test(slug)) return SERVICES;
+  /* The names people actually give a contact page. */
+  if (/^(contact|contact-us|get-in-touch|enquiries|enquiry|book|booking)$/.test(slug)) return CONTACT;
   return INNER;
 }
 
