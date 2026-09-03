@@ -183,6 +183,7 @@ export function BuilderApp({
   initialIntake,
   previewFacts,
   formFields,
+  formToken,
   siteDetails,
   prompt,
   autostart,
@@ -208,6 +209,8 @@ export function BuilderApp({
   previewFacts: Record<string, string>;
   /** The attached form's fields, so the canvas draws the real questions. */
   formFields: FormPreviewField[];
+  /** Its embed token, so the canvas can link to the working form. */
+  formToken: string | null;
   /** Everything the site-details drawer shows. */
   siteDetails: SiteDetails;
   prompt: string | null;
@@ -1341,6 +1344,7 @@ export function BuilderApp({
                     // to exactly this list.
                     pages.map((p) => ({ slug: p.slug, title: p.title })),
                     formFields,
+                    formToken ?? undefined,
                   )}
                   // The palette the client chose, so the canvas is that site's
                   // colours rather than the theme's defaults.

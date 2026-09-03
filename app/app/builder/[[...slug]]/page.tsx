@@ -175,6 +175,7 @@ export default async function BuilderPage({
       initialIntake={initialIntake}
       previewFacts={previewFacts}
       formFields={(attachedForm?.fields as FormPreviewField[] | undefined) ?? []}
+      formToken={attachedForm?.embedToken ?? null}
       /*
        * Read here rather than in the drawer: it is a server component, so the
        * hosting records never travel through a client action, and an unset

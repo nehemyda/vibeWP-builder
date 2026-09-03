@@ -130,6 +130,8 @@ export function withPreviewPlaceholders(
    * form".
    */
   formFields?: FormPreviewField[],
+  /** The attached form's embed token, so the canvas can link to the real thing. */
+  formToken?: string,
 ): string {
   /*
    * The site title is a real value we hold, so the builder passes it and the
@@ -160,6 +162,22 @@ export function withPreviewPlaceholders(
    * Falls back to a generic three-field skeleton when no form is attached yet,
    * which is what the section library and a brand-new site see.
    */
+  /*
+   * A way to actually try the form.
+   *
+   * The drawing is deliberately inert — the canvas has no token, so a working
+   * form here would post real leads every time someone looked at a page. But
+   * "you cannot click this" is a dead end unless it also says where you CAN,
+   * and being asked twice why it does not respond is the sign it was one.
+   *
+   * target="_blank" because this opens outside the iframe, and the builder
+   * intercepts in-canvas clicks for page navigation.
+   */
+  const caption = formToken
+    ? `<a class="yp-embed__try" href="/forms/preview/${escAttr(formToken)}" target="_blank" rel="noreferrer">` +
+      "Open the working form &#8599;</a>"
+    : "<em>Your form appears here on the live site</em>";
+
   const formPreview = formFields?.length
     ? formFields
         .map((f) => {
@@ -176,7 +194,7 @@ export function withPreviewPlaceholders(
             "</label>"
           );
         })
-        .join("") + '<b>Send</b><em>Your form appears here on the live site</em>'
+        .join("") + "<b>Send</b>" + caption
     : '<label style="grid-column:span 6"><span></span><i></i></label>' +
       '<label style="grid-column:span 6"><span></span><i></i></label>' +
       '<label style="grid-column:span 12"><span></span><i class="tall"></i></label>' +

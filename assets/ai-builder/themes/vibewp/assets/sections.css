@@ -3075,3 +3075,13 @@ body.yp-page {
   grid-column: span 12;
   font-style: normal; font-size: 0.78rem; color: var(--muted);
 }
+/* The one thing in the drawing that IS clickable, and it looks it. */
+.yp-page .yp-embed__ph .yp-embed__try {
+  grid-column: span 12;
+  justify-self: start;
+  font-size: 0.8rem;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
