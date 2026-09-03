@@ -29,6 +29,7 @@ import { PreviewFrame } from "./PreviewFrame";
 import { WordPressLockNotice } from "./WordPressLockNotice";
 import { SiteDetailsDrawer, type SiteDetails } from "./SiteDetailsDrawer";
 import type { WpEditLock } from "@/lib/wp/local-driver";
+import type { FormPreviewField } from "@/lib/wp/serialize";
 import { IntakeForm } from "./IntakeForm";
 import { loadIntakeAction, type IntakeData } from "@/app/actions/intake";
 import { applyEditAction } from "@/app/actions/edit";
@@ -181,6 +182,7 @@ export function BuilderApp({
   initialChrome,
   initialIntake,
   previewFacts,
+  formFields,
   siteDetails,
   prompt,
   autostart,
@@ -204,6 +206,8 @@ export function BuilderApp({
   initialIntake: { data: IntakeData; completed: boolean };
   /** phone/email/address/hours, for resolving tokens in the canvas. */
   previewFacts: Record<string, string>;
+  /** The attached form's fields, so the canvas draws the real questions. */
+  formFields: FormPreviewField[];
   /** Everything the site-details drawer shows. */
   siteDetails: SiteDetails;
   prompt: string | null;
@@ -1336,6 +1340,7 @@ export function BuilderApp({
                     // actually has. The exported site's navigation falls back
                     // to exactly this list.
                     pages.map((p) => ({ slug: p.slug, title: p.title })),
+                    formFields,
                   )}
                   // The palette the client chose, so the canvas is that site's
                   // colours rather than the theme's defaults.

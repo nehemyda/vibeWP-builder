@@ -3031,19 +3031,25 @@ body.yp-page {
 .yp-page .yp-embed__mount { min-height: 12rem; }
 
 /* ── Its stand-in in the builder canvas ──
-   The canvas runs no JavaScript, so the real form cannot appear there. A
-   skeleton is drawn instead: without it the section renders as blank space and
-   reads as a section that failed, which is exactly how the navigation
-   placeholder misled before it was built. */
+   The canvas runs no JavaScript, so the real form cannot appear. It draws the
+   client's ACTUAL questions instead of grey bars: a preview that shows the
+   labels they wrote is the difference between "this is your form" and "a
+   section failed to load". */
 .yp-page .yp-embed__ph {
   display: grid;
+  grid-template-columns: repeat(12, 1fr);
   gap: 0.9rem;
   max-width: 34rem;
   padding: 1.2rem;
   border: 1px dashed var(--line);
   border-radius: 12px;
 }
+.yp-page .yp-embed__ph label { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
 .yp-page .yp-embed__ph span {
+  font-size: 0.85rem; font-weight: 600; color: var(--ink);
+}
+/* An empty label still needs height, or the fallback skeleton collapses. */
+.yp-page .yp-embed__ph span:empty {
   display: block; height: 0.62rem; width: 6.5rem; border-radius: 4px; background: var(--line);
 }
 .yp-page .yp-embed__ph i {
@@ -3051,11 +3057,21 @@ body.yp-page {
   border: 1px solid var(--line); background: var(--surface);
 }
 .yp-page .yp-embed__ph i.tall { height: 6rem; }
+/* A dropdown reads as one at a glance because of the chevron, not the box. */
+.yp-page .yp-embed__ph i.pick {
+  background:
+    linear-gradient(45deg, transparent 49%, var(--muted) 49% 55%, transparent 55%) no-repeat
+      right 1.1rem top 1.15rem / 7px 7px,
+    linear-gradient(-45deg, transparent 49%, var(--muted) 49% 55%, transparent 55%) no-repeat
+      right 0.75rem top 1.15rem / 7px 7px,
+    var(--surface);
+}
 .yp-page .yp-embed__ph b {
-  display: inline-block; justify-self: start;
+  grid-column: span 12; justify-self: start;
   padding: 0.7rem 1.4rem; border-radius: 9px;
   background: var(--primary); color: #fafafa; font-size: 0.9rem;
 }
 .yp-page .yp-embed__ph em {
+  grid-column: span 12;
   font-style: normal; font-size: 0.78rem; color: var(--muted);
 }

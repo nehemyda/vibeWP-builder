@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   sitePages,
@@ -12,8 +12,10 @@ import {
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
 import { resolveSitePaths } from "@/lib/site-paths";
 import type { ChromeNode } from "@/app/actions/ai-generate";
+import type { FormPreviewField } from "@/lib/wp/serialize";
 import { loadIntakeAction } from "@/app/actions/intake";
 import { getPlatformSettings } from "@/lib/platform-settings";
+import { formDefinitions } from "@/lib/db/schema";
 import { loadBusinessContext, contactFactsFor } from "@/lib/ai/business-context";
 import { BuilderApp } from "./BuilderApp";
 
@@ -76,6 +78,15 @@ export default async function BuilderPage({
 
   // Hosting targets for the site-details drawer. Null until an admin sets them.
   const platform = await getPlatformSettings();
+
+  /*
+   * The site's form, so the canvas can draw the client's real questions rather
+   * than grey bars. Only the active one: a paused form is not what the live
+   * page would show.
+   */
+  const attachedForm = await db.query.formDefinitions.findFirst({
+    where: and(eq(formDefinitions.siteId, site.id), eq(formDefinitions.isActive, true)),
+  });
 
   // Real contact details, so the canvas resolves the {{phone}}-style tokens
   // the generated content carries and shows what the live site will show.
@@ -163,6 +174,7 @@ export default async function BuilderPage({
       initialSchema={initialSchema}
       initialIntake={initialIntake}
       previewFacts={previewFacts}
+      formFields={(attachedForm?.fields as FormPreviewField[] | undefined) ?? []}
       /*
        * Read here rather than in the drawer: it is a server component, so the
        * hosting records never travel through a client action, and an unset

@@ -18,6 +18,15 @@ import { esc, escAttr } from "./blocks";
  * lets a section be added without touching them.
  */
 
+/** One field of the attached form, as the canvas needs to draw it. */
+export type FormPreviewField = {
+  label: string;
+  name: string;
+  type: string;
+  required?: boolean;
+  span?: number;
+};
+
 type SchemaNode = { id?: string; type?: string; props?: Record<string, unknown> };
 type PageSchema = { schemaVersion?: string; nodes?: SchemaNode[] };
 
@@ -110,6 +119,17 @@ export function withPreviewPlaceholders(
    * the canvas agree with WordPress instead of guessing at it.
    */
   pages?: { slug: string; title: string }[],
+  /**
+   * The fields of the form attached to this site, so the canvas can draw the
+   * client's ACTUAL questions.
+   *
+   * The placeholder used to be grey bars. It was honest — the canvas runs no
+   * JavaScript, so the real form cannot render — but it told the client nothing
+   * about the form they had built, and looked like a section that had failed.
+   * Drawing the real labels turns "something goes here" into "this is your
+   * form".
+   */
+  formFields?: FormPreviewField[],
 ): string {
   /*
    * The site title is a real value we hold, so the builder passes it and the
@@ -130,6 +150,38 @@ export function withPreviewPlaceholders(
    * Falls back to a generic menu ONLY when no pages were supplied, which is the
    * section library previewing a header that belongs to no site.
    */
+  /*
+   * The form as it will appear, drawn rather than run.
+   *
+   * Inputs are rendered but DISABLED. The canvas has no JavaScript and no
+   * token, so nothing could submit anyway — disabling says so plainly instead
+   * of offering a box that silently does nothing when typed into.
+   *
+   * Falls back to a generic three-field skeleton when no form is attached yet,
+   * which is what the section library and a brand-new site see.
+   */
+  const formPreview = formFields?.length
+    ? formFields
+        .map((f) => {
+          const span = typeof f.span === "number" ? Math.min(12, Math.max(1, f.span)) : 6;
+          const control =
+            f.type === "textarea"
+              ? '<i class="tall"></i>'
+              : f.type === "select"
+                ? '<i class="pick"></i>'
+                : "<i></i>";
+          return (
+            `<label style="grid-column:span ${span}">` +
+            `<span>${esc(f.label || f.name)}${f.required ? "*" : ""}</span>${control}` +
+            "</label>"
+          );
+        })
+        .join("") + '<b>Send</b><em>Your form appears here on the live site</em>'
+    : '<label style="grid-column:span 6"><span></span><i></i></label>' +
+      '<label style="grid-column:span 6"><span></span><i></i></label>' +
+      '<label style="grid-column:span 12"><span></span><i class="tall"></i></label>' +
+      "<b>Send</b><em>Add a form in Leads &amp; forms to see it here</em>";
+
   const navLinks = (pages?.length ? pages : [{ slug: "home", title: "Home" }, { slug: "services", title: "Services" }, { slug: "about", title: "About" }, { slug: "contact", title: "Contact" }])
     .map(
       (p) =>
@@ -204,10 +256,7 @@ export function withPreviewPlaceholders(
      */
     .replace(
       /<div class="yp-embed__mount"[^>]*><\/div>\s*<script[^>]*><\/script>/g,
-      '<div class="yp-embed__ph">' +
-        "<span></span><i></i><span></span><i></i><span></span><i class=\"tall\"></i>" +
-        "<b>Send</b><em>Your form appears here on the live site</em>" +
-        "</div>",
+      `<div class="yp-embed__ph">${formPreview}</div>`,
     )
     .replace(
       /<!--\s*wp:social-links[^>]*?\/-->/g,
