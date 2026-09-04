@@ -3115,3 +3115,87 @@ body.yp-page {
   text-underline-offset: 2px;
   cursor: pointer;
 }
+
+/* ── The embedded form, styled by the THEME ──
+   embed.js injects these same rules when it renders, but the export writes a
+   working <form> that must look right BEFORE any script loads — and if the
+   script never loads, must look right permanently. Without them the exported
+   page showed browser-default inputs with the labels inline, and the honeypot,
+   which is only hidden by CSS, was visible to every visitor.
+
+   embed.js injects its copy at runtime, after this file, so its custom
+   properties still win once it takes over. */
+.yp-page .vibewp-form {
+  --vwf-gap: 14px;
+  --vwf-radius: 10px;
+  --vwf-border: var(--line);
+  --vwf-accent: var(--primary);
+  --vwf-accent-text: #fafafa;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--vwf-gap);
+  max-width: var(--vwf-max, 34rem);
+  background: var(--vwf-bg, transparent);
+  padding: var(--vwf-pad, 0);
+  border-radius: var(--vwf-radius);
+  box-sizing: border-box;
+}
+.yp-page .vibewp-form * { box-sizing: border-box; }
+.yp-page .vibewp-form__field {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.yp-page .vibewp-form__label {
+  font-size: var(--vwf-label-size, 0.85rem);
+  font-weight: var(--vwf-label-weight, 600);
+  color: var(--vwf-label, var(--ink));
+}
+.yp-page .vibewp-form__req { color: var(--vwf-accent); margin-left: 2px; }
+.yp-page .vibewp-form__control {
+  width: 100%;
+  font: inherit;
+  font-size: var(--vwf-input-size, 0.95rem);
+  padding: var(--vwf-input-pad, 10px 12px);
+  border: 1px solid var(--vwf-border);
+  border-radius: var(--vwf-radius);
+  background: var(--vwf-input-bg, var(--surface));
+  color: inherit;
+}
+.yp-page .vibewp-form__control:focus {
+  outline: none;
+  border-color: var(--vwf-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vwf-accent) 20%, transparent);
+}
+.yp-page .vibewp-form textarea.vibewp-form__control {
+  resize: vertical; min-height: var(--vwf-textarea-height, 120px);
+}
+.yp-page .vibewp-form__control::placeholder {
+  font-size: var(--vwf-ph-size, inherit);
+  color: var(--vwf-ph-color, var(--muted));
+  opacity: 1;
+}
+/*
+ * The honeypot. Off-screen, NEVER display:none — bots increasingly skip the
+ * obvious tell. Without this rule it is a visible extra field on the live page,
+ * which is how it appeared on the first export.
+ */
+.yp-page .vibewp-form__hp {
+  position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden;
+}
+.yp-page .vibewp-form__submit {
+  grid-column: span 12;
+  justify-self: var(--vwf-btn-justify, start);
+  font: inherit;
+  font-size: var(--vwf-btn-size, 0.95rem);
+  font-weight: 600;
+  cursor: pointer;
+  padding: var(--vwf-btn-pad, 11px 22px);
+  border: 0;
+  border-radius: var(--vwf-radius);
+  background: var(--vwf-accent);
+  color: var(--vwf-accent-text);
+}
+.yp-page .vibewp-form__status { grid-column: span 12; margin: 0; font-size: 0.9rem; }
+.yp-page .vibewp-form__status[data-state="error"] { color: #b3261e; }
+@media (max-width: 560px) {
+  .yp-page .vibewp-form__field { grid-column: span 12 !important; }
+}
