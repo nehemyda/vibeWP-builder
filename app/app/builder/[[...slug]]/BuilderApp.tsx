@@ -792,6 +792,24 @@ export function BuilderApp({
 
     const intent = detectIntent(text);
 
+    /*
+     * "Recreate the quote page" is one request, not a delete and a create.
+     * Regenerating reaches the same place without destroying anything — and
+     * the page's history is kept, so a rebuild someone dislikes can be undone.
+     */
+    if (intent.kind === "rebuild_page") {
+      const target = pages.find((p) => p.slug === intent.slug);
+      if (!target) {
+        setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
+        remember("user", text);
+        say(`There's no ${intent.slug} page yet — say "create ${intent.slug} page" and I'll make one.`);
+        return;
+      }
+      if (target.slug !== activeSlug) switchToPage(target.slug);
+      await generate(text, false, { slug: target.slug, title: target.title });
+      return;
+    }
+
     if (intent.kind === "switch_page") {
       setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
       remember("user", text);

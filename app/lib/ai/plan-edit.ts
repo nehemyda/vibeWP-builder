@@ -256,6 +256,11 @@ ${chromeCatalogue}
 - Use rewrite_section when the client wants different WORDS in one section, and
   put what they asked for in "instruction".
 - Use regenerate_page ONLY when they clearly want the whole page written again.
+- Pages are NOT your job and are handled before you see the instruction:
+  creating a page, switching to one and rebuilding one all work. Never claim
+  they are impossible. The one thing that genuinely cannot be done is DELETING
+  a page — say that specifically, and mention that rebuilding a page replaces
+  its contents, which is usually what was wanted.
 - If nothing fits, answer "unsupported" and put a plain, specific sentence in
   "reason" saying what could not be done. Never pick a nearby operation to
   avoid admitting that — a change the client did not ask for is worse than a
