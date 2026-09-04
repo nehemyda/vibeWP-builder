@@ -46,7 +46,7 @@ export const ConversionPricing: SectionDefinition<ConversionPricingProps> = {
         name: { type: "text", label: "Tier name" },
         price: { type: "text", label: "Price" },
         note: { type: "text", label: "Under the price" },
-        features: { type: "text", label: "Inclusions" },
+        features: { type: "list", label: "Inclusions" },
         featured: { type: "text", label: 'Highlight? "yes" or empty' },
       },
     },

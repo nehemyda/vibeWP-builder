@@ -20,7 +20,14 @@ export const FaqGrouped: SectionDefinition<FaqGroupedProps> = {
   rootClass: "yp-faqg",
   fields: {
     heading: { type: "text", label: "Section heading", maxChars: 60 },
-    groups: { type: "list", label: "Topics", hint: "Two to four topics", of: { title: { type: "text", label: "Topic" }, items: { type: "text", label: "Questions in it" } } },
+    groups: { type: "list", label: "Topics", hint: "Two to four topics", of: { title: { type: "text", label: "Topic" }, items: {
+          type: "list",
+          label: "Questions in it",
+          of: {
+            question: { type: "text", label: "Question" },
+            answer: { type: "text", label: "Answer" },
+          },
+        } } },
   },
   aiPrompt: "Group by the customer's concern — Ordering, Delivery, Weddings, Payment — not by internal department. Two to four topics, three or four questions each. Invent no prices or policies.",
   sample: {

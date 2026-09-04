@@ -64,8 +64,18 @@ export type FieldSpec = {
   label: string;
   /** Guidance for both the AI prompt and the admin form. */
   hint?: string;
-  /** Only for `list`: the shape of a single entry. */
-  of?: Record<string, Omit<FieldSpec, "of">>;
+  /**
+   * Only for `list`: the shape of a single entry. Recursive, so an entry may
+   * itself hold a list.
+   *
+   * It used to be `Omit<FieldSpec, "of">`, which made a nested list
+   * undeclarable — so the five sections that have one declared it as `text`
+   * instead. A price list's rows, an FAQ topic's questions and a footer
+   * column's links were all described to the model, and to any code reading
+   * the registry, as a string. The lie was invisible until a feature tried to
+   * reshape one list into another and had nothing truthful to read.
+   */
+  of?: Record<string, FieldSpec>;
   /** Roughly how long the copy should be, so generated text fits the design. */
   maxChars?: number;
   /** Only for `choice`: the permitted values. */

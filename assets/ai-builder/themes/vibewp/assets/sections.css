@@ -197,19 +197,35 @@ body.yp-page {
   line-height: 1.45;
 }
 
+/*
+ * A TICK, drawn the same way .yp-check__list draws its own.
+ *
+ * This was a circle with a diagonal stripe across it, which is the symbol for
+ * "not permitted" — beside lines like "Free parking on site" it said the
+ * opposite of what the list is for. It went unnoticed because `features` had
+ * no FieldSpec, so nothing ever wrote one and the marker was never seen.
+ */
 .yp-page .yp-hero__features > li::before {
   content: "";
   position: absolute;
   left: 0;
   top: 0.28em;
-  width: 1.05rem;
-  height: 1.05rem;
+  width: 1.15rem;
+  height: 1.15rem;
   border-radius: 50%;
-  border: 1.5px solid var(--primary);
-  background: linear-gradient(
-    to bottom right,
-    transparent 46%, var(--primary) 46%, var(--primary) 54%, transparent 54%
-  );
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  border: 1.5px solid color-mix(in oklch, var(--primary) 55%, transparent);
+}
+.yp-page .yp-hero__features > li::after {
+  content: "";
+  position: absolute;
+  left: 0.36rem;
+  top: 0.5em;
+  width: 0.32rem;
+  height: 0.16rem;
+  border-left: 2px solid var(--primary);
+  border-bottom: 2px solid var(--primary);
+  transform: rotate(-45deg);
 }
 
 /* ---- buttons ----

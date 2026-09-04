@@ -33,6 +33,21 @@ export const HeroSplit: SectionDefinition<HeroSplitProps> = {
     eyebrow: { type: "text", label: "Eyebrow", hint: "Short label above the headline", maxChars: 40 },
     heading: { type: "text", label: "Headline", maxChars: 70 },
     body: { type: "richtext", label: "Supporting copy", maxChars: 220 },
+    /*
+     * Declared late, and that was the defect.
+     *
+     * It round-trips through both the serializer and the parser and the theme
+     * styles it as a two-column ticked list — but with no FieldSpec it was
+     * invisible to the admin form and to the generation prompt, which derives
+     * from `fields`. So nothing ever wrote one, the list never appeared on a
+     * generated site, and any edit that rebuilt the props deleted one a client
+     * had. A whole working feature reachable by no one.
+     */
+    features: {
+      type: "list",
+      label: "Feature lines",
+      hint: "Three or four short reassurances, a few words each. Shown as a ticked list.",
+    },
     actions: {
       type: "list",
       label: "Buttons",
@@ -44,12 +59,20 @@ export const HeroSplit: SectionDefinition<HeroSplitProps> = {
 
   aiPrompt:
     "Open the page. State what the business does and who it serves, in the customer's words. " +
-    "The eyebrow is a short credibility or urgency cue. Two actions: one primary, one secondary.",
+    "The eyebrow is a short credibility or urgency cue. Two actions: one primary, one secondary. " +
+    "The feature lines answer the doubts that stop someone booking — hours, cost, access — not a " +
+    "restatement of the services.",
 
   sample: {
     eyebrow: "NEW PATIENTS WELCOME",
     heading: "Friendly, Modern Dental Care for the Whole Family",
     body: "Same-week appointments, gentle hygienists, and painless checkups your kids won't dread.",
+    features: [
+      "Evening and Saturday slots",
+      "Most insurers accepted",
+      "Nervous patients welcome",
+      "Free parking on site",
+    ],
     actions: [
       { label: "Book an Appointment", href: "#", variant: "primary" },
       { label: "View Services", href: "#", variant: "outline" },

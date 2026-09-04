@@ -168,6 +168,51 @@ export function contactFactsFor(ctx: BusinessContext): Record<string, string> {
   return facts;
 }
 
+/*
+ * Fields the WordPress theme can resolve at render time, and the token each
+ * one becomes. Anything not listed here is written as a literal value.
+ */
+const TOKENISED_FACTS: Record<string, string> = {
+  phone: "{{phone}}",
+  email: "{{email}}",
+  address: "{{address}}",
+  hours: "{{hours}}",
+};
+
+/**
+ * Writes the details we hold over whatever was generated about them.
+ *
+ * A TOKEN, not the value. Writing "01225 447 812" into the page freezes it
+ * there: change the number later and it has to be changed on the contact
+ * section, the footer, and every other place it appears, on every page. The
+ * token is resolved by the theme from a single option, so one edit in
+ * Settings → Business details updates the whole site — which is the entire
+ * reason the WordPress side has an options screen at all.
+ *
+ * ONLY WHERE THE FIELD CAN HOLD A STRING. This was written three times, in
+ * generation, in swap_chrome and in add_section, and all three checked that
+ * the section declared the field and nothing else. `hours` is a string in four
+ * Contact sections and a list of day/time rows in two others, so a
+ * contact-hours section reached the database with the string "{{hours}}" in a
+ * list field and its renderer threw `(p.hours ?? []).filter is not a
+ * function` — one dead section taking the whole page with it. Shared now, so
+ * there is one place for that to be true.
+ */
+export function pinContactFacts(
+  props: Record<string, unknown>,
+  fields: Record<string, { type: string }>,
+  facts: Record<string, string>,
+): Record<string, unknown> {
+  const out = { ...props };
+  for (const field of Object.keys(facts)) {
+    const spec = fields[field];
+    if (!spec) continue;
+    if (spec.type !== "text" && spec.type !== "richtext") continue;
+    out[field] = TOKENISED_FACTS[field] ?? facts[field];
+  }
+  return out;
+}
+
 /**
  * A Pexels query for this business.
  *

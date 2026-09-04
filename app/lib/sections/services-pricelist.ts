@@ -41,7 +41,15 @@ export const ServicesPricelist: SectionDefinition<ServicesPricelistProps> = {
       hint: "Two or three groups of services",
       of: {
         title: { type: "text", label: "Group name" },
-        items: { type: "text", label: "Services in it" },
+        items: {
+          type: "list",
+          label: "Services in it",
+          of: {
+            name: { type: "text", label: "Service" },
+            note: { type: "text", label: "Detail" },
+            price: { type: "text", label: "Price" },
+          },
+        },
       },
     },
     footnote: { type: "text", label: "Footnote", hint: "VAT, minimums, how quotes work", maxChars: 150 },

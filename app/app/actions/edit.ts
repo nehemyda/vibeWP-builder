@@ -7,7 +7,11 @@ import { sites, sitePages, formDefinitions } from "@/lib/db/schema";
 import { canEditSite } from "@/app/actions/sites";
 import { savePageSchemaAction } from "@/app/actions/pages";
 import { getAiProviderSettings } from "@/lib/ai-provider-settings";
-import { loadBusinessContext, contactFactsFor } from "@/lib/ai/business-context";
+import {
+  loadBusinessContext,
+  contactFactsFor,
+  pinContactFacts,
+} from "@/lib/ai/business-context";
 import { generatePageWithGemini } from "@/lib/ai/generate-page";
 import { fillSectionImages } from "@/lib/ai/section-images";
 import { planEdit } from "@/lib/ai/plan-edit";
@@ -454,10 +458,7 @@ async function runEdit(
     }
 
     // Real contact details beat anything written about them.
-    const facts = contactFactsFor(business);
-    for (const field of Object.keys(facts)) {
-      if (field in resolved.definition.fields) props[field] = `{{${field}}}`;
-    }
+    props = pinContactFacts(props, resolved.definition.fields, contactFactsFor(business));
 
     const next = { type: resolved.definition.nodeType, props };
     await writeChromeWithHistory({
@@ -587,12 +588,7 @@ async function runEdit(
     });
 
     // Real contact details beat anything written about them.
-    const facts = contactFactsFor(business);
-    for (const field of Object.keys(facts)) {
-      if (field in resolved.definition.fields) {
-        newProps[field] = `{{${field}}}`;
-      }
-    }
+    newProps = pinContactFacts(newProps, resolved.definition.fields, contactFactsFor(business));
     /*
      * A form added by chat needs a real form behind it.
      *

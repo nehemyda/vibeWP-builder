@@ -22,7 +22,14 @@ export const FooterColumns: SectionDefinition<FooterColumnsProps> = {
   rootClass: "yp-ftrc",
   fields: {
     blurb: { type: "text", label: "Blurb under the brand", maxChars: 150 },
-    columns: { type: "list", label: "Columns", hint: "Two or three", of: { title: { type: "text", label: "Column heading" }, links: { type: "text", label: "Links in it" } } },
+    columns: { type: "list", label: "Columns", hint: "Two or three", of: { title: { type: "text", label: "Column heading" }, links: {
+        type: "list",
+        label: "Links in it",
+        of: {
+          label: { type: "text", label: "Label" },
+          href: { type: "link", label: "Links to" },
+        },
+      } } },
     copyright: { type: "text", label: "Copyright name", hint: "Name only — the year is added for you" },
   },
   aiPrompt: "Group links by what a visitor is looking for — Services, About, Legal. Two or three columns, three or four links each. Only link to pages that plausibly exist; leave hrefs empty otherwise.",

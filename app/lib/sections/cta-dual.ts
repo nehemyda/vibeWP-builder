@@ -22,7 +22,14 @@ export const CtaDual: SectionDefinition<CtaDualProps> = {
   rootClass: "yp-ctadual",
   fields: {
     heading: { type: "text", label: "Section heading", maxChars: 55 },
-    options: { type: "list", label: "Paths", hint: "Exactly two", of: { title: { type: "text", label: "Path name" }, body: { type: "text", label: "Who it's for" }, actions: { type: "text", label: "Its button" } } },
+    options: { type: "list", label: "Paths", hint: "Exactly two", of: { title: { type: "text", label: "Path name" }, body: { type: "text", label: "Who it's for" }, actions: {
+        type: "list",
+        label: "Its button",
+        of: {
+          label: { type: "text", label: "Label" },
+          href: { type: "link", label: "Links to" },
+        },
+      } } },
   },
   aiPrompt: "Exactly two paths, genuinely different — not the same action worded twice. Each says WHO it is for, so the visitor can self-select in one read.",
   sample: {
