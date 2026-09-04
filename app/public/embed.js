@@ -171,7 +171,7 @@
     hp.setAttribute("aria-hidden", "true");
     var hpInput = document.createElement("input");
     hpInput.type = "text";
-    hpInput.name = "website";
+    hpInput.name = "vw_hp";
     hpInput.tabIndex = -1;
     hpInput.autocomplete = "off";
     hp.appendChild(hpInput);
@@ -201,7 +201,7 @@
       event.preventDefault();
       var data = {};
       Array.prototype.forEach.call(form.elements, function (el) {
-        if (!el.name || el.type === "submit" || el.name === "site" || el.name === "website") return;
+        if (!el.name || el.type === "submit" || el.name === "site" || el.name === "vw_hp") return;
         data[el.name] = el.type === "checkbox" ? (el.checked ? "yes" : "") : el.value;
       });
 

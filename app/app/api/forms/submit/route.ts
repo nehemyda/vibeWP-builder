@@ -104,13 +104,13 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const data: Record<string, unknown> = {};
     for (const [key, value] of form.entries()) {
-      if (key === "site" || key === "website" || key === "form") continue;
+      if (key === "site" || key === "vw_hp" || key === "form") continue;
       data[key] = typeof value === "string" ? value : "";
     }
     body = {
       site: form.get("site"),
       form: form.get("form"),
-      website: form.get("website"),
+      website: form.get("vw_hp"),
       // No timing signal without scripting, so the check cannot apply here.
       elapsed: Number.MAX_SAFE_INTEGER,
       page: request.headers.get("referer"),
@@ -163,9 +163,34 @@ export async function POST(request: Request) {
    * A person can never trip these — the honeypot is off-screen and nobody reads
    * and completes a form in two seconds — so silently discarding costs nothing.
    */
+  /*
+   * The old field was called "website" — a real autocomplete token, so browsers
+   * filled it and genuine enquiries were discarded as spam. Pages exported
+   * before the rename still send it; it is deliberately IGNORED rather than
+   * honoured, because losing a real lead is worse than accepting some spam
+   * until those pages are exported again.
+   */
   const honeypot = typeof body.website === "string" ? body.website.trim() : "";
   const elapsed = typeof body.elapsed === "number" ? body.elapsed : Number.MAX_SAFE_INTEGER;
   if (honeypot || elapsed < MIN_FILL_MS) {
+    /*
+     * Recorded, because this is the one path that throws a submission away and
+     * answers as though it succeeded.
+     *
+     * That silence is deliberate — telling a bot it was detected is free
+     * feedback for tuning around the check — but it also meant a honeypot
+     * filled by browser AUTOFILL discarded real enquiries with nothing to see
+     * anywhere. The client is still told "thanks"; we now know it happened.
+     */
+    console.warn(
+      "[forms] submission discarded:",
+      JSON.stringify({
+        form: form.id,
+        reason: honeypot ? "honeypot" : "too-fast",
+        elapsed,
+        ua: request.headers.get("user-agent")?.slice(0, 120) ?? null,
+      }),
+    );
     if (isFormPost) {
       const back = request.headers.get("referer");
       return NextResponse.redirect(back ? `${back.split("#")[0]}${back.includes("?") ? "&" : "?"}sent=1` : "/", 303);
