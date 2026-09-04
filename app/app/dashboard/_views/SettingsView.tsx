@@ -30,9 +30,10 @@ async function smtpPanel(siteId: string, smbId: string) {
   const active = await describeSmtpForSite(siteId);
   return (
     <div style={{ marginTop: "1.6rem" }}>
-      {/* The client DOES receive these, so naming them by what arrives is right
-          here — it is the same setting described from the other end. */}
-      <h2 style={{ margin: "0 0 0.7rem", fontSize: "1rem", fontWeight: 700 }}>Enquiry emails</h2>
+      {/* Same name as the agency and platform pages: one setting, one label. */}
+      <h2 style={{ margin: "0 0 0.7rem", fontSize: "1rem", fontWeight: 700 }}>
+        SMTP configuration
+      </h2>
       <SmtpForm
         action={saveSiteSmtpAction.bind(null, smbId)}
         ownLabel="this site"
