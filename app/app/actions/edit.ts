@@ -16,7 +16,8 @@ import { generatePageWithGemini } from "@/lib/ai/generate-page";
 import { fillSectionImages } from "@/lib/ai/section-images";
 import { planEdit } from "@/lib/ai/plan-edit";
 import { loadBuilderMessagesAction } from "@/app/actions/builder-chat";
-import { applyOp, type EditOp, type PageSchema } from "@/lib/sections/edit-ops";
+import { applyOp, indexOfSection, type EditOp, type PageSchema } from "@/lib/sections/edit-ops";
+import { carryProps, mountsForm } from "@/lib/sections/carry-props";
 import { sectionsForPlan } from "@/lib/sections/resolve";
 import { getSectionByKey, getSectionByNodeType } from "@/lib/sections";
 import { isOptionField } from "@/lib/sections/types";
@@ -554,8 +555,137 @@ async function runEdit(
     };
   }
 
-  // Content is only needed when a section is being added or rewritten.
+  // Content is only needed when a section is being added, rewritten or swapped.
   let newProps: Record<string, unknown> | undefined;
+  /** Content the new design cannot hold, so the reply can say what went. */
+  let swapDropped: string[] = [];
+
+  if (op.kind === "swap_section") {
+    const design = available.find((s) => s.key === op.design);
+    if (!design) return { ok: false, message: "I don't have a design like that to switch to." };
+    if (design.definition.placement && design.definition.placement !== "page") {
+      return {
+        ok: false,
+        message: `The ${design.name} belongs in the site's header or footer, not on the page.`,
+      };
+    }
+
+    const nodes = schema.nodes ?? [];
+    const at = indexOfSection(nodes, op.section);
+    if (at < 0) return { ok: false, message: plainRefusal(`There's no ${op.section} on this page.`) };
+
+    const current = getSectionByNodeType(nodes[at].type);
+    if (!current) {
+      return { ok: false, message: "I don't recognise that section well enough to change it." };
+    }
+    if (nodes[at].type === design.definition.nodeType) {
+      return { ok: false, message: `That section is already the ${design.name.toLowerCase()}.` };
+    }
+
+    /*
+     * The client's words move across first, and this is the whole feature. See
+     * lib/sections/carry-props.ts for why it is not a matter of copying
+     * matching keys.
+     */
+    const carried = carryProps(
+      current,
+      (nodes[at].props ?? {}) as Record<string, unknown>,
+      design.definition,
+    );
+    newProps = { ...carried.props };
+    /*
+     * Named in the CLIENT's language, and from the section they are leaving —
+     * the new design has no field for what it cannot hold, which is exactly
+     * why it was dropped, so its own labels are no help here.
+     */
+    swapDropped = carried.dropped
+      .map((path) => (current.fields[path.split(".")[0]]?.label ?? path.split(".")[0]).toLowerCase())
+      .filter((label, i, all) => all.indexOf(label) === i);
+
+    /*
+     * Only what could not be carried is written, and only when there is
+     * something to write. A hero into another hero needs no model at all —
+     * generating anyway would spend a call to replace copy we already had, and
+     * quietly reword a headline the client may have edited by hand.
+     */
+    const wholeFieldsMissing = carried.missing.filter((path) => !path.includes("."));
+    const nestedMissing = carried.missing.filter((path) => path.includes("."));
+
+    if (wholeFieldsMissing.length || nestedMissing.length) {
+      try {
+        const written = await generatePageWithGemini({
+          apiKey: settings.geminiApiKey,
+          plan: [{ job: "The section being restyled", section: design }],
+          business,
+          /*
+           * TWO things go in, and both are needed.
+           *
+           * The carried copy, so the new fields match the tone of the ones
+           * that stayed — without it the model wrote a fresh section in its own
+           * voice beside sentences the client had written.
+           *
+           * And the content the OLD design held, so a field that could not be
+           * reshaped is rebuilt from the client's own words rather than
+           * invented. Asked to group a flat FAQ, the model was shown only the
+           * heading — the questions had been refused for want of topic names —
+           * so it wrote five plausible new questions and quietly replaced the
+           * five the client had. On-topic, and not theirs.
+           */
+          instruction:
+            `${instruction}\n\nThis section already says the following, and it must not change:\n` +
+            `${JSON.stringify(newProps, null, 2)}\n\n` +
+            `Before this change the section held the content below. REUSE these words — ` +
+            `rearrange, regroup or shorten them to fit, but do not invent replacements ` +
+            `for content that is already here:\n${JSON.stringify(nodes[at].props ?? {}, null, 2)}\n\n` +
+            `Write ONLY these: ${carried.missing.join(", ")}.`,
+          pageTitle: page.title ?? slug,
+        });
+        const fresh = written[design.key] as Record<string, unknown> | undefined;
+        if (fresh) {
+          for (const field of wholeFieldsMissing) {
+            if (fresh[field] !== undefined) newProps[field] = fresh[field];
+          }
+          /*
+           * A sub-field of entries that carried — a caption for a row that
+           * kept its photograph. Paired by position, which is the only pairing
+           * available, and only ever written where the carried entry has a gap.
+           */
+          for (const path of nestedMissing) {
+            const [field, key] = path.split(".");
+            const mine = newProps[field];
+            const theirs = fresh[field];
+            if (!Array.isArray(mine) || !Array.isArray(theirs)) continue;
+            newProps[field] = mine.map((entry, i) => {
+              if (!entry || typeof entry !== "object") return entry;
+              const row = entry as Record<string, unknown>;
+              if (row[key] !== undefined && row[key] !== "") return row;
+              const donor = theirs[i] as Record<string, unknown> | undefined;
+              return donor?.[key] === undefined ? row : { ...row, [key]: donor[key] };
+            });
+          }
+        }
+      } catch (err) {
+        /*
+         * Fails OPEN. The carried content is already correct and complete for
+         * everything that mapped, so a swap that keeps the client's words and
+         * lacks one new line beats refusing the change outright.
+         */
+        console.error("Swap content generation failed, carrying what we have:", err);
+      }
+    }
+
+    newProps = await fillSectionImages({ section: design.definition, props: newProps, business });
+    newProps = pinContactFacts(newProps, design.definition.fields, contactFactsFor(business));
+
+    /* A design that mounts a form needs a form behind it. */
+    if (mountsForm(design.definition) && typeof newProps.formToken !== "string") {
+      const token = await ensureSiteForm(siteId, business.businessName, instruction);
+      if (!token) {
+        return { ok: false, message: "I couldn't create the form just now. Try again in a moment." };
+      }
+      newProps.formToken = token;
+    }
+  }
 
   if (op.kind === "add_section" || op.kind === "rewrite_section") {
     const key = op.kind === "add_section" ? op.section : (getSectionByNodeType(op.section)?.key ?? op.section);
@@ -647,9 +777,14 @@ async function runEdit(
 
   if (op.kind === "rewrite_section") {
     const nodes = [...(schema.nodes ?? [])];
-    const at = nodes.findIndex(
-      (n) => n.type?.toLowerCase() === op.section.toLowerCase(),
-    );
+    /*
+     * The shared matcher, which knows a section by its node type, its registry
+     * key, its display name AND its own heading. This compared node types
+     * alone, so "rewrite the What our customers say bit" — the planner's own
+     * preferred way of naming a section — resolved to nothing here while
+     * working everywhere else.
+     */
+    const at = indexOfSection(nodes, op.section);
     if (at < 0) return { ok: false, message: `There's no ${op.section} on this page.` };
     nodes[at] = { ...nodes[at], props: newProps ?? nodes[at].props };
     next = { ...schema, nodes };
@@ -683,6 +818,18 @@ async function runEdit(
     described = describe.replace(/the Contact form/i, `the ${formName}`);
   }
 
+  /*
+   * A swap that lost something says so, in the client's language.
+   *
+   * Reporting "Changed the split hero to the centred hero." while silently
+   * deleting the photograph is the failure this whole feature was built to
+   * avoid — carry-props.ts knows exactly what went, and it would be strange to
+   * compute that and not mention it.
+   */
+  if (op.kind === "swap_section" && swapDropped.length) {
+    described += ` This design has no ${listWords(swapDropped)} — say "undo" if you want that back.`;
+  }
+
   return {
     ok: true,
     message: `${described} The page now has ${count} section${count === 1 ? "" : "s"}. Say "undo" to put it back.`,
@@ -701,4 +848,10 @@ async function formNameFor(token: string): Promise<string> {
     where: eq(formDefinitions.embedToken, token),
   });
   return form?.name ?? "form";
+}
+
+/** "a, b and c" — for naming what a swap could not keep. */
+function listWords(words: string[]): string {
+  if (words.length <= 1) return words[0] ?? "";
+  return `${words.slice(0, -1).join(", ")} or ${words[words.length - 1]}`;
 }

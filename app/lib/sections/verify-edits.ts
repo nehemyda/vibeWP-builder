@@ -81,6 +81,72 @@ const clobber = applyOp(gallery, { kind: "set_option", section: "ContentGallery"
 check("refuses to set a CONTENT field as if it were an option", !clobber.ok,
   clobber.ok ? `items became ${JSON.stringify(clobber.schema.nodes![0].props!.items)}` : clobber.error);
 
+/* ── swap_section ──────────────────────────────────────────────────── */
+
+// Referred to by its own heading, like every other op accepts.
+const swapped = applyOp(
+  page,
+  { kind: "swap_section", section: "What Our Customers Say", design: "faq" },
+  { heading: "Common questions" },
+);
+check(
+  "swaps the section named by its heading, in place",
+  swapped.ok && types(swapped.schema) === "HeroSplit > ServicesEditorial > Faq > CtaBand",
+  swapped.ok ? types(swapped.schema) : swapped.error,
+);
+check(
+  "and says which design it changed to",
+  swapped.ok && /Testimonials|customer/i.test(swapped.describe) && /FAQ/i.test(swapped.describe),
+  swapped.ok ? swapped.describe : swapped.error,
+);
+
+// Nothing else on the page may move. A swap that reordered the page would be
+// indistinguishable from remove + add, which is what it replaces.
+check(
+  "leaves every other section's props untouched",
+  swapped.ok &&
+    JSON.stringify(swapped.schema.nodes?.filter((n) => n.type !== "Faq")) ===
+      JSON.stringify(page.nodes?.filter((n) => n.type !== "Testimonials")),
+);
+
+const missingNode = applyOp(page, { kind: "swap_section", section: "Faq", design: "faq-open" }, {});
+check(
+  "refuses a section that is not on the page",
+  !missingNode.ok,
+  missingNode.ok ? types(missingNode.schema) : missingNode.error,
+);
+
+const noDesign = applyOp(
+  page,
+  { kind: "swap_section", section: "Testimonials", design: "not-a-design" },
+  {},
+);
+check("refuses a design that does not exist", !noDesign.ok, noDesign.ok ? "" : noDesign.error);
+
+/* A header is not a page section, and putting one mid-page gives the visitor a
+ * second navigation bar below the real one. */
+const chromeDesign = applyOp(
+  page,
+  { kind: "swap_section", section: "Testimonials", design: "header-cta" },
+  {},
+);
+check(
+  "refuses a header as a page design",
+  !chromeDesign.ok,
+  chromeDesign.ok ? "" : chromeDesign.error,
+);
+
+const sameDesign = applyOp(
+  page,
+  { kind: "swap_section", section: "Testimonials", design: "testimonials" },
+  {},
+);
+check(
+  "refuses a swap to the design already in place",
+  !sameDesign.ok,
+  sameDesign.ok ? "" : sameDesign.error,
+);
+
 console.log(fails === 0 ? "\nALL EDIT TESTS PASS" : `\n${fails} FAILURE(S)`);
 
 /* A gate that always exits 0 gates nothing: chained from `npm run verify`,

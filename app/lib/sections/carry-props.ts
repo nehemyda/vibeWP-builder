@@ -500,9 +500,26 @@ const ATTRIBUTE_ONLY = new Set([
   "formToken",
 ]);
 
-/** Every string in a value that a reader should be able to see. */
-function visibleStrings(value: unknown, key?: string): string[] {
+/**
+ * Every string in a value that a reader should be able to see.
+ *
+ * Exported because the gate needs exactly this judgement; its own copy of it
+ * diverged the moment carry-props learned that an image's strings are not
+ * copy, and reported 107 false failures.
+ */
+export function visibleStrings(value: unknown, key?: string): string[] {
   if (key && ATTRIBUTE_ONLY.has(key)) return [];
+  /*
+   * NOTHING inside an image is body copy.
+   *
+   * The declared keys are all attributes, but a stored image also carries
+   * whatever the photo lookup put there — a real hero on a client's site holds
+   * `photographer: "Kate Filatova"` and `photographerUrl`, neither of which
+   * renders. Listing keys one by one missed both, so the removal test read the
+   * photograph as content that had vanished and threw it away on every swap.
+   * Samples never showed it: they have no credit metadata.
+   */
+  if (describe(value).kind === "image") return [];
   if (typeof value === "string") return value.trim().length > 3 ? [value.trim()] : [];
   if (Array.isArray(value)) return value.flatMap((v) => visibleStrings(v, key));
   if (isRecord(value)) return Object.entries(value).flatMap(([k, v]) => visibleStrings(v, k));

@@ -95,6 +95,29 @@ export type EditOp =
       width?: string;
       required?: string;
     }
+  /**
+   * Replaces one page section's DESIGN, keeping its content.
+   *
+   * The gap the other operations left. Asked for a different-looking hero, the
+   * planner could only rewrite the copy of the one already there
+   * (rewrite_section), change a setting it happens to have (set_option), or
+   * throw it away and generate a new one (remove + add) — which loses whatever
+   * the client edited by hand. None of those is "same words, different
+   * layout", which is what someone means when they say the section looks wrong.
+   *
+   * Note this INVERTS swap_chrome's policy. A header swap deliberately
+   * discards its copy, because a header that has no button has nowhere to put
+   * one and the words belonged to the design that wrote them. Here carrying
+   * the content across is the entire point, which is why lib/sections/carry-props.ts
+   * exists and why it is the largest part of this feature.
+   */
+  | {
+      kind: "swap_section";
+      /** The section on the page, by node type, key, name or its own heading. */
+      section: string;
+      /** Registry key of the design to use instead, e.g. "hero-centered". */
+      design: string;
+    }
   | { kind: "rewrite_section"; section: string; instruction: string }
   | { kind: "regenerate_page" }
   | { kind: "unsupported"; reason: string };
@@ -115,7 +138,7 @@ export type PageSchema = { schemaVersion?: string; nodes?: SchemaNode[] };
  * it SAYS; requiring them to know it is called `Testimonials` is requiring them
  * to know our internals.
  */
-function indexOfSection(nodes: SchemaNode[], ref: string | undefined): number {
+export function indexOfSection(nodes: SchemaNode[], ref: string | undefined): number {
   if (!ref) return -1;
   // Quotes are stripped because the instruction usually carried them and the
   // model tends to hand them back.
@@ -212,6 +235,38 @@ export function applyOp(
         ok: true,
         schema: { ...schema, schemaVersion: schema.schemaVersion ?? "1.0", nodes },
         describe: `Added the ${section.name} ${where}.`,
+      };
+    }
+
+    case "swap_section": {
+      const at = indexOfSection(nodes, op.section);
+      if (at < 0) return { ok: false, error: `There's no ${label(op.section)} on this page.` };
+
+      const design = getSectionByKey(op.design) ?? getSectionByNodeType(op.design);
+      if (!design) return { ok: false, error: `There's no "${op.design}" design.` };
+      if (design.placement && design.placement !== "page") {
+        return {
+          ok: false,
+          error: `The ${design.name} belongs in the site's header or footer, not on the page.`,
+        };
+      }
+
+      const previous = getSectionByNodeType(nodes[at].type);
+      if (nodes[at].type === design.nodeType) {
+        return { ok: false, error: `That section is already the ${design.name.toLowerCase()}.` };
+      }
+
+      /*
+       * A new id, because it encodes the design and this is a different one.
+       * Nothing correlates nodes across saves — revisions snapshot the whole
+       * schema — so keeping the old id would only preserve a name that lies.
+       */
+      nodes[at] = { id: `n_${design.key}_${at}`, type: design.nodeType, props: newProps ?? {} };
+
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe: `Changed the ${previous?.name ?? "section"} to the ${design.name}.`,
       };
     }
 
