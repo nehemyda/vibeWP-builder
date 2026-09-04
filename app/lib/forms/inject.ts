@@ -17,6 +17,30 @@ import type { FormFieldSpec } from "@/app/actions/forms";
  * from their site permanently.
  */
 export async function withStaticForms(html: string, endpoint: string): Promise<string> {
+  /*
+   * Point the script at US, not at the client's own site.
+   *
+   * The section emits src="/embed.js", which is correct in the builder and
+   * wrong the moment the page is exported: on WordPress it resolves against
+   * THEIR domain, 404s, and the form silently falls back to a full page reload
+   * instead of an inline thank-you. Rewritten here for the same reason the form
+   * action is — where the page will live is a fact about export, not about the
+   * section.
+   */
+  let origin = "";
+  try {
+    origin = new URL(endpoint).origin;
+  } catch {
+    // A malformed endpoint must not strip the script; a relative src at least
+    // keeps working wherever the origin happens to match.
+  }
+  if (origin) {
+    html = html.replace(
+      /<script src="\/embed\.js"([^>]*)><\/script>/g,
+      `<script src="${origin}/embed.js"$1></script>`,
+    );
+  }
+
   const tokens = [...html.matchAll(/data-vibewp-form="([^"]+)"/g)].map((m) => m[1]).filter(Boolean);
   if (tokens.length === 0) return html;
 

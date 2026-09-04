@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { formDefinitions } from "@/lib/db/schema";
+import { formDefinitions, formSubmissions } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
 
 /**
@@ -146,6 +146,23 @@ export async function deleteFormAction(smbId: string, formId: string) {
 
   if (!gone) return { ok: false as const, error: "That form doesn't exist." };
 
+  revalidatePath("/dashboard", "layout");
+  return { ok: true as const };
+}
+
+/**
+ * Marks one submission read.
+ *
+ * Called when it is opened, not by a button: "read" should describe what
+ * happened, and a client who opened an enquiry has read it. A separate button
+ * would let the unread count disagree with what they have actually seen.
+ */
+export async function markSubmissionReadAction(smbId: string, submissionId: string) {
+  const { site } = await requireSiteAccess(smbId);
+  await db
+    .update(formSubmissions)
+    .set({ readAt: new Date() })
+    .where(and(eq(formSubmissions.id, submissionId), eq(formSubmissions.siteId, site.id)));
   revalidatePath("/dashboard", "layout");
   return { ok: true as const };
 }

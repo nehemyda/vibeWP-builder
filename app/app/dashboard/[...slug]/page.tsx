@@ -28,7 +28,7 @@ export default async function SmbDashboardPage({
   searchParams,
 }: {
   params: Promise<{ slug: string[] }>;
-  searchParams: Promise<{ page?: string; tab?: string; form?: string; saved?: string; error?: string }>;
+  searchParams: Promise<{ page?: string; tab?: string; form?: string; lead?: string; saved?: string; error?: string }>;
 }) {
   const { slug } = await params;
   if (slug.length < 1 || slug.length > 3) notFound();
@@ -91,6 +91,7 @@ export default async function SmbDashboardPage({
         page={parsePage(sp.page)}
         tab={typeof sp.tab === "string" ? sp.tab : undefined}
         formId={typeof sp.form === "string" ? sp.form : undefined}
+        leadId={typeof sp.lead === "string" ? sp.lead : undefined}
       />
     );
   }
