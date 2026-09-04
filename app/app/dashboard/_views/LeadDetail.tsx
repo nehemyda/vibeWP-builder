@@ -56,6 +56,8 @@ export function LeadDetail({
 
   return (
     <div>
+      <style>{`.yp-lead-contact:hover{text-decoration:underline;text-underline-offset:2px}`}</style>
+
       <div style={{ display: "flex", alignItems: "center", gap: "0.8rem", marginBottom: "1rem" }}>
         <Link className={shell.btn} href={backHref}>
           ← Submissions
@@ -101,7 +103,25 @@ export function LeadDetail({
                   {/* Contact answers are actionable, so they are links: replying is
                       the entire point of reading an enquiry. */}
                   <dd style={{ margin: 0, fontSize: "0.95rem", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-                    {isContact ? <a href={href}>{text}</a> : text}
+                    {isContact ? (
+                      /*
+                        Styled, not left to the browser. A default link puts a
+                        blue underline through an email address, which reads as
+                        decoration over the very thing being read — and these
+                        sit in a list of answers where everything else is plain
+                        text. Underlined on hover, so it still announces itself
+                        as clickable when reached for.
+                      */
+                      <a
+                        href={href}
+                        style={{ color: "var(--primary, #f54900)", textDecoration: "none", fontWeight: 500 }}
+                        className="yp-lead-contact"
+                      >
+                        {text}
+                      </a>
+                    ) : (
+                      text
+                    )}
                   </dd>
                 </div>
               );

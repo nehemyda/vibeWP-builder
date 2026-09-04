@@ -231,6 +231,9 @@ export async function LeadsView({
                   <th>Status</th>
                   <th>Message</th>
                   <th>Received</th>
+                  {/* Empty header: the column holds an action, and a label
+                      above a chevron reads as a column of data. */}
+                  <th aria-label="Open" />
                 </tr>
               </thead>
               <tbody>
@@ -254,12 +257,40 @@ export async function LeadsView({
                       </td>
                       <td className={shell.rowSub}>{summaryOf(data) || "—"}</td>
                       <td>{row.receivedAt.toLocaleString()}</td>
+                      <td style={{ textAlign: "right", width: "1%" }}>
+                        {/*
+                          An explicit way in. The name was already a link, but a
+                          bare name in a table does not look like one — the row
+                          gave no sign it opened anything.
+                        */}
+                        <Link
+                          href={`${paths.leadsPath}?lead=${row.id}`}
+                          aria-label={`Open enquiry from ${personOf(data)}`}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            padding: "0.25rem 0.6rem",
+                            borderRadius: 8,
+                            border: "1px solid var(--line, #e6e8ee)",
+                            color: "var(--ink-2, #4a5160)",
+                            textDecoration: "none",
+                            fontSize: "0.8rem",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          View
+                          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+                            <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </Link>
+                      </td>
                     </tr>
                   );
                 })}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={4} className={shell.rowSub}>
+                    <td colSpan={5} className={shell.rowSub}>
                       No submissions yet. Enquiries from your site&rsquo;s contact form
                       appear here.
                     </td>
