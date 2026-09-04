@@ -132,3 +132,7 @@ for (const s of SECTIONS) {
 }
 console.log(`\n== registry: ${SECTIONS.length} sections, keys/nodeTypes/rootClasses all unique ==`);
 console.log(fails === 0 ? "\nALL GATES PASS" : `\n${fails} FAILURE(S)`);
+
+/* A gate that always exits 0 gates nothing: chained from `npm run verify`,
+   a failure here has to stop the run. */
+process.exitCode = fails === 0 ? 0 : 1;

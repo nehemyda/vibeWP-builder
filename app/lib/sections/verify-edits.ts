@@ -82,3 +82,7 @@ check("refuses to set a CONTENT field as if it were an option", !clobber.ok,
   clobber.ok ? `items became ${JSON.stringify(clobber.schema.nodes![0].props!.items)}` : clobber.error);
 
 console.log(fails === 0 ? "\nALL EDIT TESTS PASS" : `\n${fails} FAILURE(S)`);
+
+/* A gate that always exits 0 gates nothing: chained from `npm run verify`,
+   a failure here has to stop the run. */
+process.exitCode = fails === 0 ? 0 : 1;
