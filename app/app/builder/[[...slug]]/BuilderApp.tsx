@@ -29,6 +29,7 @@ import {
 } from "@/lib/wp/serialize";
 import { PreviewFrame, type CanvasSelection, type SectionBox } from "./PreviewFrame";
 import { CanvasOverlay } from "./CanvasOverlay";
+import { Composer, WorkingCover } from "./Composer";
 import { DesignPanel, type CatalogueEntry } from "./DesignPanel";
 import { WordPressLockNotice } from "./WordPressLockNotice";
 import { SiteDetailsDrawer, type SiteDetails } from "./SiteDetailsDrawer";
@@ -343,7 +344,14 @@ export function BuilderApp({
    * durable route back is the revision history, which every swap writes to.
    */
   const [swapOrigin, setSwapOrigin] = useState<Record<string, string>>({});
-  const [canvasBusy, setCanvasBusy] = useState(false);
+  /*
+   * What the canvas is doing right now, or null.
+   *
+   * A sentence rather than a boolean because the cover repeats it: a swap that
+   * has to write new copy takes about five seconds, and a page that simply sits
+   * there for five seconds after a click reads as a click that did not land.
+   */
+  const [canvasBusy, setCanvasBusy] = useState<string | null>(null);
   /** Seeded from the server so an already-exported site shows its links on load. */
   const [wpUrl, setWpUrl] = useState<string | null>(initialWpUrl);
   const [pages, setPages] = useState<PageSummary[]>(initialPages);
@@ -955,7 +963,7 @@ export function BuilderApp({
    * "undo" read the same revision either way.
    */
   async function runCanvasOp(op: CanvasOp, spoken: string) {
-    setCanvasBusy(true);
+    setCanvasBusy(spoken);
     const aiId = nextId();
     setMessages((prev) => [...prev, { id: aiId, role: "ai", text: `${spoken}…`, steps: [] }]);
 
@@ -966,7 +974,7 @@ export function BuilderApp({
       const failed = "I couldn't reach the builder. Nothing was changed.";
       setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: failed } : m)));
       remember("ai", failed);
-      setCanvasBusy(false);
+      setCanvasBusy(null);
       return;
     }
 
@@ -983,7 +991,7 @@ export function BuilderApp({
 
     setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: result.message } : m)));
     remember("ai", result.message);
-    setCanvasBusy(false);
+    setCanvasBusy(null);
   }
 
   function openDesignPanel(sel: CanvasSelection) {
@@ -1465,19 +1473,13 @@ export function BuilderApp({
               ),
             )}
           </div>
-          <div className={styles.chatInput}>
-            <form onSubmit={onSendMessage}>
-              <input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="Ask VibeWP to change something…"
-                disabled={generating}
-              />
-              <button type="submit" disabled={generating || !draft.trim()}>
-                Send
-              </button>
-            </form>
-          </div>
+          <Composer
+            draft={draft}
+            onDraft={setDraft}
+            onSubmit={onSendMessage}
+            busy={generating}
+            scope={pages.find((p) => p.slug === activeSlug)?.title ?? activeSlug}
+          />
         </div>
 
         <div
@@ -1581,7 +1583,7 @@ export function BuilderApp({
                   boxes={boxes}
                   selection={selection}
                   labelFor={labelOfSelection}
-                  busy={canvasBusy || generating}
+                  busy={Boolean(canvasBusy) || generating}
                   onChangeDesign={openDesignPanel}
                   onMove={(sel, direction) => {
                     if (sel.kind !== "node") return;
@@ -1620,6 +1622,19 @@ export function BuilderApp({
           </div>
         </div>
 
+        {/*
+          A cover over the whole workspace while a canvas change is in flight.
+          Two jobs: it says what is happening, and it stops a second click
+          landing on a page that is about to be replaced underneath it —
+          pressing another design mid-swap would send a second operation built
+          from a schema that no longer matches the one on screen.
+
+          Scoped to canvas changes. A chat edit takes just as long, but its
+          progress is already in the transcript, and covering the panel would
+          stop the client reading the reply they are waiting for.
+        */}
+        {canvasBusy && <WorkingCover label={canvasBusy} />}
+
         {designFor && keyOfSelection(designFor) && (
           <DesignPanel
             selection={designFor}
@@ -1627,7 +1642,7 @@ export function BuilderApp({
             currentProps={propsOfSelection(designFor)}
             catalogue={catalogue}
             originKey={swapOrigin[designFor.kind === "chrome" ? designFor.slot : `n${designFor.index}`]}
-            busy={canvasBusy || generating}
+            busy={Boolean(canvasBusy) || generating}
             context={{
               siteName,
               facts,

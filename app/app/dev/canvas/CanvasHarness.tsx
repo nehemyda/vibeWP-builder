@@ -11,6 +11,7 @@ import { getSectionByKey, getSectionByNodeType } from "@/lib/sections";
 import { PreviewFrame, type CanvasSelection, type SectionBox } from "@/app/builder/[[...slug]]/PreviewFrame";
 import { CanvasOverlay } from "@/app/builder/[[...slug]]/CanvasOverlay";
 import { DesignPanel, type CatalogueEntry } from "@/app/builder/[[...slug]]/DesignPanel";
+import { Composer, WorkingCover } from "@/app/builder/[[...slug]]/Composer";
 import { SECTIONS } from "@/lib/sections";
 import styles from "@/app/builder/[[...slug]]/builder.module.css";
 import harness from "./harness.module.css";
@@ -45,6 +46,9 @@ export function CanvasHarness() {
   })();
 
   const [selection, setSelection] = useState<CanvasSelection | null>(fromUrl);
+  const [draft, setDraft] = useState(params.get("draft") ?? "");
+  /* ?busy=Changing the hero shows the working cover without a server. */
+  const [cover, setCover] = useState<string | null>(params.get("busy"));
   const [boxes, setBoxes] = useState<SectionBox[]>([]);
   const [log, setLog] = useState<string[]>([]);
   const [order, setOrder] = useState<string[]>(FIXTURE);
@@ -105,6 +109,8 @@ export function CanvasHarness() {
      * measured the harness's own layout instead of the overlay's.
      */
     <div className={harness.shell}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", position: "relative" }}>
+      {cover && <WorkingCover label={cover} />}
       <div className={styles.canvasScroll} style={{ flex: 1, minWidth: 0 }}>
         <div className={styles.canvasFrame}>
           <PreviewFrame
@@ -145,6 +151,7 @@ export function CanvasHarness() {
           />
         </div>
       </div>
+      </div>
 
       {panelFor && (
         <DesignPanel
@@ -173,6 +180,32 @@ export function CanvasHarness() {
       )}
 
       <aside className={harness.panel}>
+        {/* The real composer and the real cover, so what is checked here is
+            what the builder renders. */}
+        <div style={{ marginBottom: 14, border: "1px solid #e5e7eb", borderRadius: 10 }}>
+          <Composer
+            draft={draft}
+            onDraft={setDraft}
+            onSubmit={(e) => {
+              e.preventDefault();
+              note(`send: ${draft}`);
+              setDraft("");
+            }}
+            busy={params.get("sending") === "1"}
+            scope="Home"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setCover("Changing the Split hero to the Centred hero");
+            window.setTimeout(() => setCover(null), 5000);
+          }}
+          style={{ marginBottom: 12, padding: "6px 10px", font: "inherit", fontSize: 12 }}
+        >
+          Show the 5-second cover
+        </button>
+
         <strong style={{ display: "block", marginBottom: 8 }}>Canvas harness</strong>
         <p style={{ color: "#6b7280", margin: "0 0 12px" }}>
           Development only. Real PreviewFrame, real CanvasOverlay, fixture content. Two cta-band

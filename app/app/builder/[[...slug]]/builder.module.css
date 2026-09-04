@@ -341,32 +341,101 @@
   padding: 0.9rem;
   background: var(--surface);
 }
-.chatInput form {
+/* One bordered box: field on top, its controls in a row beneath. */
+.composer {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 0.55rem 0.6rem 0.5rem;
   display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.composer:focus-within {
+  border-color: var(--primary, #f54900);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary, #f54900) 14%, transparent);
+}
+.composerField {
+  border: 0;
+  background: transparent;
+  resize: none;
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink);
+  padding: 0.25rem 0.3rem;
+  /* Grows with the text up to about six lines, then scrolls. `field-sizing`
+     does this without measuring in script; the max-height is the fallback's
+     cap either way. */
+  field-sizing: content;
+  min-height: 2.6rem;
+  max-height: 9rem;
+  overflow-y: auto;
+}
+.composerField:focus { outline: none; }
+.composerField::placeholder { color: var(--faint, #9aa1ab); }
+
+.composerBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
 }
-.chatInput input {
-  flex: 1;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 0.7rem 0.8rem;
-  font-size: 0.87rem;
-  color: var(--ink);
-  background: var(--bg);
+.composerScope {
+  font-size: 0.74rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
-.chatInput button {
-  border: none;
-  background: var(--ink);
+.composerScope strong { color: var(--ink-2, #4a5160); font-weight: 650; }
+
+.composerSend {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--primary, #f54900);
   color: #fff;
-  border-radius: 12px;
-  padding: 0 1rem;
-  font-size: 0.87rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  transition: background 120ms ease;
 }
-.chatInput button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.composerSend:hover:not(:disabled) { filter: brightness(1.07); }
+/* Disabled is grey rather than a faded orange: a dimmed primary still reads as
+   the thing to press. */
+.composerSend:disabled {
+  background: var(--bg, #f4f5f7);
+  color: var(--faint, #9aa1ab);
+  cursor: default;
+}
+.composerSpinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in oklch, var(--faint, #9aa1ab) 45%, transparent);
+  border-top-color: var(--ink-2, #4a5160);
+  animation: vibewpSpin 620ms linear infinite;
+}
+@keyframes vibewpSpin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .composerSpinner { animation-duration: 2s; }
+}
+
+.composerNote {
+  margin: 0.5rem 0 0;
+  font-size: 0.7rem;
+  color: var(--faint, #9aa1ab);
+  text-align: center;
 }
 
 /* canvas pane */
@@ -1151,4 +1220,45 @@
 
 @media (max-width: 900px) {
   .designPanel { width: 100%; border-left: 0; }
+}
+
+/* ---- working cover ----
+   Over the canvas AND the panel, because a second click during a swap would be
+   built from a schema that is about to be replaced. Inside .panes rather than
+   the whole page so the toolbar's undo stays reachable the moment it ends. */
+.canvasCover {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklch, var(--bg, #f4f5f7) 62%, transparent);
+  backdrop-filter: blur(1.5px);
+  cursor: progress;
+}
+.canvasCoverCard {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--surface, #fff);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+  box-shadow: 0 18px 44px -18px rgba(19, 25, 34, 0.45);
+  max-width: min(28rem, 80%);
+}
+.canvasCoverSpinner {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in oklch, var(--primary, #f54900) 25%, transparent);
+  border-top-color: var(--primary, #f54900);
+  animation: vibewpSpin 620ms linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvasCoverSpinner { animation-duration: 2s; }
 }
