@@ -95,14 +95,38 @@ const EXAMPLE_FORM_FIELDS: FormPreviewField[] = [
   { name: "message", label: "How can we help?", type: "textarea", required: true, span: 12 },
 ];
 
+/**
+ * Contact details for a library card, standing in for the site's own.
+ *
+ * Samples carry {{phone}} rather than a number, because on a real site those
+ * follow the business details. With no site to read them from the tokens are
+ * stripped, so the form-and-details card showed PHONE, EMAIL and HOURS with
+ * nothing beside them — a section that looked broken in the catalogue meant
+ * to sell it. Illustrative, exactly like the example form questions above.
+ */
+const EXAMPLE_FACTS: Record<string, string> = {
+  phone: "01225 000000",
+  email: "hello@example.com",
+  address: "12 High Street, Bath BA1 5AQ",
+  hours: "Mon–Fri 9–5\nSat 9–1",
+};
+
 export function sectionPreviewMarkup(nodeType: string, props: unknown): string {
+  const markup = sectionToTemplatePart(nodeType, props);
+  /*
+   * Any section carrying a form mount gets the example questions — matched on
+   * the MARKUP, not the node type. Keyed on the name it only covered
+   * FormEmbed, so the five newer form sections previewed as an empty skeleton
+   * in the very catalogue meant to sell them.
+   */
+  const showsAForm = markup.includes("yp-embed__mount");
   return withPreviewPlaceholders(
-    sectionToTemplatePart(nodeType, props),
+    markup,
+    undefined,
+    EXAMPLE_FACTS,
     undefined,
     undefined,
-    undefined,
-    undefined,
-    nodeType === "FormEmbed" ? EXAMPLE_FORM_FIELDS : undefined,
+    showsAForm ? EXAMPLE_FORM_FIELDS : undefined,
   );
 }
 

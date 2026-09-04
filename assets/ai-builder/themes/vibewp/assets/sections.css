@@ -3183,3 +3183,172 @@ body.yp-page {
 @media (max-width: 560px) {
   .yp-page .vibewp-form__field { grid-column: span 12 !important; }
 }
+
+/* ══ Form sections ══
+   Five presentations of the same embedded form. Each styles only its own
+   frame — the form inside carries the vibewp-form classes and is styled once,
+   above, so a change to the form's look reaches all five. */
+
+/* There is no global box-sizing reset — each family declares its own, because
+   the host page's is not ours to assume. Without it `width: 100%` plus a
+   gutter measures 100% AND the gutter, and the section hangs 64px off the
+   right edge of the page. */
+.yp-page .yp-formx, .yp-page .yp-formx *,
+.yp-page .yp-formc, .yp-page .yp-formc *,
+.yp-page .yp-formd, .yp-page .yp-formd *,
+.yp-page .yp-formp, .yp-page .yp-formp *,
+.yp-page .yp-formb, .yp-page .yp-formb * { box-sizing: border-box; }
+
+/* ── Form with reassurance: copy left, form right ── */
+.yp-page .yp-formx {
+  width: 100%; max-width: var(--container); margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+}
+.yp-page .yp-formx__inner {
+  display: grid; grid-template-columns: 1fr 1.15fr; gap: clamp(2rem, 5vw, 4.5rem);
+  align-items: start;
+}
+.yp-page .yp-formx__heading {
+  margin: 0 0 0.7rem; font-size: clamp(1.8rem, 3.2vw, 2.6rem);
+  line-height: 1.08; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-formx__body { margin: 0 0 1.6rem; color: var(--ink-2); font-size: 1.04rem; max-width: 40ch; }
+/* Counters rather than bullets: these are answers to doubts, and a numbered
+   run reads as a sequence someone can hold in their head. */
+.yp-page .yp-formx__points { list-style: none; margin: 0; padding: 0; counter-reset: yp-fx; }
+.yp-page .yp-formx__points li {
+  counter-increment: yp-fx; position: relative;
+  padding: 0.7rem 0 0.7rem 2.5rem; border-top: 1px solid var(--line);
+  font-size: 0.95rem; color: var(--ink);
+}
+.yp-page .yp-formx__points li::before {
+  content: counter(yp-fx); position: absolute; left: 0; top: 0.62rem;
+  width: 1.6rem; height: 1.6rem; border-radius: 50%;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary); font-size: 0.78rem; font-weight: 700;
+}
+/* Sticks while the form is filled in, so the reasons to send it stay in view
+   rather than scrolling away above the fields. */
+.yp-page .yp-formx__copy { position: sticky; top: 2rem; min-width: 0; }
+.yp-page .yp-formx__form { min-width: 0; }
+@media (max-width: 880px) {
+  .yp-page .yp-formx__inner { grid-template-columns: 1fr; gap: 2.2rem; }
+  /* Sticky in one column would pin the copy over the fields. */
+  .yp-page .yp-formx__copy { position: static; }
+}
+
+/* ── Form on a card, over a tinted band ── */
+.yp-page .yp-formc {
+  background: var(--surface-2);
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+}
+.yp-page .yp-formc__inner { max-width: 40rem; margin: 0 auto; text-align: center; }
+.yp-page .yp-formc__eyebrow {
+  margin: 0 0 0.6rem; font-family: var(--font-mono);
+  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.11em;
+  text-transform: uppercase; color: var(--primary);
+}
+.yp-page .yp-formc__heading {
+  margin: 0 0 0.7rem; font-size: clamp(1.9rem, 3.4vw, 2.7rem);
+  line-height: 1.06; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-formc__body { margin: 0 auto 2rem; max-width: 44ch; color: var(--ink-2); font-size: 1.04rem; }
+.yp-page .yp-formc__card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 16px; padding: clamp(1.4rem, 3vw, 2.2rem);
+  box-shadow: 0 24px 50px -32px rgba(14, 20, 32, 0.4);
+  text-align: left;
+}
+
+/* ── Form with contact details beside it ── */
+.yp-page .yp-formd {
+  width: 100%; max-width: var(--container); margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+}
+.yp-page .yp-formd__inner {
+  display: grid; grid-template-columns: 1.3fr 0.85fr; gap: clamp(2rem, 5vw, 4rem);
+  align-items: start;
+}
+.yp-page .yp-formd__main { min-width: 0; }
+.yp-page .yp-formd__heading {
+  margin: 0 0 0.7rem; font-size: clamp(1.8rem, 3.2vw, 2.5rem);
+  line-height: 1.08; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-formd__body { margin: 0 0 1.8rem; color: var(--ink-2); font-size: 1.04rem; max-width: 46ch; }
+.yp-page .yp-formd__aside {
+  border: 1px solid var(--line); border-radius: 14px;
+  padding: 0.4rem 1.2rem; background: var(--surface);
+}
+.yp-page .yp-formd__rows { display: grid; }
+.yp-page .yp-formd__row {
+  display: grid; gap: 0.15rem; padding: 1rem 0; border-bottom: 1px solid var(--line);
+}
+.yp-page .yp-formd__row:last-child { border-bottom: 0; }
+/* A detail the site has not recorded resolves to nothing, and the row was left
+   showing PHONE with a blank beside it. Two shapes to catch: the bare value,
+   and the empty <a> that phone and email wrap theirs in. */
+.yp-page .yp-formd__row:has(> .yp-formd__value:empty),
+.yp-page .yp-formd__row:has(> .yp-formd__value > a:empty) { display: none; }
+.yp-page .yp-formd__label {
+  font-family: var(--font-mono); font-size: 0.68rem; font-weight: 600;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+}
+/* pre-line so opening hours keep the line per day they were written with. */
+.yp-page .yp-formd__value { font-size: 0.98rem; color: var(--ink); white-space: pre-line; }
+.yp-page .yp-formd__value a { color: var(--primary); text-decoration: none; }
+.yp-page .yp-formd__value a:hover { text-decoration: underline; text-underline-offset: 2px; }
+@media (max-width: 880px) {
+  .yp-page .yp-formd__inner { grid-template-columns: 1fr; gap: 2rem; }
+}
+
+/* ── Form with a photograph ── */
+.yp-page .yp-formp {
+  width: 100%; max-width: var(--container); margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+}
+.yp-page .yp-formp__inner {
+  display: grid; grid-template-columns: 1fr 1fr; gap: clamp(1.6rem, 4vw, 3.5rem);
+  align-items: stretch;
+}
+.yp-page .yp-formp__media { margin: 0; border-radius: 16px; overflow: hidden; min-height: 22rem; }
+.yp-page .yp-formp__img { margin: 0; height: 100%; }
+.yp-page .yp-formp__img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.yp-page .yp-formp__panel { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.yp-page .yp-formp__heading {
+  margin: 0 0 0.6rem; font-size: clamp(1.7rem, 3vw, 2.4rem);
+  line-height: 1.08; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-formp__body { margin: 0 0 1.6rem; color: var(--ink-2); font-size: 1.02rem; }
+@media (max-width: 880px) {
+  .yp-page .yp-formp__inner { grid-template-columns: 1fr; }
+  /* Form first: a photograph that pushes the fields off the first screen
+     costs enquiries, however good it is. */
+  .yp-page .yp-formp__media { order: 2; min-height: 14rem; }
+  .yp-page .yp-formp__panel { order: 1; }
+}
+
+/* ── Form on a dark band ── */
+.yp-page .yp-formb {
+  background: var(--ink);
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+}
+.yp-page .yp-formb__inner { max-width: 38rem; margin: 0 auto; }
+.yp-page .yp-formb__heading {
+  margin: 0 0 0.6rem; color: #fff;
+  font-size: clamp(1.9rem, 3.4vw, 2.7rem);
+  line-height: 1.06; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-formb__body { margin: 0 0 1.9rem; color: rgba(255, 255, 255, 0.72); font-size: 1.04rem; }
+/*
+ * The FIELDS stay light on the dark ground. Inverting them too gives a dark
+ * box with pale text, which reads as disabled — people do not type into it.
+ * Only the label colour flips.
+ */
+.yp-page .yp-formb__form { --vwf-label: rgba(255, 255, 255, 0.86); --vwf-border: rgba(255, 255, 255, 0.22); }
+/* The preview's own caption and dashed outline: --muted on ink is unreadable,
+   and this is the one section where the placeholder sits on a dark ground. */
+.yp-page .yp-formb__form .yp-embed__ph { border-color: rgba(255, 255, 255, 0.28); }
+.yp-page .yp-formb__form .yp-embed__ph em { color: rgba(255, 255, 255, 0.6); }
+.yp-page .yp-formb__form .vibewp-form__control { background: #fff; color: var(--ink); }
+.yp-page .yp-formb__form .vibewp-form__control::placeholder { color: var(--muted); }

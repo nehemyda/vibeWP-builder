@@ -1,5 +1,5 @@
 import type { HTMLElement } from "node-html-parser";
-import { group, heading, paragraph, htmlBlock, escAttr } from "@/lib/wp/blocks";
+import { group, heading, paragraph, htmlBlock, formMount } from "@/lib/wp/blocks";
 import type { SectionDefinition } from "./types";
 
 export type FormEmbedProps = {
@@ -54,9 +54,7 @@ export const FormEmbed: SectionDefinition<FormEmbedProps> = {
      * emitted even when the token is missing, so a page saved before a form
      * existed starts working the moment one is attached.
      */
-    const mount =
-      `<div class="yp-embed__mount" data-vibewp-form="${escAttr(p.formToken ?? "")}"></div>` +
-      `<script src="/embed.js" async></script>`;
+    const mount = formMount(p.formToken);
 
     const inner = [
       p.heading ? heading(p.heading, 2, "yp-embed__heading") : "",

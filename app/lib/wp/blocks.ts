@@ -194,6 +194,14 @@ export function socialLinks(className: string): string {
 export function contactHref(kind: "phone" | "email", value: string): string {
   const v = value.trim();
   if (kind === "email") return `mailto:${v}`;
+  /*
+   * A {{token}} is passed through whole. Stripping "everything a dialler
+   * cannot use" ate the braces too, so a section holding {{phone}} — which is
+   * how contact details follow the business record instead of being copy in
+   * two places — exported `href="tel:"`. Visibly fine, and untappable on the
+   * one device where tapping is the point.
+   */
+  if (/^\{\{[a-z_]+\}\}$/.test(v)) return `tel:${v}`;
   return `tel:${v.replace(/[^\d+]/g, "")}`;
 }
 
@@ -312,4 +320,25 @@ export function gallery(
  */
 export function htmlBlock(markup: string): string {
   return `<!-- wp:html -->\n${markup}\n<!-- /wp:html -->`;
+}
+
+/**
+ * The mount point an embedded form renders into, plus its script.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * ONE SHAPE, THREE CONSUMERS
+ *
+ * Export rewrites the token and the script URL, the builder canvas swaps the
+ * whole thing for a drawn form, and the live script renders into it. All three
+ * match on this exact markup, so a section that spells it differently — a
+ * changed attribute order, a self-closed div — silently gets no form at all.
+ *
+ * Every form section emits it through here rather than writing it out, so
+ * there is one place for it to be right.
+ */
+export function formMount(token: string | undefined): string {
+  return (
+    `<div class="yp-embed__mount" data-vibewp-form="${escAttr(token ?? "")}"></div>` +
+    `<script src="/embed.js" async></script>`
+  );
 }
