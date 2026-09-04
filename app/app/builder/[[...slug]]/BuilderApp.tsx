@@ -70,10 +70,24 @@ const PLANNING_STEPS = [
   "Writing the copy",
 ];
 
-let idCounter = 0;
+/**
+ * A message id that cannot collide with one already on screen.
+ *
+ * This was a module-level counter, which React reported as "two children with
+ * the same key, m_3". The counter lives in the module and the messages live in
+ * component state, so anything that re-evaluates the module without discarding
+ * the state — Fast Refresh during development, most obviously — restarts it at
+ * zero while m_1, m_2, m_3 are still rendered. The next three messages collide.
+ *
+ * Randomness rather than a bigger counter, because the fault is the assumption
+ * that a counter and the list it numbers share a lifetime. They do not.
+ */
 function nextId() {
-  idCounter += 1;
-  return `m_${idCounter}`;
+  const rand =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `m_${rand}`;
 }
 
 /* Inline so they inherit currentColor and need no icon dependency. */
