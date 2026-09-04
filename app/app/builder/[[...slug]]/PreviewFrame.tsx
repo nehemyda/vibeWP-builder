@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { tokensToCss, type DesignTokens } from "@/lib/design/tokens";
 
 /** Only plain hex is allowed into the stylesheet. */
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
@@ -121,6 +122,7 @@ export function PreviewFrame({
   html,
   className,
   colors,
+  designTokens,
   onNavigate,
   selection,
   onSelect,
@@ -144,6 +146,16 @@ export function PreviewFrame({
    * on their live site and orange in the builder.
    */
   colors?: Record<string, string>;
+  /**
+   * The site's hand-set design values, injected the same way the palette is.
+   *
+   * They belong in the SAME `:root` block for the same reason: this iframe has
+   * no WordPress, so the only way the canvas can agree with the exported site
+   * is to emit by hand what the live site emits from theme.json. A token that
+   * reached one and not the other would break the parity the whole preview
+   * rests on.
+   */
+  designTokens?: DesignTokens;
   /**
    * Called when a menu link inside the canvas is clicked, with that page's slug.
    *
@@ -235,6 +247,7 @@ export function PreviewFrame({
   body { background: #fff; }
   :root {
     ${paletteCss}
+    ${tokensToCss(designTokens ?? {})}
   }
 </style>
 </head><body class="yp-page" data-vibewp-preview>${html}</body></html>`;

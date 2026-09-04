@@ -114,6 +114,16 @@ export const sites = pgTable("sites", {
    */
   brandPaletteKey: text("brand_palette_key"),
   brandColors: jsonb("brand_colors"),
+  /**
+   * Design values the client set by hand — heading scale, spacing, radius.
+   *
+   * Multipliers rather than sizes, so they compose with each section's own
+   * design instead of flattening 62 of them onto one value. Absent means "as
+   * designed", which is why an at-default control stores nothing: pinning
+   * today's default would freeze a site against a stylesheet that may improve.
+   * Sanitised on the way in and again on the way out — see lib/design/tokens.ts.
+   */
+  designTokens: jsonb("design_tokens"),
   /** Set when the intake form is first submitted — drives Build vs Edit. */
   intakeCompletedAt: timestamp("intake_completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })

@@ -18,6 +18,7 @@ import { getPlatformSettings } from "@/lib/platform-settings";
 import { formDefinitions } from "@/lib/db/schema";
 import { loadBusinessContext, contactFactsFor } from "@/lib/ai/business-context";
 import { sectionsForPlan } from "@/lib/sections/resolve";
+import { sanitiseTokens } from "@/lib/design/tokens";
 import { BuilderApp } from "./BuilderApp";
 
 /**
@@ -186,6 +187,10 @@ export default async function BuilderPage({
   return (
     <BuilderApp
       catalogue={catalogue}
+      // Sanitised on the way out as well as in: a value that was valid when it
+      // was stored can fall outside a range we later narrow, and the canvas
+      // should show what the exported site will show.
+      initialDesignTokens={sanitiseTokens(site.designTokens)}
       siteId={site.id}
       smbId={site.smbId ?? ""}
       initialPages={allPages.map((p) => ({

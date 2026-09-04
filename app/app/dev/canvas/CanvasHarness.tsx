@@ -12,6 +12,8 @@ import { PreviewFrame, type CanvasSelection, type SectionBox } from "@/app/build
 import { CanvasOverlay } from "@/app/builder/[[...slug]]/CanvasOverlay";
 import { DesignPanel, type CatalogueEntry } from "@/app/builder/[[...slug]]/DesignPanel";
 import { Composer, WorkingCover } from "@/app/builder/[[...slug]]/Composer";
+import { StylePanel } from "@/app/builder/[[...slug]]/StylePanel";
+import type { DesignTokens } from "@/lib/design/tokens";
 import { SECTIONS } from "@/lib/sections";
 import styles from "@/app/builder/[[...slug]]/builder.module.css";
 import harness from "./harness.module.css";
@@ -54,6 +56,8 @@ export function CanvasHarness() {
   const [draft, setDraft] = useState(params.get("draft") ?? "");
   /* ?busy=Changing the hero shows the working cover without a server. */
   const [cover, setCover] = useState<string | null>(params.get("busy"));
+  const [tokens, setTokens] = useState<DesignTokens>({});
+  const [styleOpen, setStyleOpen] = useState(params.get("style") !== "0");
   const [boxes, setBoxes] = useState<SectionBox[]>([]);
   const [log, setLog] = useState<string[]>([]);
   const [order, setOrder] = useState<string[]>(FIXTURE);
@@ -114,6 +118,18 @@ export function CanvasHarness() {
      * measured the harness's own layout instead of the overlay's.
      */
     <div className={harness.shell}>
+      {styleOpen && (
+        <StylePanel
+          tokens={tokens}
+          scope="Whole site"
+          onPreview={setTokens}
+          onCommit={(next) => {
+            setTokens(next);
+            note(`style ${JSON.stringify(next)}`);
+          }}
+          onClose={() => setStyleOpen(false)}
+        />
+      )}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", position: "relative" }}>
       {cover && <WorkingCover label={cover} />}
       <div className={styles.canvasScroll} style={{ flex: 1, minWidth: 0 }}>
@@ -126,6 +142,7 @@ export function CanvasHarness() {
               note(sel ? `select ${JSON.stringify(sel)} → ${labelFor(sel)}` : "deselect");
             }}
             onGeometry={setBoxes}
+            designTokens={tokens}
             onNavigate={(slug) => note(`navigate ${slug}`)}
           />
           <CanvasOverlay

@@ -31,6 +31,9 @@ import { PreviewFrame, type CanvasSelection, type SectionBox } from "./PreviewFr
 import { CanvasOverlay } from "./CanvasOverlay";
 import { Composer, WorkingCover } from "./Composer";
 import { DesignPanel, type CatalogueEntry } from "./DesignPanel";
+import { StylePanel } from "./StylePanel";
+import { saveDesignTokensAction } from "@/app/actions/design";
+import { sanitiseTokens, type DesignTokens } from "@/lib/design/tokens";
 import { WordPressLockNotice } from "./WordPressLockNotice";
 import { SiteDetailsDrawer, type SiteDetails } from "./SiteDetailsDrawer";
 import type { WpEditLock } from "@/lib/wp/local-driver";
@@ -188,6 +191,7 @@ const ReloadIcon = () => (
 
 export function BuilderApp({
   catalogue,
+  initialDesignTokens,
   siteId,
   smbId,
   initialPages,
@@ -215,6 +219,8 @@ export function BuilderApp({
    * the client already imports for the canvas.
    */
   catalogue: CatalogueEntry[];
+  /** The site's hand-set design values, or {} when it is all as designed. */
+  initialDesignTokens: DesignTokens;
   siteId: string;
   smbId: string;
   initialPages: PageSummary[];
@@ -352,6 +358,10 @@ export function BuilderApp({
    * there for five seconds after a click reads as a click that did not land.
    */
   const [canvasBusy, setCanvasBusy] = useState<string | null>(null);
+
+  /* ---- hand-set design values ---- */
+  const [designTokens, setDesignTokens] = useState<DesignTokens>(initialDesignTokens);
+  const [styleOpen, setStyleOpen] = useState(false);
   /** Seeded from the server so an already-exported site shows its links on load. */
   const [wpUrl, setWpUrl] = useState<string | null>(initialWpUrl);
   const [pages, setPages] = useState<PageSummary[]>(initialPages);
@@ -1246,6 +1256,22 @@ export function BuilderApp({
           >
             Business details
           </button>
+
+          {/*
+            Beside Business details, because they are the same kind of thing:
+            what the site IS, and what it LOOKS like. Both belong next to the
+            page being edited rather than in a settings screen the client has
+            to leave the builder for.
+          */}
+          <button
+            type="button"
+            className={`${styles.detailsBtn} ${styleOpen ? styles.detailsBtnOn : ""}`}
+            onClick={() => setStyleOpen((open) => !open)}
+            title="Heading size, spacing, corners and page width"
+            aria-pressed={styleOpen}
+          >
+            Style
+          </button>
         </div>
 
         {/*
@@ -1549,6 +1575,7 @@ export function BuilderApp({
                   // The palette the client chose, so the canvas is that site's
                   // colours rather than the theme's defaults.
                   colors={intake.data.colors}
+                  designTokens={designTokens}
                   /*
                    * Clicking the canvas menu edits that page, which is the
                    * nearest honest equivalent to what the link does on the live
@@ -1634,6 +1661,28 @@ export function BuilderApp({
           stop the client reading the reply they are waiting for.
         */}
         {canvasBusy && <WorkingCover label={canvasBusy} />}
+
+        {styleOpen && (
+          <StylePanel
+            tokens={designTokens}
+            scope={siteName}
+            busy={Boolean(canvasBusy)}
+            /*
+             * Preview writes state only, so the canvas tracks the slider
+             * without a round trip per pixel; commit persists on release.
+             */
+            onPreview={setDesignTokens}
+            onCommit={(next) => {
+              setDesignTokens(next);
+              void saveDesignTokensAction({ siteId, tokens: next }).then((result) => {
+                // The server sanitises, so what it returns is the truth about
+                // what was stored — including a value it refused.
+                if (result.ok) setDesignTokens(result.tokens);
+              });
+            }}
+            onClose={() => setStyleOpen(false)}
+          />
+        )}
 
         {designFor && keyOfSelection(designFor) && (
           <DesignPanel
