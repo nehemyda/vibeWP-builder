@@ -37,6 +37,7 @@ const OP_SCHEMA = {
         "set_items",
         "swap_chrome",
         "rewrite_chrome",
+        "edit_form",
         "rewrite_section",
         "regenerate_page",
         "unsupported",
@@ -44,6 +45,15 @@ const OP_SCHEMA = {
     },
     section: { type: "string" },
     slot: { type: "string", enum: ["header", "footer"] },
+    action: {
+      type: "string",
+      enum: ["add_field", "remove_field", "set_width", "set_required", "rename_field"],
+    },
+    field: { type: "string" },
+    label: { type: "string" },
+    fieldType: { type: "string" },
+    width: { type: "string" },
+    required: { type: "string" },
     before: { type: "string" },
     after: { type: "string" },
     position: { type: "string", enum: ["start", "end"] },
@@ -66,7 +76,7 @@ const OP_SCHEMA = {
    * position to be considered every time.
    */
   required: ["kind", "section", "before", "after"],
-  propertyOrdering: ["kind", "section", "slot", "before", "after", "position", "option", "value", "itemCount", "count", "columns", "instruction", "reason"],
+  propertyOrdering: ["kind", "section", "slot", "action", "field", "label", "fieldType", "width", "required", "before", "after", "position", "option", "value", "itemCount", "count", "columns", "instruction", "reason"],
 } as const;
 
 export async function planEdit(opts: {
@@ -76,6 +86,14 @@ export async function planEdit(opts: {
   available: ResolvedSection[];
   /** Header/footer node types, so options on those can be set too. */
   chrome: { header?: string; footer?: string };
+  /**
+   * The form this page shows, if any.
+   *
+   * Without it "make Company name full width" is unanswerable — the model
+   * cannot know the form has such a field, or what the others are called, so
+   * every form request could only be refused.
+   */
+  form?: { name: string; fields: { name: string; label: string; type: string; span?: number }[] };
   /**
    * What was said just before this, oldest first.
    *
@@ -88,7 +106,7 @@ export async function planEdit(opts: {
    */
   history?: { role: "user" | "ai"; text: string }[];
 }): Promise<EditOp> {
-  const { apiKey, instruction, schema, available, chrome, history } = opts;
+  const { apiKey, instruction, schema, available, chrome, history, form } = opts;
   const ai = new GoogleGenAI({ apiKey });
 
   /*
@@ -159,6 +177,20 @@ export async function planEdit(opts: {
     .filter(Boolean)
     .join("\n");
 
+  /* Listed with widths, so "make it full width" has something to compare to. */
+  const formLines = form
+    ? `## The form on this page — "${form.name}"\n\n` +
+      form.fields
+        .map(
+          (f) =>
+            `- ${f.label} (stored as ${f.name}, ${f.type}, ${
+              typeof f.span === "number" ? `${f.span}/12 wide` : "half width"
+            })`,
+        )
+        .join("\n") +
+      "\n"
+    : "";
+
   const catalogue = available
     .filter((s) => !s.definition.placement || s.definition.placement === "page")
     .map((s) => `- ${s.key} (${s.category}): ${s.description}`)
@@ -201,6 +233,7 @@ ${conversation ? `## What was said just before this\n\n${conversation}\n` : ""}
 ${page || "(no sections yet)"}
 
 ${chromeLines ? `## Site-wide\n\n${chromeLines}\n` : ""}
+${formLines}
 ## Sections that can be added
 
 ${catalogue}
@@ -256,6 +289,17 @@ ${chromeCatalogue}
 - Use rewrite_section when the client wants different WORDS in one section, and
   put what they asked for in "instruction".
 - Use regenerate_page ONLY when they clearly want the whole page written again.
+- Use edit_form to change the FORM this page shows — add a question, remove
+  one, rename one, make one required, or change how wide it is. Put the action
+  in "action", the field the client named in "field" (their words, e.g.
+  "Company name"), and the new label, type or width in "label", "fieldType" or
+  "width". Widths are "third", "half", "two-thirds", "full", or a number of
+  twelfths. The form's current fields are listed above; never claim a form
+  cannot be changed from here.
+  add_field takes a width too, so "add a Company name field, full width" is ONE
+  operation — never refuse it as needing two steps. If a request names a new
+  field AND refers vaguely to "this field", assume they mean the one being
+  added; that is the only field the sentence introduces.
 - Pages are NOT your job and are handled before you see the instruction:
   creating a page, switching to one and rebuilding one all work. Never claim
   they are impossible. The one thing that genuinely cannot be done is DELETING
@@ -314,6 +358,16 @@ Return only the JSON object.`,
         kind,
         section: str("section") ?? "",
         count: typeof parsed.count === "number" ? parsed.count : 0,
+      };
+    case "edit_form":
+      return {
+        kind,
+        action: (parsed.action as "add_field") ?? "add_field",
+        field: str("field"),
+        label: str("label"),
+        fieldType: str("fieldType"),
+        width: str("width"),
+        required: str("required"),
       };
     case "rewrite_chrome":
       return {

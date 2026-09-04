@@ -19,6 +19,8 @@ import { isOptionField } from "@/lib/sections/types";
 import { plainRefusal } from "@/lib/ai/refusal";
 import { logEdit } from "@/lib/ai/edit-log";
 import { ensureSiteForm } from "@/lib/forms/ensure";
+import { applyFieldEdit } from "@/lib/forms/apply-field-edit";
+import type { FormFieldSpec } from "@/app/actions/forms";
 import { writeChromeWithHistory } from "@/lib/history/chrome";
 
 /**
@@ -115,6 +117,19 @@ async function runEdit(
   if (!business) return { ok: false, message: "This site has no business details yet." };
 
   const schema = (page.schemaJson ?? { nodes: [] }) as PageSchema;
+
+  /*
+   * The form this page embeds, if any. The planner cannot change what it
+   * cannot see: without this, "make Company name full width" had no way to
+   * know such a field existed and could only be refused.
+   */
+  const embedToken = (schema.nodes ?? []).find((n) => n.type === "FormEmbed")?.props?.formToken;
+  const attachedForm =
+    typeof embedToken === "string" && embedToken
+      ? await db.query.formDefinitions.findFirst({
+          where: eq(formDefinitions.embedToken, embedToken),
+        })
+      : undefined;
   const available = await sectionsForPlan(site?.plan ?? "starter");
 
   let op: EditOp;
@@ -128,6 +143,12 @@ async function runEdit(
         header: (site?.headerSchemaJson as { type?: string } | null)?.type,
         footer: (site?.footerSchemaJson as { type?: string } | null)?.type,
       },
+      form: attachedForm
+        ? {
+            name: attachedForm.name,
+            fields: (attachedForm.fields as FormFieldSpec[]) ?? [],
+          }
+        : undefined,
       // The transcript, so a follow-up like "connect the phone number" can be
       // resolved against the button the previous turn created.
       history: (await loadBuilderMessagesAction(siteId)).map((m) => ({
@@ -208,6 +229,40 @@ async function runEdit(
         chrome: { header: updated, footer: (site?.footerSchemaJson ?? null) as ChromeUpdate },
       };
     }
+  }
+
+  /*
+   * Changing a field on the form this page shows.
+   *
+   * Handled here rather than in applyOp because a form is not part of the page
+   * schema — it is a definition in Leads & forms that many pages may embed, so
+   * the change belongs to the form and shows up everywhere it appears.
+   */
+  if (op.kind === "edit_form") {
+    if (!attachedForm) {
+      return { ok: false, message: "This page doesn't show a form, so there's nothing to change." };
+    }
+
+    const result = applyFieldEdit((attachedForm.fields as FormFieldSpec[]) ?? [], {
+      action: op.action,
+      field: op.field,
+      label: op.label,
+      fieldType: op.fieldType,
+      width: op.width,
+      required: op.required,
+    });
+    if (!result.ok) return { ok: false, message: result.error };
+
+    await db
+      .update(formDefinitions)
+      .set({ fields: result.fields, updatedAt: new Date() })
+      // Ownership in the WHERE clause, so a form on another site is untouched.
+      .where(and(eq(formDefinitions.id, attachedForm.id), eq(formDefinitions.siteId, siteId)));
+
+    return {
+      ok: true,
+      message: `${result.describe} It changes everywhere this form appears.`,
+    };
   }
 
   /*

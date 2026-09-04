@@ -75,6 +75,26 @@ export type EditOp =
    * with a contact bar they never asked for.
    */
   | { kind: "rewrite_chrome"; slot: "header" | "footer"; instruction: string }
+  /**
+   * Changes a field on the form this page shows.
+   *
+   * The form is not a section — it is a definition in Leads & forms, embedded
+   * here — so none of the section operations reach it, and every request to add
+   * a question or widen a field was refused with "edit it in the form builder".
+   * Accurate, and a dead end: the client is looking at the form, describing the
+   * change, and being sent somewhere else to make it.
+   */
+  | {
+      kind: "edit_form";
+      action: "add_field" | "remove_field" | "set_width" | "set_required" | "rename_field";
+      /** Which field, by its label or its stored name. */
+      field?: string;
+      label?: string;
+      fieldType?: string;
+      /** "third" | "half" | "two-thirds" | "full", or a number of twelfths. */
+      width?: string;
+      required?: string;
+    }
   | { kind: "rewrite_section"; section: string; instruction: string }
   | { kind: "regenerate_page" }
   | { kind: "unsupported"; reason: string };
