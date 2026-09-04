@@ -3047,11 +3047,17 @@ body.yp-page {
    previewing is not a preview. */
 .yp-page .yp-embed__ph {
   display: block;
-  max-width: var(--vwf-max, 34rem);
+  /* Padding of its own, so the form inside never touches the dashed edge — and
+     box-sizing, or that padding pushes the content out through the border. */
+  padding: 1rem;
+  box-sizing: border-box;
+  max-width: calc(var(--vwf-max, 34rem) + 2rem);
   border: 1px dashed var(--line);
   border-radius: var(--vwf-radius, 12px);
 }
-.yp-page .yp-embed__ph > .vibewp-form { max-width: none; }
+/* The form fills the wrapper rather than keeping its own narrower cap, which
+   left the grid overflowing the dashed box on one side and short on the other. */
+.yp-page .yp-embed__ph > .vibewp-form { max-width: none; width: 100%; }
 
 /* The stand-in shown when no form is attached — bars, not fields, because
    there are no questions to show yet. Scoped to its own class so it cannot
@@ -3072,6 +3078,16 @@ body.yp-page {
 }
 .yp-page .yp-embed__skeleton em {
   grid-column: span 12; font-style: normal; font-size: 0.78rem; color: var(--muted);
+}
+
+/* The caption, in either form the preview takes. <em> is used for grouping,
+   not emphasis, so it must not inherit italics. */
+.yp-page .yp-embed__ph em {
+  display: block;
+  margin-top: 0.6rem;
+  font-style: normal;
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
 /* The one clickable thing in the preview, and it looks it. */

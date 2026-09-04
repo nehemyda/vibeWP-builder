@@ -80,8 +80,30 @@ export function sectionToTemplatePart(nodeType: string, props: unknown): string 
  * footer card in the library blank. This routes by placement and substitutes
  * the dynamic blocks so previews show something real.
  */
+/**
+ * The four questions the library card shows for a form section.
+ *
+ * A catalogue card has to look like the thing it is selling. With no site and
+ * no form, the preview fell back to grey bars — which said "unfinished", not
+ * "this is a contact form". These are illustrative and the caption says so;
+ * the real questions come from the client's own form once there is one.
+ */
+const EXAMPLE_FORM_FIELDS: FormPreviewField[] = [
+  { name: "name", label: "Your name", type: "text", required: true, span: 6 },
+  { name: "email", label: "Email", type: "email", required: true, span: 6 },
+  { name: "phone", label: "Phone", type: "tel", span: 12 },
+  { name: "message", label: "How can we help?", type: "textarea", required: true, span: 12 },
+];
+
 export function sectionPreviewMarkup(nodeType: string, props: unknown): string {
-  return withPreviewPlaceholders(sectionToTemplatePart(nodeType, props));
+  return withPreviewPlaceholders(
+    sectionToTemplatePart(nodeType, props),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    nodeType === "FormEmbed" ? EXAMPLE_FORM_FIELDS : undefined,
+  );
 }
 
 /**
