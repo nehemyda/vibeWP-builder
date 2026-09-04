@@ -107,8 +107,124 @@ export async function applyEditAction(opts: {
   }
 }
 
+/**
+ * One change from the canvas, where the operation is already known.
+ *
+ * The client picked a design from a panel, or pressed an arrow. There is
+ * nothing to interpret, so nothing is sent to a language model: this validates
+ * what was asked and hands it to the same machinery chat uses.
+ *
+ * VALIDATED HERE, not trusted. It arrives from a browser, so the design must
+ * exist and be allowed on this site's plan, and the operation must be one the
+ * canvas is actually able to ask for — a hand-written request naming
+ * `regenerate_page` or `edit_form` must not find a way in through the panel.
+ */
+export async function applyCanvasOpAction(opts: {
+  siteId: string;
+  slug: string;
+  op: CanvasOp;
+}): Promise<EditResult> {
+  const { siteId, slug, op } = opts;
+
+  if (!CANVAS_OPS.includes(op.kind)) {
+    return { ok: false, message: "That isn't a change the canvas can make." };
+  }
+
+  /*
+   * A sentence describing what happened, for the revision log and — where a
+   * swap has to write new copy — for the generation prompt. Built here rather
+   * than sent by the browser, so it always matches the operation performed.
+   */
+  const instruction = describeCanvasOp(op);
+
+  let chosenOp: unknown = op;
+  const record = (result: EditResult) => {
+    void logEdit({
+      siteId,
+      slug,
+      instruction,
+      op: chosenOp,
+      outcome: result.ok ? "ok" : "refused",
+      message: result.message,
+      source: "canvas",
+    });
+    return result;
+  };
+
+  try {
+    return record(await runEdit({ siteId, slug, instruction, op }, (chosen) => { chosenOp = chosen; }));
+  } catch (err) {
+    void logEdit({
+      siteId,
+      slug,
+      instruction,
+      op: chosenOp,
+      outcome: "error",
+      message: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      source: "canvas",
+    });
+    throw err;
+  }
+}
+
+/**
+ * The operations the canvas may ask for.
+ *
+ * An allow-list rather than the whole EditOp union: every one of these is
+ * something the client can point at, and the ones left out — regenerating a
+ * page, editing a form's fields, rewriting copy — have their own interfaces
+ * where they can be confirmed properly.
+ */
+export type CanvasOp =
+  | Extract<EditOp, { kind: "swap_section" }>
+  | Extract<EditOp, { kind: "move_section" }>
+  | Extract<EditOp, { kind: "remove_section" }>
+  | Extract<EditOp, { kind: "add_section" }>
+  | Extract<EditOp, { kind: "swap_chrome" }>;
+
+const CANVAS_OPS: CanvasOp["kind"][] = [
+  "swap_section",
+  "move_section",
+  "remove_section",
+  "add_section",
+  "swap_chrome",
+];
+
+function describeCanvasOp(op: CanvasOp): string {
+  const name = (key: string) => getSectionByKey(key)?.name ?? key;
+  switch (op.kind) {
+    case "swap_section":
+      return `Changed the ${op.section} to the ${name(op.design)}`;
+    case "swap_chrome":
+      return `Changed the ${op.slot} to the ${name(op.section)}`;
+    case "move_section":
+      return `Moved the ${op.section}`;
+    case "remove_section":
+      return `Removed the ${op.section}`;
+    case "add_section":
+      return `Added the ${name(op.section)}`;
+  }
+}
+
 async function runEdit(
-  opts: { siteId: string; slug: string; instruction: string },
+  opts: {
+    siteId: string;
+    slug: string;
+    instruction: string;
+    /**
+     * The operation to perform, when the caller already knows it.
+     *
+     * Supplied by the canvas, where the client has picked a design from a
+     * panel or pressed an arrow. Asking a language model to work out what
+     * "move this down one" means, from a button whose whole purpose is to mean
+     * exactly that, would add a second or two, a Gemini call and a chance of
+     * being wrong to an action that has none of those today.
+     *
+     * Everything AFTER planning is shared deliberately: the form repair, the
+     * contact facts, the revision, the message. A second path would drift.
+     */
+    op?: EditOp;
+  },
   noteOp: (op: unknown) => void,
 ): Promise<EditResult> {
   const { siteId, slug, instruction } = opts;
@@ -197,7 +313,9 @@ async function runEdit(
   const available = await sectionsForPlan(site?.plan ?? "starter");
 
   let op: EditOp;
-  try {
+  if (opts.op) {
+    op = opts.op;
+  } else try {
     op = await planEdit({
       apiKey: settings.geminiApiKey,
       instruction,

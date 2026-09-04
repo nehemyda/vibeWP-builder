@@ -32,6 +32,16 @@ export type EditLogEntry = {
   outcome: "ok" | "refused" | "error";
   /** What the client was told. */
   message: string;
+  /**
+   * Where the change came from.
+   *
+   * Chat and the canvas fail in different ways — chat can misread a sentence,
+   * the canvas cannot — so a log that does not distinguish them makes the
+   * planner look worse than it is, and hides a canvas bug among the
+   * misreadings. Absent means chat, which is everything logged before the
+   * canvas could edit anything.
+   */
+  source?: "chat" | "canvas";
 };
 
 export async function logEdit(entry: Omit<EditLogEntry, "at">): Promise<void> {

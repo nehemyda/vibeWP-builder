@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   schemaToGutenberg,
   sectionToTemplatePart,
@@ -9,6 +10,8 @@ import {
 import { getSectionByKey, getSectionByNodeType } from "@/lib/sections";
 import { PreviewFrame, type CanvasSelection, type SectionBox } from "@/app/builder/[[...slug]]/PreviewFrame";
 import { CanvasOverlay } from "@/app/builder/[[...slug]]/CanvasOverlay";
+import { DesignPanel, type CatalogueEntry } from "@/app/builder/[[...slug]]/DesignPanel";
+import { SECTIONS } from "@/lib/sections";
 import styles from "@/app/builder/[[...slug]]/builder.module.css";
 import harness from "./harness.module.css";
 
@@ -24,10 +27,44 @@ const FIXTURE = [
 ];
 
 export function CanvasHarness() {
-  const [selection, setSelection] = useState<CanvasSelection | null>(null);
+  /*
+   * ?panel=<index> or ?panel=header opens the panel on load.
+   *
+   * So looking at the panel needs no scripted clicking — which matters because
+   * a programmatic click does not always repaint in an embedded browser, and a
+   * stale screenshot is worse than none. Read in the state initialiser rather
+   * than an effect, so there is no second render and nothing to hydrate twice.
+   */
+  const params = useSearchParams();
+  const fromUrl = ((): CanvasSelection | null => {
+    const want = params.get("panel");
+    if (!want) return null;
+    return want === "header" || want === "footer"
+      ? { kind: "chrome", slot: want }
+      : { kind: "node", index: Number(want) || 0 };
+  })();
+
+  const [selection, setSelection] = useState<CanvasSelection | null>(fromUrl);
   const [boxes, setBoxes] = useState<SectionBox[]>([]);
   const [log, setLog] = useState<string[]>([]);
   const [order, setOrder] = useState<string[]>(FIXTURE);
+  const [panelFor, setPanelFor] = useState<CanvasSelection | null>(fromUrl);
+  const [origin, setOrigin] = useState<string | undefined>(undefined);
+
+
+
+  const catalogue: CatalogueEntry[] = SECTIONS.map((s) => ({
+    key: s.key,
+    nodeType: s.nodeType,
+    name: s.name,
+    description: s.description,
+    category: s.category,
+  }));
+
+  const CHROME = { header: "header-cta", footer: "footer-columns" } as const;
+
+  const keyOf = (sel: CanvasSelection) =>
+    sel.kind === "chrome" ? CHROME[sel.slot] : order[sel.index];
 
   const note = (line: string) => setLog((prev) => [line, ...prev].slice(0, 8));
 
@@ -84,7 +121,11 @@ export function CanvasHarness() {
             boxes={boxes}
             selection={selection}
             labelFor={labelFor}
-            onChangeDesign={(sel) => note(`change design: ${labelFor(sel)}`)}
+            onChangeDesign={(sel) => {
+              setPanelFor(sel);
+              setOrigin(keyOf(sel));
+              note(`open panel for ${labelFor(sel)}`);
+            }}
             onMove={(sel, dir) => {
               if (sel.kind !== "node") return;
               const next = [...order];
@@ -104,6 +145,32 @@ export function CanvasHarness() {
           />
         </div>
       </div>
+
+      {panelFor && (
+        <DesignPanel
+          selection={panelFor}
+          currentKey={keyOf(panelFor)}
+          currentProps={(getSectionByKey(keyOf(panelFor))?.sample ?? {}) as Record<string, unknown>}
+          catalogue={catalogue}
+          originKey={origin}
+          context={{
+            siteName: "Sunrise Bakery",
+            facts: { phone: "01225 447 812", email: "hello@example.com", address: "14 Market Street, Bath", hours: "Mon–Fri 9–5" },
+            pages: [{ slug: "home", title: "Home" }, { slug: "contact", title: "Contact" }],
+            formFields: [],
+            formStyle: {},
+          }}
+          onPick={(key) => {
+            if (panelFor.kind === "node") {
+              const next = [...order];
+              next[panelFor.index] = key;
+              setOrder(next);
+            }
+            note(`pick ${key}`);
+          }}
+          onClose={() => setPanelFor(null)}
+        />
+      )}
 
       <aside className={harness.panel}>
         <strong style={{ display: "block", marginBottom: 8 }}>Canvas harness</strong>

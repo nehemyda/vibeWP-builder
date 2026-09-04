@@ -171,8 +171,14 @@ export function PreviewFrame({
    * parent re-renders on every click, and re-attaching the whole apparatus on
    * each one is how a click starts costing a reflow.
    */
-  const handlers = useRef({ onNavigate, onSelect, onGeometry });
-  handlers.current = { onNavigate, onSelect, onGeometry };
+  const handlers = useRef({ onNavigate, onSelect, onGeometry, selection });
+  // Assigned in an effect rather than during render: writing a ref while
+  // rendering is what React's own lint now rejects, and `selection` rides
+  // along so attach() cannot paint an outline for a section that is no longer
+  // the one selected.
+  useEffect(() => {
+    handlers.current = { onNavigate, onSelect, onGeometry, selection };
+  });
 
   /*
    * `yp-page` on <body> is what activates the theme's rules: every selector in
@@ -413,7 +419,7 @@ export function PreviewFrame({
 
       // Measure now rather than waiting for the first callback.
       measure();
-      paintSelection(contentDoc, selection ?? null);
+      paintSelection(contentDoc, handlers.current.selection ?? null);
     };
 
     iframe.addEventListener("load", attach);

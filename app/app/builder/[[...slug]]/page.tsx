@@ -17,6 +17,7 @@ import { loadIntakeAction } from "@/app/actions/intake";
 import { getPlatformSettings } from "@/lib/platform-settings";
 import { formDefinitions } from "@/lib/db/schema";
 import { loadBusinessContext, contactFactsFor } from "@/lib/ai/business-context";
+import { sectionsForPlan } from "@/lib/sections/resolve";
 import { BuilderApp } from "./BuilderApp";
 
 /**
@@ -165,8 +166,26 @@ export default async function BuilderPage({
     backLabel = "Site detail";
   }
 
+  /*
+   * The designs this site may use, for the canvas's Change design panel.
+   *
+   * Only the serialisable half: `definition` holds functions, so it cannot
+   * cross to the client — and does not need to, because the whole registry is
+   * already in the client bundle. What the client cannot know is POLICY: which
+   * sections an admin has switched off, renamed or restricted by plan. That is
+   * what travels.
+   */
+  const catalogue = (await sectionsForPlan(site.plan ?? "starter")).map((s) => ({
+    key: s.key,
+    nodeType: s.nodeType,
+    name: s.name,
+    description: s.description,
+    category: s.category,
+  }));
+
   return (
     <BuilderApp
+      catalogue={catalogue}
       siteId={site.id}
       smbId={site.smbId ?? ""}
       initialPages={allPages.map((p) => ({

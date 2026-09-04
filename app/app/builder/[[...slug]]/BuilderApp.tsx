@@ -19,13 +19,17 @@ import {
   type HistoryState,
 } from "@/app/actions/pages";
 import { detectIntent } from "@/lib/page-intent";
+import { getSectionByKey, getSectionByNodeType } from "@/lib/sections";
+import { applyCanvasOpAction, type CanvasOp } from "@/app/actions/edit";
 import {
   schemaToGutenberg,
   sectionToTemplatePart,
   withPreviewPlaceholders,
   withSiteLogo,
 } from "@/lib/wp/serialize";
-import { PreviewFrame } from "./PreviewFrame";
+import { PreviewFrame, type CanvasSelection, type SectionBox } from "./PreviewFrame";
+import { CanvasOverlay } from "./CanvasOverlay";
+import { DesignPanel, type CatalogueEntry } from "./DesignPanel";
 import { WordPressLockNotice } from "./WordPressLockNotice";
 import { SiteDetailsDrawer, type SiteDetails } from "./SiteDetailsDrawer";
 import type { WpEditLock } from "@/lib/wp/local-driver";
@@ -182,6 +186,7 @@ const ReloadIcon = () => (
 );
 
 export function BuilderApp({
+  catalogue,
   siteId,
   smbId,
   initialPages,
@@ -201,6 +206,14 @@ export function BuilderApp({
   prompt,
   autostart,
 }: {
+  /**
+   * The designs this site may use, resolved on the server.
+   *
+   * Policy only — which sections are switched on, what the admin renamed them
+   * to, which plans may use them. The structure comes from the registry, which
+   * the client already imports for the canvas.
+   */
+  catalogue: CatalogueEntry[];
   siteId: string;
   smbId: string;
   initialPages: PageSummary[];
@@ -307,6 +320,30 @@ export function BuilderApp({
    * failed to load, none of which a prop change clears.
    */
   const [reloadKey, setReloadKey] = useState(0);
+
+  /* ---- canvas selection ---- */
+  /**
+   * The page's nodes, typed.
+   *
+   * `schema` is held as a loose record because it arrives as a server prop and
+   * is written back as jsonb; the canvas needs to read a node's type and props,
+   * so the narrowing happens once here rather than at each use.
+   */
+  const nodes = (schema?.nodes ?? []) as Array<{
+    type?: string;
+    props?: Record<string, unknown>;
+  }>;
+
+  const [selection, setSelection] = useState<CanvasSelection | null>(null);
+  const [boxes, setBoxes] = useState<SectionBox[]>([]);
+  const [designFor, setDesignFor] = useState<CanvasSelection | null>(null);
+  /*
+   * The design each section had when its panel was opened, so "back to how it
+   * was" survives trying five in a row. Session-only and per section: the
+   * durable route back is the revision history, which every swap writes to.
+   */
+  const [swapOrigin, setSwapOrigin] = useState<Record<string, string>>({});
+  const [canvasBusy, setCanvasBusy] = useState(false);
   /** Seeded from the server so an already-exported site shows its links on load. */
   const [wpUrl, setWpUrl] = useState<string | null>(initialWpUrl);
   const [pages, setPages] = useState<PageSummary[]>(initialPages);
@@ -882,6 +919,101 @@ export function BuilderApp({
    * produced the same six sections and reported success — work claimed but not
    * done. If the instruction cannot be carried out, this now says so instead.
    */
+  /* ── the canvas as an editor ──────────────────────────────────────── */
+
+  /** The registry key of whatever is selected — the design in place now. */
+  function keyOfSelection(sel: CanvasSelection): string | undefined {
+    if (sel.kind === "chrome") {
+      const node = sel.slot === "header" ? chrome.header : chrome.footer;
+      return node ? getSectionByNodeType(node.type)?.key : undefined;
+    }
+    return getSectionByNodeType(nodes[sel.index]?.type)?.key;
+  }
+
+  function labelOfSelection(sel: CanvasSelection): string {
+    const key = keyOfSelection(sel);
+    const name = key ? getSectionByKey(key)?.name : undefined;
+    if (name) return name;
+    return sel.kind === "chrome" ? (sel.slot === "header" ? "Header" : "Footer") : "Section";
+  }
+
+  /** The props the selected thing holds now, which is what a swap carries. */
+  function propsOfSelection(sel: CanvasSelection): Record<string, unknown> {
+    if (sel.kind === "chrome") {
+      const node = sel.slot === "header" ? chrome.header : chrome.footer;
+      return (node?.props ?? {}) as Record<string, unknown>;
+    }
+    return nodes[sel.index]?.props ?? {};
+  }
+
+  /**
+   * One structured change from the canvas.
+   *
+   * The reply lands in the transcript like any other edit. A change made by
+   * clicking is still a change to the site, and a client who then asks chat
+   * "what did you just do" should find it there — and the history buttons and
+   * "undo" read the same revision either way.
+   */
+  async function runCanvasOp(op: CanvasOp, spoken: string) {
+    setCanvasBusy(true);
+    const aiId = nextId();
+    setMessages((prev) => [...prev, { id: aiId, role: "ai", text: `${spoken}…`, steps: [] }]);
+
+    let result;
+    try {
+      result = await applyCanvasOpAction({ siteId, slug: activeSlug, op });
+    } catch {
+      const failed = "I couldn't reach the builder. Nothing was changed.";
+      setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: failed } : m)));
+      remember("ai", failed);
+      setCanvasBusy(false);
+      return;
+    }
+
+    // Chrome lives on the site, not the page, so nothing below carries it.
+    if (result.ok && "chrome" in result && result.chrome) {
+      setChrome(result.chrome as typeof chrome);
+    }
+    if (result.ok) {
+      const refreshed = await listPagesAction(siteId);
+      setPages(refreshed);
+      paintFrom(refreshed, activeSlug);
+      await refreshHistory(activeSlug);
+    }
+
+    setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: result.message } : m)));
+    remember("ai", result.message);
+    setCanvasBusy(false);
+  }
+
+  function openDesignPanel(sel: CanvasSelection) {
+    const key = keyOfSelection(sel);
+    const id = sel.kind === "chrome" ? sel.slot : `n${sel.index}`;
+    // Remembered once per section, on the first open, so it is the design they
+    // started from rather than the one they tried a moment ago.
+    if (key) setSwapOrigin((prev) => (id in prev ? prev : { ...prev, [id]: key }));
+    setDesignFor(sel);
+    // The panel takes the chat pane's slot, so chat steps aside for it.
+    setChatOpen(false);
+  }
+
+  function pickDesign(sel: CanvasSelection, design: string) {
+    const name = getSectionByKey(design)?.name ?? "that design";
+    if (sel.kind === "chrome") {
+      void runCanvasOp(
+        { kind: "swap_chrome", slot: sel.slot, section: design },
+        `Changing your ${sel.slot} to the ${name}`,
+      );
+      return;
+    }
+    const ref = nodes[sel.index]?.type;
+    if (!ref) return;
+    void runCanvasOp(
+      { kind: "swap_section", section: ref, design },
+      `Changing the ${labelOfSelection(sel)} to the ${name}`,
+    );
+  }
+
   async function runEdit(text: string) {
     setGenerating(true);
     setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
@@ -1387,13 +1519,19 @@ export function BuilderApp({
                     // the live site will.
                     withSiteLogo(
                       chrome.header
-                        ? sectionToTemplatePart(chrome.header.type, chrome.header.props)
+                        ? sectionToTemplatePart(chrome.header.type, chrome.header.props, {
+                            mark: "header",
+                          })
                         : "",
                       Boolean(intake.data.logoUrl),
                     ) +
-                      schemaToGutenberg(schema) +
+                      // markNodes: the canvas is an editor now, and a click has to
+                      // trace back to a node. Opt-in, so export stays untouched.
+                      schemaToGutenberg(schema, { markNodes: true }) +
                       (chrome.footer
-                        ? sectionToTemplatePart(chrome.footer.type, chrome.footer.props)
+                        ? sectionToTemplatePart(chrome.footer.type, chrome.footer.props, {
+                            mark: "footer",
+                          })
                         : ""),
                     siteName,
                     facts,
@@ -1419,6 +1557,16 @@ export function BuilderApp({
                   onNavigate={(slug) => {
                     if (pages.some((p) => p.slug === slug)) switchToPage(slug);
                   }}
+                  selection={selection}
+                  onSelect={(sel) => {
+                    setSelection(sel);
+                    // Clicking a different section while the panel is open
+                    // retargets it, rather than leaving it pointed at the
+                    // section that is no longer outlined.
+                    if (sel && designFor) openDesignPanel(sel);
+                    if (!sel) setDesignFor(null);
+                  }}
+                  onGeometry={setBoxes}
                 />
               ) : (
                 <div className={styles.emptyCanvas}>
@@ -1427,11 +1575,79 @@ export function BuilderApp({
                     : "Nothing built yet — describe your business in the chat to get started."}
                 </div>
               )}
+
+              {schema && (
+                <CanvasOverlay
+                  boxes={boxes}
+                  selection={selection}
+                  labelFor={labelOfSelection}
+                  busy={canvasBusy || generating}
+                  onChangeDesign={openDesignPanel}
+                  onMove={(sel, direction) => {
+                    if (sel.kind !== "node") return;
+                    const to = sel.index + direction;
+                    const mine = nodes[sel.index]?.type;
+                    const neighbour = nodes[to]?.type;
+                    if (!mine || !neighbour) return;
+                    /*
+                     * Named by the NEIGHBOUR rather than by an index, because
+                     * that is what move_section takes: it places a section
+                     * before or after another one, so "up" is "before the one
+                     * above" and "down" is "after the one below".
+                     */
+                    void runCanvasOp(
+                      direction < 0
+                        ? { kind: "move_section", section: mine, before: neighbour }
+                        : { kind: "move_section", section: mine, after: neighbour },
+                      `Moving the ${labelOfSelection(sel)} ${direction < 0 ? "up" : "down"}`,
+                    );
+                    setSelection({ kind: "node", index: to });
+                  }}
+                  onRemove={(sel) => {
+                    if (sel.kind !== "node") return;
+                    const mine = nodes[sel.index]?.type;
+                    if (!mine) return;
+                    void runCanvasOp(
+                      { kind: "remove_section", section: mine },
+                      `Removing the ${labelOfSelection(sel)}`,
+                    );
+                    setSelection(null);
+                    setDesignFor(null);
+                  }}
+                />
+              )}
             </div>
           </div>
         </div>
 
-        {!chatOpen && (
+        {designFor && keyOfSelection(designFor) && (
+          <DesignPanel
+            selection={designFor}
+            currentKey={keyOfSelection(designFor)!}
+            currentProps={propsOfSelection(designFor)}
+            catalogue={catalogue}
+            originKey={swapOrigin[designFor.kind === "chrome" ? designFor.slot : `n${designFor.index}`]}
+            busy={canvasBusy || generating}
+            context={{
+              siteName,
+              facts,
+              logoUrl: intake.data.logoUrl,
+              pages: pages.map((p) => ({ slug: p.slug, title: p.title })),
+              formFields: activeForm?.fields ?? [],
+              formToken: activeFormToken,
+              formStyle: activeForm?.style ?? {},
+              colors: intake.data.colors,
+            }}
+            onPick={(design) => pickDesign(designFor, design)}
+            onClose={() => {
+              setDesignFor(null);
+              // Chat comes back, because it stepped aside for the panel.
+              setChatOpen(true);
+            }}
+          />
+        )}
+
+        {!chatOpen && !designFor && (
           <button
             type="button"
             className={styles.chatFab}

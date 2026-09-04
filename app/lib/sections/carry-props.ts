@@ -49,7 +49,9 @@ import { isOptionField, type FieldSpec, type SectionDefinition } from "./types";
  */
 
 type Props = Record<string, unknown>;
-type AnySection = SectionDefinition<any>;
+/* The same concrete parameterisation resolve.ts uses for a heterogeneous
+   registry, rather than `any`. */
+type AnySection = SectionDefinition<Record<string, unknown>>;
 
 export type CarryResult = {
   /** What carries. Ready to hand to the target's toGutenberg. */
