@@ -125,8 +125,20 @@ export function planChrome(available: ResolvedSection[]): PlannedSection[] {
 function slotsFor(slug: string): Slot[] {
   if (slug === "home") return HOME;
   if (/^(services|our-services|what-we-do|treatments|pricing|prices)$/.test(slug)) return SERVICES;
-  /* The names people actually give a contact page. */
-  if (/^(contact|contact-us|get-in-touch|enquiries|enquiry|book|booking)$/.test(slug)) return CONTACT;
+  /*
+   * The names people actually give a page whose point is a form.
+   *
+   * "quote" was missing, so "create a quote page and add a quote form" produced
+   * a hero, some prose and a call to action — a page for requesting a quote
+   * with no way to request one.
+   */
+  if (
+    /^(contact|contact-us|get-in-touch|enquiries|enquiry|book|booking|quote|quotes|get-a-quote|request-a-quote|estimate|consultation|appointment)$/.test(
+      slug,
+    )
+  ) {
+    return CONTACT;
+  }
   return INNER;
 }
 
@@ -140,12 +152,45 @@ export type PlannedSection = { job: string; section: ResolvedSection };
  * a deploy — and the slot falls through to its next candidate rather than
  * leaving a hole.
  */
-export function planPage(slug: string, available: ResolvedSection[]): PlannedSection[] {
+/**
+ * Does the client's own sentence ask for a form?
+ *
+ * The slug list will always be incomplete — "Request a callback", "Start your
+ * order", "Work with us" all want a form and none of them match. What someone
+ * TYPED is better evidence than what we guessed their page should be called,
+ * so an explicit request wins regardless of the slug.
+ */
+function instructionWantsForm(instruction?: string): boolean {
+  return /\b(form|enquir|enquiry|quote|contact us|get in touch|book|booking|request)\b/i.test(
+    instruction ?? "",
+  );
+}
+
+export function planPage(
+  slug: string,
+  available: ResolvedSection[],
+  /** What the client actually asked for, when a page is made from a sentence. */
+  instruction?: string,
+): PlannedSection[] {
   const byKey = new Map(available.map((s) => [s.key, s]));
   const used = new Set<string>();
   const out: PlannedSection[] = [];
 
-  for (const slot of slotsFor(slug)) {
+  const slots = [...slotsFor(slug)];
+
+  /*
+   * Asked for a form on a page whose plan has none — add one before the closing
+   * ask, where a form belongs. Without this the request was silently ignored:
+   * the page was built, reported as three sections, and contained nothing to
+   * fill in.
+   */
+  const hasFormSlot = slots.some((slot) => slot.candidates.includes("form-embed"));
+  if (!hasFormSlot && instructionWantsForm(instruction)) {
+    const lastIndex = slots.length > 1 ? slots.length - 1 : slots.length;
+    slots.splice(lastIndex, 0, { job: "The form", candidates: ["form-embed"] });
+  }
+
+  for (const slot of slots) {
     const pick = slot.candidates
       .map((k) => byKey.get(k))
       .find((s): s is ResolvedSection => Boolean(s) && !used.has(s!.key));

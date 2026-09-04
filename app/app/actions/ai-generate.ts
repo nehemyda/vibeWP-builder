@@ -84,7 +84,8 @@ export async function generatePageAction(opts: {
   const settings = await getAiProviderSettings();
 
   const available = await sectionsForPlan(site?.plan ?? "starter");
-  const plan = planPage(slug, available);
+  // The client's own words, so an explicit "add a form" is not lost to the slug.
+  const plan = planPage(slug, available, instruction);
 
   /*
    * Header and footer are chosen once and then left alone. Re-picking them on
