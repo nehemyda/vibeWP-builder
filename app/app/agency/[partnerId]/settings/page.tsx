@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { businessProfiles, plans, smtpSettings } from "@/lib/db/schema";
 import { requireAgency } from "@/lib/auth/require-agency";
 import { SmtpForm } from "@/components/dashboard/SmtpForm";
-import { saveAgencySmtpAction } from "@/app/actions/smtp-scoped";
+import { saveAgencySmtpAction, testSmtpAction } from "@/app/actions/smtp-scoped";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CopyableText } from "@/components/dashboard/CopyableText";
 import { BusinessDetailsFields } from "@/components/dashboard/BusinessDetailsFields";
@@ -185,6 +185,8 @@ export default async function AgencySettingsPage({
         </h2>
         <SmtpForm
           action={saveAgencySmtpAction.bind(null, agency.partnerId ?? "")}
+          testAction={testSmtpAction.bind(null, "agency", agency.partnerId ?? "")}
+          testDefaultTo=""
           ownLabel="your agency"
           activeLevel={ownSmtp?.host ? "agency" : "global"}
           activeFrom={

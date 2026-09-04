@@ -10,7 +10,7 @@ import { smbNav } from "../nav";
 import { updateSiteSettingsAction } from "@/app/actions/sites";
 import { upsertBusinessProfileAction } from "@/app/actions/business-profile";
 import { SmtpForm } from "@/components/dashboard/SmtpForm";
-import { saveSiteSmtpAction, describeSmtpForSite } from "@/app/actions/smtp-scoped";
+import { saveSiteSmtpAction, describeSmtpForSite, testSmtpAction } from "@/app/actions/smtp-scoped";
 
 type Profile = typeof profiles.$inferSelect;
 type Site = typeof sites.$inferSelect;
@@ -36,6 +36,8 @@ async function smtpPanel(siteId: string, smbId: string) {
       </h2>
       <SmtpForm
         action={saveSiteSmtpAction.bind(null, smbId)}
+        testAction={testSmtpAction.bind(null, "site", smbId)}
+        testDefaultTo=""
         ownLabel="this site"
         activeLevel={active.configured ? active.level : null}
         activeFrom={active.configured ? `${active.fromName} <${active.fromEmail}>` : null}

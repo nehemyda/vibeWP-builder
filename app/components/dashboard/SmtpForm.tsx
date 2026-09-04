@@ -1,4 +1,5 @@
 import shell from "./dashboard-shell.module.css";
+import { SmtpTestButton } from "./SmtpTestButton";
 
 /**
  * The mail-account form, shared by an agency and a client.
@@ -34,6 +35,8 @@ const input: React.CSSProperties = {
 
 export function SmtpForm({
   action,
+  testAction,
+  testDefaultTo,
   current,
   activeLevel,
   activeFrom,
@@ -55,6 +58,10 @@ export function SmtpForm({
   activeFrom: string | null;
   /** "this site" or "your agency", for the sentence. */
   ownLabel: string;
+  /** Sends a test using the values currently typed. */
+  testAction: (formData: FormData) => Promise<{ ok: true; to: string } | { ok: false; error: string }>;
+  /** Whoever is looking at the page, as the default recipient. */
+  testDefaultTo: string;
 }) {
   const usingOwn = activeLevel === "site" || activeLevel === "agency";
 
@@ -132,6 +139,15 @@ export function SmtpForm({
         <button type="submit" className={`${shell.btn} ${shell.btnPrimary}`} style={{ justifySelf: "start" }}>
           Save mail settings
         </button>
+
+        {/*
+          Inside the form, so it tests what is on screen rather than what was
+          saved — a wrong password can be corrected and retried without ever
+          committing it.
+        */}
+        <div style={{ borderTop: "1px solid var(--line, #e6e8ee)", paddingTop: "0.9rem" }}>
+          <SmtpTestButton action={testAction} defaultTo={testDefaultTo} />
+        </div>
       </form>
     </div>
   );
