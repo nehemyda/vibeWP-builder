@@ -48,6 +48,25 @@
   --line:        var(--wp--preset--color--line,        #dbdee3);
 
   --radius: 10px;
+
+  /*
+   * The faintest text, for small print.
+   *
+   * It was READ twice — .yp-pricing__footnote and .yp-logos__note — and
+   * defined nowhere the stylesheet could see, so both declarations were
+   * invalid at computed-value time and both elements inherited the body's
+   * near-black --ink instead. Legal small print and a logo caption rendering
+   * at headline colour, on every site, in the builder and on the front end
+   * alike. It went unnoticed because a colour that fails to resolve inherits
+   * rather than disappearing.
+   *
+   * A literal, not a palette preset: this is a neutral, and the neutrals are
+   * identical across all four brand palettes — only `primary` varies. Adding
+   * a ninth preset slug would create a channel theme.json does not declare,
+   * which is the same mistake in a new place.
+   */
+  --faint: #9aa0aa;
+
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 

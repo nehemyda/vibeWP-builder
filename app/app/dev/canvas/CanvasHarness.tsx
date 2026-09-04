@@ -22,6 +22,11 @@ const FIXTURE = [
   "features-grid",
   "testimonials",
   "faq",
+  // Both carry small print that reads --faint, which was defined nowhere and
+  // rendered at full body ink until it was fixed. Here so the difference is
+  // visible without a login.
+  "conversion-pricing",
+  "conversion-logos",
   "contact-block",
   "cta-band",
   "cta-band",
