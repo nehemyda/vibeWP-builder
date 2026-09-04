@@ -44,7 +44,21 @@ import { resolveSitePaths } from "@/lib/site-paths";
 export type ChromeUpdate = { type: string; props: Record<string, unknown> } | null;
 
 export type EditResult =
-  | { ok: true; message: string; regenerate?: false; chrome?: { header: ChromeUpdate; footer: ChromeUpdate } }
+  | {
+      ok: true;
+      message: string;
+      regenerate?: false;
+      chrome?: { header: ChromeUpdate; footer: ChromeUpdate };
+      /**
+       * The form's fields after the change, so the canvas can repaint.
+       *
+       * The builder receives them as a server prop and never refetches, so a
+       * field added by chat was saved and stayed invisible — the reply said it
+       * had been added while the form on screen disagreed. Same fault chrome
+       * had, and the same fix: hand the new state back with the result.
+       */
+      formFields?: { name: string; label: string; type: string; required?: boolean; span?: number }[];
+    }
   | { ok: true; message: string; regenerate: true }
   | { ok: false; message: string };
 
@@ -317,6 +331,7 @@ async function runEdit(
     return {
       ok: true,
       message: `${result.describe} It changes everywhere this form appears.`,
+      formFields: result.fields,
     };
   }
 

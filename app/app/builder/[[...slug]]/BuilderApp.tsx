@@ -265,6 +265,14 @@ export function BuilderApp({
    * pages leaves them alone — which is the whole point of a template part.
    */
   const [chrome, setChrome] = useState(initialChrome);
+  /*
+   * Seeded from the server, then kept current by chat.
+   *
+   * As a bare prop it never changed after a form edit: the field was saved and
+   * the canvas kept drawing the old questions, so the reply and the screen
+   * disagreed about what had just happened.
+   */
+  const [fields, setFields] = useState(formFields);
   const [intake, setIntake] = useState(initialIntake);
   /*
    * Open on a first build, closed afterwards.
@@ -899,6 +907,11 @@ export function BuilderApp({
       setChrome(result.chrome as typeof chrome);
     }
 
+    // A form edit changes the canvas as surely as a section edit does.
+    if (result.ok && "formFields" in result && result.formFields) {
+      setFields(result.formFields as typeof fields);
+    }
+
     // The instruction genuinely asked for the page to be written again.
     if (result.ok && "regenerate" in result && result.regenerate) {
       setMessages((prev) => prev.filter((m) => m.id !== aiId));
@@ -1378,7 +1391,7 @@ export function BuilderApp({
                     // actually has. The exported site's navigation falls back
                     // to exactly this list.
                     pages.map((p) => ({ slug: p.slug, title: p.title })),
-                    formFields,
+                    fields,
                     formToken ?? undefined,
                     formStyle,
                   )}
