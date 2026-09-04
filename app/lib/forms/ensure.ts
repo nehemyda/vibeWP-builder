@@ -56,9 +56,16 @@ export function purposeFrom(instruction?: string): { key: string; name: string }
   for (const [key, name] of PURPOSES) {
     // Only when it is the KIND of form being asked for, not any mention of the
     // word: "quote form", "booking form", "form for bookings".
+    /*
+     * Up to two words may sit between the purpose and "form".
+     *
+     * "quote request form" and "booking request form" are how people actually
+     * say it, and requiring them to be adjacent missed both — the request fell
+     * through to the contact form, which was then named in the reply.
+     */
     if (
-      new RegExp(`\\b${key}\\w*\\s+form\\b`).test(text) ||
-      new RegExp(`\\bform\\s+for\\s+\\w*\\s*${key}`).test(text)
+      new RegExp(`\\b${key}\\w*(?:\\s+\\w+){0,2}\\s+form\\b`).test(text) ||
+      new RegExp(`\\bform\\s+for\\s+(?:\\w+\\s+){0,2}${key}`).test(text)
     ) {
       return { key, name };
     }

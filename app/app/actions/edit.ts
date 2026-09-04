@@ -3,7 +3,7 @@
 import { eq, and } from "drizzle-orm";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
-import { sites, sitePages } from "@/lib/db/schema";
+import { sites, sitePages, formDefinitions } from "@/lib/db/schema";
 import { canEditSite } from "@/app/actions/sites";
 import { savePageSchemaAction } from "@/app/actions/pages";
 import { getAiProviderSettings } from "@/lib/ai-provider-settings";
@@ -479,6 +479,33 @@ async function runEdit(
     if (op.kind === "add_section" && resolved.definition.nodeType === "FormEmbed") {
       const token = await ensureSiteForm(siteId, business.businessName, instruction);
       if (token) newProps.formToken = token;
+
+      /*
+       * A page holds ONE form. Asking for a quote form on a page that already
+       * shows the contact one means "show the quote form here", not "show two" —
+       * and adding a second produced a page with two identical-looking forms
+       * feeding different inboxes, which is worse than either outcome.
+       *
+       * Swapping the existing node's token also keeps its heading and intro,
+       * which the client may have written.
+       */
+      const existingForm = (schema.nodes ?? []).find((n) => n.type === "FormEmbed");
+      if (existingForm && token) {
+        const nodes = (schema.nodes ?? []).map((n) =>
+          n === existingForm ? { ...n, props: { ...(n.props ?? {}), formToken: token } } : n,
+        );
+        await savePageSchemaAction({
+          siteId,
+          slug,
+          schema: { ...schema, nodes } as Record<string, unknown>,
+          reason: instruction,
+        });
+        const formName = await formNameFor(token);
+        return {
+          ok: true,
+          message: `This page now shows the ${formName}. Say "undo" to put it back.`,
+        };
+      }
     }
 
     if (op.kind === "add_section" && op.columns && "columns" in resolved.definition.fields) {
@@ -515,13 +542,34 @@ async function runEdit(
   });
 
   const count = next.nodes?.length ?? 0;
+
+  /*
+   * Name the FORM, not the section type. The section is called "Contact form"
+   * in the registry, so adding a quote form reported "Added the Contact form" —
+   * accurate about our internals and wrong about what the client asked for.
+   */
+  let described = describe;
+  if (op.kind === "add_section" && typeof newProps?.formToken === "string") {
+    const formName = await formNameFor(newProps.formToken);
+    described = describe.replace(/the Contact form/i, `the ${formName}`);
+  }
+
   return {
     ok: true,
-    message: `${describe} The page now has ${count} section${count === 1 ? "" : "s"}. Say "undo" to put it back.`,
+    message: `${described} The page now has ${count} section${count === 1 ? "" : "s"}. Say "undo" to put it back.`,
   };
 }
 
 /** Re-exported for the section catalogue shown in the planner prompt. */
 export async function sectionNameForKey(key: string): Promise<string | null> {
   return getSectionByKey(key)?.name ?? null;
+}
+
+
+/** The client's own name for a form, for messages that mention it. */
+async function formNameFor(token: string): Promise<string> {
+  const form = await db.query.formDefinitions.findFirst({
+    where: eq(formDefinitions.embedToken, token),
+  });
+  return form?.name ?? "form";
 }
