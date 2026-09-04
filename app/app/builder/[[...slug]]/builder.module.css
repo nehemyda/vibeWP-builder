@@ -405,6 +405,9 @@
   overflow: hidden;
   height: fit-content;
   transition: max-width 0.2s ease;
+  /* The selection overlay positions against this box, using the rects the
+     frame reports from inside itself. */
+  position: relative;
 }
 /* iPad-ish portrait width — wide enough to keep two columns, narrow enough
    to show where the desktop layout starts to strain. */
@@ -898,3 +901,81 @@
 .sdEmpty { color: var(--faint, #9aa1ad); font-style: italic; }
 .sdHint { margin: 0 0 0.6rem; font-size: 0.8rem; line-height: 1.5; color: var(--ink-2, #4a5160); }
 .sdLink { display: inline-block; margin-top: 0.5rem; font-size: 0.83rem; }
+
+/* ---- canvas selection overlay ----
+   Positioned against .canvasFrame, which the frame's own rects are relative
+   to. The layer itself is inert; only the controls take a pointer, so hovering
+   the page underneath still highlights sections. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+.selectionBox {
+  position: absolute;
+  pointer-events: none;
+}
+/* Both bars sit inside the top edge: .canvasFrame clips its overflow, so a
+   toolbar above the first section would simply not be drawn. */
+.selectionLabel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  background: var(--primary, #f54900);
+  color: #fff;
+  font: 600 10.5px/1 ui-monospace, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 8px;
+  border-radius: 0 0 6px 0;
+  white-space: nowrap;
+}
+.selectionTools {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: auto;
+  background: var(--surface, #fff);
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 9px;
+  padding: 4px;
+  box-shadow: 0 8px 24px -10px rgba(19, 25, 34, 0.35);
+}
+.selectionPrimary {
+  border: 0;
+  border-radius: 6px;
+  background: var(--primary, #f54900);
+  color: #fff;
+  font: 600 12px/1 inherit;
+  padding: 7px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.selectionPrimary:hover:not(:disabled) { filter: brightness(1.06); }
+.selectionIcon {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink, #131922);
+  font: 600 13px/1 inherit;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+}
+.selectionIcon:hover:not(:disabled) { background: var(--bg, #f4f5f7); }
+.selectionDanger:hover:not(:disabled) { background: #fee2e2; color: #b91c1c; }
+.selectionPrimary:disabled,
+.selectionIcon:disabled { opacity: 0.4; cursor: default; }
+
+/* On a phone the toolbar would cover the section it labels, so it drops to a
+   single row of icons and the wording goes. */
+@media (max-width: 700px) {
+  .selectionPrimary { padding: 7px 8px; font-size: 11px; }
+  .selectionTools { top: 4px; right: 4px; gap: 2px; padding: 3px; }
+  .selectionLabel { font-size: 9.5px; padding: 4px 6px; }
+}

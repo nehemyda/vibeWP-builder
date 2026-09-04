@@ -1,6 +1,6 @@
 import { parse, type HTMLElement } from "node-html-parser";
 import { SECTIONS } from "@/lib/sections";
-import { sectionPreviewMarkup } from "@/lib/wp/serialize";
+import { sectionPreviewMarkup, markElement } from "@/lib/wp/serialize";
 import { readThemeCss, findCollapsingAutoFitGrids } from "@/lib/sections/css-audit";
 
 /**
@@ -120,10 +120,25 @@ for (const s of targets) {
   const floor = isTemplatePart ? 10 : 40;
   if (previewText.length < floor) fail(`${s.key}: preview nearly empty (${previewText.length} chars)`);
 
+  /*
+   * 8. The canvas can identify it.
+   *
+   * schemaToGutenberg stamps data-vibewp-node on each section's outermost
+   * element so a click in the preview can be traced back to a schema node. A
+   * section that failed to be stamped would be one the client cannot select —
+   * invisible, and only in the builder — so it is asserted rather than assumed.
+   */
+  const marked = markElement(html, "data-vibewp-node", "7");
+  const rootTag = parse(marked).querySelector(`.${s.rootClass}`);
+  if (marked === html) fail(`${s.key}: cannot be stamped for selection`);
+  else if (rootTag?.getAttribute("data-vibewp-node") !== "7") {
+    fail(`${s.key}: selection stamp landed outside .${s.rootClass}`);
+  }
+
   console.log(`  ${s.key.padEnd(20)} ${html.length} bytes, ${emitted.size} classes, preview ${previewText.length} chars`);
 }
 
-// 8. registry hygiene across ALL sections
+// 9. registry hygiene across ALL sections
 const keys = new Set<string>(), nodes = new Set<string>(), roots = new Set<string>();
 for (const s of SECTIONS) {
   if (keys.has(s.key)) fail(`duplicate key ${s.key}`); keys.add(s.key);

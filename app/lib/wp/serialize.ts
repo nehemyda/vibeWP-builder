@@ -42,12 +42,25 @@ type PageSchema = { schemaVersion?: string; nodes?: SchemaNode[] };
  * which also means an older client can render a schema written by a newer
  * deploy without erroring.
  */
-export function schemaToGutenberg(schema: unknown): string {
+export function schemaToGutenberg(
+  schema: unknown,
+  /**
+   * Stamps each section's outermost element with `data-vibewp-node="<index>"`.
+   *
+   * FOR THE BUILDER CANVAS ONLY, and opt-in so the export path cannot pick it
+   * up by accident — a stray attribute in a client's WordPress content would
+   * outlive us. Nothing else identifies a node in the rendered markup: node
+   * `id`s are assigned only by add_section, so a generated page has none, and
+   * matching on the root class is ambiguous the moment a page holds two
+   * sections of the same design.
+   */
+  opts?: { markNodes?: boolean },
+): string {
   const nodes = (schema as PageSchema)?.nodes;
   if (!Array.isArray(nodes)) return "";
 
   return nodes
-    .map((node) => {
+    .map((node, index) => {
       const section = getSectionByNodeType(node?.type);
       if (!section) return "";
       /*
@@ -57,19 +70,46 @@ export function schemaToGutenberg(schema: unknown): string {
        * Skipped rather than thrown so one mistaken node can't fail an export.
        */
       if (section.placement && section.placement !== "page") return "";
-      return section.toGutenberg(node.props ?? {});
+      const html = section.toGutenberg(node.props ?? {});
+      return opts?.markNodes ? markElement(html, "data-vibewp-node", String(index)) : html;
     })
     .filter(Boolean)
     .join("\n\n");
 }
 
 /**
+ * Adds an attribute to the FIRST element in a section's markup.
+ *
+ * The first `<` in the string is always the section's own root element: the
+ * Gutenberg block comment that precedes it carries its attributes as JSON, and
+ * a class name cannot contain an angle bracket. Asserted for all 62 sections in
+ * verify.ts rather than trusted, because a section that silently failed to be
+ * stamped would be a section the client cannot click.
+ */
+export function markElement(html: string, attr: string, value: string): string {
+  return html.replace(/<([a-zA-Z][\w-]*)/, (_, tag: string) => `<${tag} ${attr}="${escAttr(value)}"`);
+}
+
+/**
  * Serializes a section for a template part (header/footer), where page-content
  * placement rules do not apply.
  */
-export function sectionToTemplatePart(nodeType: string, props: unknown): string {
+export function sectionToTemplatePart(
+  nodeType: string,
+  props: unknown,
+  /**
+   * Stamps `data-vibewp-chrome`, for the same reason page nodes are stamped
+   * and with the same opt-in. A click on the header has to route to
+   * swap_chrome: the header is a template part shared by every page, not a
+   * node on this one, and treating it as a page section is how a change to it
+   * silently does nothing.
+   */
+  opts?: { mark?: "header" | "footer" },
+): string {
   const section = getSectionByNodeType(nodeType);
-  return section ? section.toGutenberg(props ?? {}) : "";
+  if (!section) return "";
+  const html = section.toGutenberg(props ?? {});
+  return opts?.mark ? markElement(html, "data-vibewp-chrome", opts.mark) : html;
 }
 
 /**

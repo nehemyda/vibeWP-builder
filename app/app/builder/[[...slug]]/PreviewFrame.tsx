@@ -30,11 +30,85 @@ const MIN_HEIGHT = 520;
  * This is the same reason WordPress iframes its own block-editor canvas.
  * ─────────────────────────────────────────────────────────────────────
  */
+/**
+ * What the client has clicked in the canvas.
+ *
+ * A page section is identified by its INDEX, which is what
+ * schemaToGutenberg stamps. Header and footer are not nodes on this page at
+ * all — they are template parts shared site-wide — so they are a different
+ * kind of thing here, and that distinction is what routes a header change to
+ * swap_chrome instead of quietly doing nothing.
+ */
+export type CanvasSelection =
+  | { kind: "node"; index: number }
+  | { kind: "chrome"; slot: "header" | "footer" };
+
+/** One section's position inside the frame, for the parent's overlay. */
+export type SectionBox = {
+  selection: CanvasSelection;
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+};
+
+export function sameSelection(a: CanvasSelection | null, b: CanvasSelection | null): boolean {
+  if (!a || !b) return a === b;
+  if (a.kind === "node" && b.kind === "node") return a.index === b.index;
+  if (a.kind === "chrome" && b.kind === "chrome") return a.slot === b.slot;
+  return false;
+}
+
+/** The attribute and value that identify a selection in the preview DOM. */
+function selectorFor(selection: CanvasSelection): string {
+  return selection.kind === "node"
+    ? `[data-vibewp-node="${selection.index}"]`
+    : `[data-vibewp-chrome="${selection.slot}"]`;
+}
+
+const SELECTABLE = "[data-vibewp-node],[data-vibewp-chrome]";
+
+/**
+ * Draws the hover and selection outlines by injecting one stylesheet.
+ *
+ * A STYLESHEET, not a class or a wrapper. The preview document is the markup
+ * we export, so nothing may be added to it that could survive into a client's
+ * WordPress content — and `outline` is the one way to draw a border that
+ * occupies no space, so a selected section does not shift the page around it.
+ *
+ * The previous attempt at this was deleted for putting the section's name in
+ * CSS `content`: the badge read the literal string "HeroSplit", which was
+ * right when a page could only hold a hero and wrong the moment it held six.
+ * The label lives in the parent's overlay now, where it can come from the
+ * registry.
+ */
+function paintSelection(doc: Document, selection: CanvasSelection | null): void {
+  const ID = "vibewp-selection";
+  let style = doc.getElementById(ID) as HTMLStyleElement | null;
+  if (!style) {
+    style = doc.createElement("style");
+    style.id = ID;
+    doc.head.appendChild(style);
+  }
+  const selected = selection ? selectorFor(selection) : null;
+  style.textContent = [
+    `${SELECTABLE.split(",").map((s) => `${s}:hover`).join(",")} {`,
+    `  outline: 1.5px dashed rgba(245, 73, 0, 0.45); outline-offset: -2px; cursor: pointer;`,
+    `}`,
+    selected
+      ? `${selected} { outline: 2px solid #f54900 !important; outline-offset: -2px; }`
+      : "",
+  ].join("\n");
+}
+
 export function PreviewFrame({
   html,
   className,
   colors,
   onNavigate,
+  selection,
+  onSelect,
+  onGeometry,
 }: {
   /** Gutenberg block markup from schemaToGutenberg() — the same string exported. */
   html: string;
@@ -63,9 +137,42 @@ export function PreviewFrame({
    * a client expects from something that looks exactly like their website.
    */
   onNavigate?: (slug: string) => void;
+  /**
+   * What is selected, so the frame can outline it. Null means nothing.
+   *
+   * Held by the parent rather than the frame because the whole srcDoc document
+   * is rebuilt on every edit — anything the frame remembered would be thrown
+   * away with it, and the section the client was working on would deselect
+   * itself the moment they changed it.
+   */
+  selection?: CanvasSelection | null;
+  /** A click on a section, or on empty space (null). */
+  onSelect?: (selection: CanvasSelection | null) => void;
+  /**
+   * Where each section sits, in the frame's own coordinates.
+   *
+   * Reported so the parent can draw the selection toolbar and the insert
+   * buttons OUTSIDE the frame. They are the builder's own controls, not part
+   * of the page being designed: putting them in the preview document would
+   * mean they appeared in the markup we export, and in the height we measure.
+   */
+  onGeometry?: (boxes: SectionBox[]) => void;
 }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(MIN_HEIGHT);
+
+  /*
+   * The callbacks live in refs, and the attach effect depends only on `doc`.
+   *
+   * Every one of these is an inline arrow in the parent, so its identity
+   * changes on each render — and the effect below tears down its listeners and
+   * its ResizeObserver and rebuilds them when it re-runs. That was already
+   * happening for onNavigate alone; with selection state in the parent, the
+   * parent re-renders on every click, and re-attaching the whole apparatus on
+   * each one is how a click starts costing a reflow.
+   */
+  const handlers = useRef({ onNavigate, onSelect, onGeometry });
+  handlers.current = { onNavigate, onSelect, onGeometry };
 
   /*
    * `yp-page` on <body> is what activates the theme's rules: every selector in
@@ -167,9 +274,39 @@ export function PreviewFrame({
         const el = event.target as Element | null;
         const link = el?.closest?.("[data-vibewp-slug]");
         const slug = link?.getAttribute("data-vibewp-slug");
-        if (!slug) return;
-        event.preventDefault();
-        onNavigate?.(slug);
+        if (slug) {
+          event.preventDefault();
+          handlers.current.onNavigate?.(slug);
+          return;
+        }
+
+        /*
+         * Anything else is a click on a SECTION.
+         *
+         * preventDefault regardless of what was hit, because every button a
+         * section renders defaults to href="#" and none of them were
+         * intercepted before this. That was harmless only because the frame
+         * cannot scroll; now that a click means "select this", letting a CTA
+         * through would swallow it.
+         */
+        const section = el?.closest?.(SELECTABLE) as HTMLElement | null;
+        if (el?.closest?.("a,button")) event.preventDefault();
+
+        if (!section) {
+          // Empty space between sections. Deselecting there is what makes the
+          // outline feel like a selection rather than something stuck on.
+          handlers.current.onSelect?.(null);
+          return;
+        }
+        const index = section.getAttribute("data-vibewp-node");
+        const slot = section.getAttribute("data-vibewp-chrome");
+        const picked: CanvasSelection | null =
+          index !== null
+            ? { kind: "node", index: Number(index) }
+            : slot === "header" || slot === "footer"
+              ? { kind: "chrome", slot }
+              : null;
+        if (picked) handlers.current.onSelect?.(picked);
       };
       contentDoc.addEventListener("click", onLinkClick);
       cleanups.push(() => contentDoc.removeEventListener("click", onLinkClick));
@@ -194,7 +331,49 @@ export function PreviewFrame({
         // React skips a re-render when the value is unchanged, so this is safe
         // to call as often as the observer fires.
         if (h > 0) setHeight(h);
+        reportGeometry();
       };
+
+      /*
+       * Where every section is, for the parent's overlay.
+       *
+       * Reported from measure() rather than once on load, because the boxes
+       * move whenever the frame reflows: a late-loading photograph, the chat
+       * panel collapsing, the viewport toggle switching to mobile. A toolbar
+       * pinned to a stale rect floats over the wrong section, which is worse
+       * than no toolbar.
+       */
+      function reportGeometry() {
+        const report = handlers.current.onGeometry;
+        // Captured, because TypeScript cannot see that a nested function
+        // declaration only ever runs after the null guard above.
+        const scope = ref.current?.contentDocument;
+        if (!report || !scope) return;
+        const boxes: SectionBox[] = [];
+        for (const el of Array.from(scope.querySelectorAll(SELECTABLE))) {
+          const index = el.getAttribute("data-vibewp-node");
+          const slot = el.getAttribute("data-vibewp-chrome");
+          const selection: CanvasSelection | null =
+            index !== null
+              ? { kind: "node", index: Number(index) }
+              : slot === "header" || slot === "footer"
+                ? { kind: "chrome", slot }
+                : null;
+          if (!selection) continue;
+          const rect = (el as HTMLElement).getBoundingClientRect();
+          boxes.push({
+            selection,
+            // The frame never scrolls itself, so a client rect IS the offset
+            // from the top of the document. If that ever changes, this needs
+            // the scroll position added.
+            top: rect.top,
+            left: rect.left,
+            width: rect.width,
+            height: rect.height,
+          });
+        }
+        report(boxes);
+      }
 
       /*
        * THE OBSERVER MUST BE CREATED INSIDE THE IFRAME'S OWN WINDOW.
@@ -234,6 +413,7 @@ export function PreviewFrame({
 
       // Measure now rather than waiting for the first callback.
       measure();
+      paintSelection(contentDoc, selection ?? null);
     };
 
     iframe.addEventListener("load", attach);
@@ -244,7 +424,20 @@ export function PreviewFrame({
       cleanups.forEach((fn) => fn());
       iframe.removeEventListener("load", attach);
     };
-  }, [doc, onNavigate]);
+  }, [doc]);
+
+  /*
+   * Repainting the outline is its own effect.
+   *
+   * Selection changes constantly while the document does not, and folding it
+   * into the attach effect above would rebuild every listener and remeasure
+   * the frame each time the client clicked a different section.
+   */
+  useEffect(() => {
+    const contentDoc = ref.current?.contentDocument;
+    if (!contentDoc?.body?.hasAttribute("data-vibewp-preview")) return;
+    paintSelection(contentDoc, selection ?? null);
+  }, [selection, doc]);
 
   return (
     <iframe
