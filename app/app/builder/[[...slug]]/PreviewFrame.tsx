@@ -69,6 +69,21 @@ function selectorFor(selection: CanvasSelection): string {
 const SELECTABLE = "[data-vibewp-node],[data-vibewp-chrome]";
 
 /**
+ * The editor's own colour, written as a literal because this stylesheet is
+ * injected into the PREVIEW document, which cannot see the app's tokens.
+ *
+ * It must not be the site's brand colour. The outline sits directly on the
+ * client's design, so drawing it in their own primary makes it invisible on
+ * exactly the sections most likely to use that colour — and the previous value
+ * was a hardcoded orange, which is what --primary falls back to outside the
+ * theme, so it clashed with every palette that was not orange.
+ *
+ * The app's --accent indigo, which stays legible on a white hero and on the
+ * dark band form-band paints in --ink.
+ */
+const EDITOR_ACCENT = "#5b6bff";
+
+/**
  * Draws the hover and selection outlines by injecting one stylesheet.
  *
  * A STYLESHEET, not a class or a wrapper. The preview document is the markup
@@ -93,10 +108,11 @@ function paintSelection(doc: Document, selection: CanvasSelection | null): void 
   const selected = selection ? selectorFor(selection) : null;
   style.textContent = [
     `${SELECTABLE.split(",").map((s) => `${s}:hover`).join(",")} {`,
-    `  outline: 1.5px dashed rgba(245, 73, 0, 0.45); outline-offset: -2px; cursor: pointer;`,
+    `  outline: 1.5px dashed color-mix(in srgb, ${EDITOR_ACCENT} 55%, transparent);`,
+    `  outline-offset: -2px; cursor: pointer;`,
     `}`,
     selected
-      ? `${selected} { outline: 2px solid #f54900 !important; outline-offset: -2px; }`
+      ? `${selected} { outline: 2px solid ${EDITOR_ACCENT} !important; outline-offset: -2px; }`
       : "",
   ].join("\n");
 }
