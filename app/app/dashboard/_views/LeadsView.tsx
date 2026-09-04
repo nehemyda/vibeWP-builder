@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { eq, desc, sql, isNull, and } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { formSubmissions, formDefinitions, type sites, type profiles } from "@/lib/db/schema";
+import { formSubmissions, formDefinitions, leadNotes, type sites, type profiles } from "@/lib/db/schema";
 import type { resolveSitePaths } from "@/lib/site-paths";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { Pagination } from "@/components/dashboard/Pagination";
@@ -13,6 +13,8 @@ import { FormEditor } from "./FormEditor";
 import type { FormFieldSpec } from "@/app/actions/forms";
 import { markSubmissionReadAction } from "@/app/actions/forms";
 import { LeadDetail } from "./LeadDetail";
+import { LeadStatusBadge } from "./LeadStatus";
+import type { LeadStatus } from "@/lib/leads/status";
 
 type Profile = typeof profiles.$inferSelect;
 type Site = typeof sites.$inferSelect;
@@ -134,6 +136,10 @@ export async function LeadsView({
   // client has actually seen.
   if (opened && !opened.readAt) await markSubmissionReadAction(site.smbId ?? "", opened.id);
 
+  const notes = opened
+    ? await db.select().from(leadNotes).where(eq(leadNotes.submissionId, opened.id)).orderBy(leadNotes.createdAt)
+    : [];
+
   const tabStyle = (active: boolean) => ({
     padding: "0.55rem 0.1rem",
     marginRight: "1.4rem",
@@ -181,6 +187,12 @@ export async function LeadsView({
           receivedAt={opened.receivedAt.toLocaleString()}
           formName={forms.find((f) => f.id === opened.formId)?.name ?? null}
           backHref={paths.leadsPath}
+          smbId={site.smbId ?? ""}
+          submissionId={opened.id}
+          status={(opened.status ?? "new") as LeadStatus}
+          /* Stored in cents so totals stay exact; shown in pounds. */
+          valuePounds={opened.valueCents ? (opened.valueCents / 100).toFixed(2) : ""}
+          notes={notes}
         />
       ) : editing ? (
         <FormEditor
@@ -216,6 +228,7 @@ export async function LeadsView({
               <thead>
                 <tr>
                   <th>From</th>
+                  <th>Status</th>
                   <th>Message</th>
                   <th>Received</th>
                 </tr>
@@ -236,6 +249,9 @@ export async function LeadsView({
                           {personOf(data)}
                         </Link>
                       </td>
+                      <td>
+                        <LeadStatusBadge status={(row.status ?? "new") as LeadStatus} />
+                      </td>
                       <td className={shell.rowSub}>{summaryOf(data) || "—"}</td>
                       <td>{row.receivedAt.toLocaleString()}</td>
                     </tr>
@@ -243,7 +259,7 @@ export async function LeadsView({
                 })}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={3} className={shell.rowSub}>
+                    <td colSpan={4} className={shell.rowSub}>
                       No submissions yet. Enquiries from your site&rsquo;s contact form
                       appear here.
                     </td>

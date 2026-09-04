@@ -408,8 +408,41 @@ export const formSubmissions = pgTable("form_submissions", {
   /** Page, referrer, user agent, IP: context for judging a lead, and for spam. */
   meta: jsonb("meta").notNull().default({}),
   spamScore: integer("spam_score").notNull().default(0),
+  /**
+   * Where this enquiry has got to: new | contacted | qualified | won | lost.
+   *
+   * On the submission because it is a fact about this enquiry, not about the
+   * form that produced it — and it must survive the form being deleted, which
+   * form_id already does by going null.
+   */
+  status: text("status").notNull().default("new"),
+  statusChangedAt: timestamp("status_changed_at", { withTimezone: true }),
+  /** What a won enquiry was worth, so a dashboard can total it. */
+  valueCents: integer("value_cents"),
   readAt: timestamp("read_at", { withTimezone: true }),
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * What was done about a lead, and when.
+ *
+ * A table rather than a text column: "called, left voicemail" is only useful
+ * with a date and a name on it, and two people working the same lead would
+ * overwrite each other in one field.
+ *
+ * Cascades with the submission — a note about an enquiry that no longer exists
+ * has nothing to describe.
+ */
+export const leadNotes = pgTable("lead_notes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  submissionId: uuid("submission_id")
+    .notNull()
+    .references(() => formSubmissions.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  authorUserId: uuid("author_user_id"),
+  /** Kept as text so a note still says who wrote it after they leave. */
+  authorName: text("author_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const leads = pgTable("leads", {
