@@ -124,13 +124,45 @@ async function runEdit(
    * cannot see: without this, "make Company name full width" had no way to
    * know such a field existed and could only be refused.
    */
-  const embedToken = (schema.nodes ?? []).find((n) => n.type === "FormEmbed")?.props?.formToken;
-  const attachedForm =
+  const formNode = (schema.nodes ?? []).find((n) => n.type === "FormEmbed");
+  const embedToken = formNode?.props?.formToken;
+
+  let attachedForm =
     typeof embedToken === "string" && embedToken
       ? await db.query.formDefinitions.findFirst({
           where: eq(formDefinitions.embedToken, embedToken),
         })
       : undefined;
+
+  /*
+   * A form section whose token is missing or points at nothing.
+   *
+   * It renders as empty space on the live site and reported "this page doesn't
+   * show a form" in chat — while the client is looking straight at one. Both
+   * are the same fault seen from different ends, and neither is recoverable by
+   * the client, who cannot see a token.
+   *
+   * So it is repaired rather than reported: attach the site's form, save, and
+   * carry on with the instruction they actually gave.
+   */
+  if (formNode && !attachedForm) {
+    const repaired = await ensureSiteForm(siteId, business.businessName, instruction);
+    if (repaired) {
+      const nodes = (schema.nodes ?? []).map((n) =>
+        n === formNode ? { ...n, props: { ...(n.props ?? {}), formToken: repaired } } : n,
+      );
+      await savePageSchemaAction({
+        siteId,
+        slug,
+        schema: { ...schema, nodes } as Record<string, unknown>,
+        reason: "Reattached the form to this page",
+      });
+      schema.nodes = nodes;
+      attachedForm = await db.query.formDefinitions.findFirst({
+        where: eq(formDefinitions.embedToken, repaired),
+      });
+    }
+  }
 
   /*
    * Where the form builder is, for refusals that should hand over rather than
@@ -556,7 +588,15 @@ async function runEdit(
      */
     if (op.kind === "add_section" && resolved.definition.nodeType === "FormEmbed") {
       const token = await ensureSiteForm(siteId, business.businessName, instruction);
-      if (token) newProps.formToken = token;
+      /*
+       * No token, no section. A FormEmbed pointing at nothing renders as blank
+       * space on the live site and reads in chat as "this page has no form" —
+       * a worse outcome than saying the form could not be created.
+       */
+      if (!token) {
+        return { ok: false, message: "I couldn't create the form just now. Try again in a moment." };
+      }
+      newProps.formToken = token;
 
       /*
        * A page holds ONE form. Asking for a quote form on a page that already
