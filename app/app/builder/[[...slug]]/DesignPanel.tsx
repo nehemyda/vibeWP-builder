@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { getSectionByKey } from "@/lib/sections";
 import { carryProps } from "@/lib/sections/carry-props";
 import { withPreviewPlaceholders, type FormPreviewField } from "@/lib/wp/serialize";
@@ -190,6 +190,21 @@ export function DesignPanel({
       ? fits
       : sameCategory;
 
+  /*
+   * When everything is on screen, fit ranking would interleave the categories
+   * — a hero, then a footer, then a hero — so the list is ordered by category
+   * instead, with the fit ranking kept inside each one.
+   */
+  const groupHeadings = Boolean(needle) || showAll;
+  const ordered = groupHeadings
+    ? [...shown].sort(
+        (a, b) =>
+          a.entry.category.localeCompare(b.entry.category) ||
+          (a.dropIn ? 0 : a.loses.length === 0 ? 1 : 2) - (b.dropIn ? 0 : b.loses.length === 0 ? 1 : 2) ||
+          a.entry.name.localeCompare(b.entry.name),
+      )
+    : shown;
+
   const originEntry =
     originKey && originKey !== currentKey ? catalogue.find((e) => e.key === originKey) : undefined;
 
@@ -232,10 +247,19 @@ export function DesignPanel({
           </button>
         )}
 
-        {shown.map((fit, i) => (
+        {ordered.map((fit, i) => (
+          <Fragment key={fit.entry.key}>
+            {/*
+              A category heading whenever the run changes. Only ever visible in
+              the browse-all and search lists, where fifty-one cards under no
+              headings at all was a wall with no way into it — the same-category
+              list is one run and gets none.
+            */}
+            {groupHeadings && fit.entry.category !== ordered[i - 1]?.entry.category && (
+              <p className={styles.designGroup}>{fit.entry.category}</p>
+            )}
           <button
             type="button"
-            key={fit.entry.key}
             className={styles.designCard}
             disabled={busy}
             onClick={() => onPick(fit.entry.key)}
@@ -268,9 +292,10 @@ export function DesignPanel({
               </span>
             )}
           </button>
+          </Fragment>
         ))}
 
-        {shown.length === 0 && (
+        {ordered.length === 0 && (
           <p className={styles.designEmpty}>
             {needle
               ? `Nothing matches “${query}”.`

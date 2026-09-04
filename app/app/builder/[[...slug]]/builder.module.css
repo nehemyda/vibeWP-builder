@@ -985,7 +985,10 @@
    mobile behaviour rather than adding a fourth column to the shell. */
 .designPanel {
   order: 2;
-  width: 380px;
+  /* Wider than the chat pane it stands in for: every pixel here is a pixel of
+     the design being judged, and at 380 a hero's supporting copy scaled to
+     five pixels. */
+  width: 440px;
   max-width: 100%;
   flex: none;
   min-height: 0;
@@ -1039,8 +1042,9 @@
 .designList {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: 0 0.9rem 1rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 0.7rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
@@ -1057,6 +1061,18 @@
   overflow: hidden;
   cursor: pointer;
   font: inherit;
+  /*
+   * Cards keep their own height.
+   *
+   * As flex children of a scrolling column they shrink to fit by default, so
+   * ten cards squashed to 65px and the fifty-one behind "Browse all" became
+   * fifty-one horizontal lines — a list with nothing in it, and nothing to
+   * scroll, because the content had been compressed rather than overflowed.
+   *
+   * Exactly the fault .msgUser and .msgAi are marked `flex: none` for, a few
+   * hundred lines up, and for the same reason.
+   */
+  flex: none;
 }
 .designCard:hover:not(:disabled) {
   border-color: var(--primary);
@@ -1066,6 +1082,7 @@
 .designCardBack {
   padding: 0.7rem 0.8rem;
   border-style: dashed;
+  flex: none;
 }
 .designCardName {
   display: block;
@@ -1084,8 +1101,17 @@
 .designCardFree { color: #15803d; }
 .designCardLoses { font-style: normal; color: #b45309; }
 
-.designEmpty { color: var(--muted); font-size: 0.8rem; margin: 0.4rem 0; }
+.designGroup {
+  flex: none;
+  margin: 0.5rem 0 -0.2rem;
+  font: 600 10px/1 ui-monospace, monospace;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.designEmpty { flex: none; color: var(--muted); font-size: 0.8rem; margin: 0.4rem 0; }
 .designMore {
+  flex: none;
   border: 1px dashed var(--line);
   background: transparent;
   color: var(--ink-2, #4a5160);
