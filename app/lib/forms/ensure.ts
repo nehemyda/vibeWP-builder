@@ -28,17 +28,77 @@ const STARTER_FIELDS: FormFieldSpec[] = [
   { name: "message", label: "How can we help?", type: "textarea", required: true, span: 12 },
 ];
 
-export async function ensureSiteForm(siteId: string, businessName?: string): Promise<string | null> {
+/**
+ * The kind of form a sentence asks for, if it names one.
+ *
+ * "Add a quote form" and "add a contact form" are different requests. Reusing
+ * one form for both put quote requests into the contact inbox under the
+ * contact form's questions — the page had a form, just not the one that was
+ * asked for.
+ *
+ * Only purposes a small business really distinguishes. Anything else is a
+ * contact form, and inventing a separate inbox per phrasing is how a leads
+ * list becomes unreadable.
+ */
+const PURPOSES = [
+  ["quote", "Quote requests"],
+  ["booking", "Bookings"],
+  ["book", "Bookings"],
+  ["appointment", "Appointments"],
+  ["order", "Orders"],
+  ["callback", "Callback requests"],
+  ["estimate", "Estimate requests"],
+  ["consultation", "Consultation requests"],
+] as const;
+
+export function purposeFrom(instruction?: string): { key: string; name: string } | null {
+  const text = (instruction ?? "").toLowerCase();
+  for (const [key, name] of PURPOSES) {
+    // Only when it is the KIND of form being asked for, not any mention of the
+    // word: "quote form", "booking form", "form for bookings".
+    if (
+      new RegExp(`\\b${key}\\w*\\s+form\\b`).test(text) ||
+      new RegExp(`\\bform\\s+for\\s+\\w*\\s*${key}`).test(text)
+    ) {
+      return { key, name };
+    }
+  }
+  return null;
+}
+
+export async function ensureSiteForm(
+  siteId: string,
+  businessName?: string,
+  /** What the client asked for, so "quote form" is not answered with the contact one. */
+  instruction?: string,
+): Promise<string | null> {
+  const purpose = purposeFrom(instruction);
+
+  if (purpose) {
+    // A form already serving this purpose is the one to use.
+    const forms = await db
+      .select()
+      .from(formDefinitions)
+      .where(and(eq(formDefinitions.siteId, siteId), eq(formDefinitions.isActive, true)));
+    const match = forms.find((f) => f.name.toLowerCase().includes(purpose.key));
+    if (match?.embedToken) return match.embedToken;
+    return createForm(siteId, purpose.name);
+  }
+
   const existing = await db.query.formDefinitions.findFirst({
     where: and(eq(formDefinitions.siteId, siteId), eq(formDefinitions.isActive, true)),
   });
   if (existing?.embedToken) return existing.embedToken;
 
+  return createForm(siteId, businessName ? `${businessName} enquiries` : "Contact form");
+}
+
+async function createForm(siteId: string, name: string): Promise<string | null> {
   const embedToken = `frm_${randomBytes(18).toString("base64url")}`;
   try {
     await db.insert(formDefinitions).values({
       siteId,
-      name: businessName ? `${businessName} enquiries` : "Contact form",
+      name,
       fields: STARTER_FIELDS,
       embedToken,
       successMessage: "Thanks — we'll be in touch.",

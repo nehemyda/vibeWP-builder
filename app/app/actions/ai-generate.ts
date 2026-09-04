@@ -218,7 +218,7 @@ export async function generatePageAction(opts: {
    */
   const needsForm = nodes.some((n) => n.type === "FormEmbed" && !(n.props as { formToken?: string })?.formToken);
   if (needsForm && site?.id) {
-    const token = await ensureSiteForm(site.id, business.businessName);
+    const token = await ensureSiteForm(site.id, business.businessName, instruction);
     if (token) {
       for (const node of nodes) {
         if (node.type !== "FormEmbed") continue;

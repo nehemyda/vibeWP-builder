@@ -477,7 +477,7 @@ async function runEdit(
      * does not create a second inbox.
      */
     if (op.kind === "add_section" && resolved.definition.nodeType === "FormEmbed") {
-      const token = await ensureSiteForm(siteId, business.businessName);
+      const token = await ensureSiteForm(siteId, business.businessName, instruction);
       if (token) newProps.formToken = token;
     }
 
