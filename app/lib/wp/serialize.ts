@@ -25,6 +25,9 @@ export type FormPreviewField = {
   type: string;
   required?: boolean;
   span?: number;
+  placeholder?: string;
+  /** A dropdown's choices, so the canvas one opens with the real options. */
+  options?: string[];
 };
 
 type SchemaNode = { id?: string; type?: string; props?: Record<string, unknown> };
@@ -178,23 +181,43 @@ export function withPreviewPlaceholders(
       "Open the working form &#8599;</a>"
     : "<em>Your form appears here on the live site</em>";
 
+  /*
+   * REAL controls, not drawings of them.
+   *
+   * These were <div>s styled to look like inputs, so the previewed form could
+   * not be clicked, focused, tabbed through or typed into — asked twice why,
+   * which is the answer that the drawing was the problem.
+   *
+   * Real inputs need no JavaScript to be interactive, so the canvas gets a form
+   * that behaves like one. What it deliberately does NOT get is a <form>
+   * element or a submit button: with no action, submitting would navigate the
+   * iframe, and with an action it would post real leads every time someone
+   * looked at a page. Send is type="button" and goes nowhere — the link beside
+   * it opens the form that really submits.
+   */
   const formPreview = formFields?.length
     ? formFields
         .map((f) => {
           const span = typeof f.span === "number" ? Math.min(12, Math.max(1, f.span)) : 6;
+          const id = `ph-${escAttr(f.name)}`;
+          const ph = f.placeholder ? ` placeholder="${escAttr(f.placeholder)}"` : "";
           const control =
             f.type === "textarea"
-              ? '<i class="tall"></i>'
+              ? `<textarea id="${id}" class="tall"${ph}></textarea>`
               : f.type === "select"
-                ? '<i class="pick"></i>'
-                : "<i></i>";
+                ? `<select id="${id}">${(f.options ?? [])
+                    .map((o) => `<option>${esc(o)}</option>`)
+                    .join("")}</select>`
+                : `<input id="${id}" type="${escAttr(
+                    ["text", "email", "tel", "number", "date", "url"].includes(f.type) ? f.type : "text",
+                  )}"${ph}>`;
           return (
-            `<label style="grid-column:span ${span}">` +
+            `<label style="grid-column:span ${span}" for="${id}">` +
             `<span>${esc(f.label || f.name)}${f.required ? "*" : ""}</span>${control}` +
             "</label>"
           );
         })
-        .join("") + "<b>Send</b>" + caption
+        .join("") + '<button type="button" class="yp-embed__send">Send</button>' + caption
     : '<label style="grid-column:span 6"><span></span><i></i></label>' +
       '<label style="grid-column:span 6"><span></span><i></i></label>' +
       '<label style="grid-column:span 12"><span></span><i class="tall"></i></label>' +

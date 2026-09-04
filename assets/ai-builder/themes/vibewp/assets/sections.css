@@ -3052,6 +3052,31 @@ body.yp-page {
 .yp-page .yp-embed__ph span:empty {
   display: block; height: 0.62rem; width: 6.5rem; border-radius: 4px; background: var(--line);
 }
+/* Real controls now, so they are styled as controls rather than as boxes.
+   font: inherit matters — a browser default would make the canvas form the one
+   thing on the page in a different typeface. */
+.yp-page .yp-embed__ph input,
+.yp-page .yp-embed__ph textarea,
+.yp-page .yp-embed__ph select {
+  width: 100%;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--ink);
+  padding: 0.72rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.yp-page .yp-embed__ph input:focus,
+.yp-page .yp-embed__ph textarea:focus,
+.yp-page .yp-embed__ph select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+.yp-page .yp-embed__ph textarea.tall { height: 6rem; resize: vertical; }
+
+/* Kept for the no-form fallback, which still draws bars. */
 .yp-page .yp-embed__ph i {
   display: block; height: 2.6rem; border-radius: 9px;
   border: 1px solid var(--line); background: var(--surface);
@@ -3066,10 +3091,15 @@ body.yp-page {
       right 0.75rem top 1.15rem / 7px 7px,
     var(--surface);
 }
-.yp-page .yp-embed__ph b {
+.yp-page .yp-embed__ph b,
+.yp-page .yp-embed__ph .yp-embed__send {
   grid-column: span 12; justify-self: start;
-  padding: 0.7rem 1.4rem; border-radius: 9px;
-  background: var(--primary); color: #fafafa; font-size: 0.9rem;
+  padding: 0.7rem 1.4rem; border-radius: 9px; border: 0;
+  background: var(--primary); color: #fafafa;
+  font: inherit; font-size: 0.9rem; font-weight: 600;
+  /* Deliberately not a pointer: it is a real button that goes nowhere, and a
+     pointer would promise otherwise. */
+  cursor: default;
 }
 .yp-page .yp-embed__ph em {
   grid-column: span 12;
