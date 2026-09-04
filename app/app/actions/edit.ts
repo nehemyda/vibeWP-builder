@@ -22,6 +22,7 @@ import { ensureSiteForm } from "@/lib/forms/ensure";
 import { applyFieldEdit } from "@/lib/forms/apply-field-edit";
 import type { FormFieldSpec } from "@/app/actions/forms";
 import { writeChromeWithHistory } from "@/lib/history/chrome";
+import { resolveSitePaths } from "@/lib/site-paths";
 
 /**
  * One targeted change to a page, from a sentence.
@@ -130,6 +131,18 @@ async function runEdit(
           where: eq(formDefinitions.embedToken, embedToken),
         })
       : undefined;
+
+  /*
+   * Where the form builder is, for refusals that should hand over rather than
+   * stop. A refusal is only a dead end if it does not say what to do next —
+   * and chat covers the common field changes now, so what remains (reordering,
+   * dropdown choices, placeholder text, styling, notification addresses) is
+   * genuinely the builder's job, not a limitation to apologise for.
+   */
+  const formBuilderHint = attachedForm
+    ? ` For anything else — reordering, dropdown choices, placeholder text or styling — open ${(await resolveSitePaths(site!)).leadsPath}?tab=forms&form=${attachedForm.id}`
+    : "";
+
   const available = await sectionsForPlan(site?.plan ?? "starter");
 
   let op: EditOp;
@@ -178,7 +191,16 @@ async function runEdit(
      * a client reading their own site's internals is a fact. Node types and
      * registry keys are ours, so they get stripped here regardless.
      */
-    return { ok: false, message: plainRefusal(op.reason) };
+    /*
+     * If they were asking about the form, say where it can be changed. The
+     * planner refuses things chat cannot do; that is not the same as things
+     * that cannot be done.
+     */
+    const aboutForm = /\b(form|field|question|dropdown|placeholder)\b/i.test(instruction);
+    return {
+      ok: false,
+      message: plainRefusal(op.reason) + (aboutForm ? formBuilderHint : ""),
+    };
   }
 
   /*
@@ -251,7 +273,8 @@ async function runEdit(
       width: op.width,
       required: op.required,
     });
-    if (!result.ok) return { ok: false, message: result.error };
+    // Hand over rather than stop.
+    if (!result.ok) return { ok: false, message: `${result.error}${formBuilderHint}` };
 
     await db
       .update(formDefinitions)
