@@ -583,6 +583,16 @@ export const smtpSettings = pgTable("smtp_settings", {
   fromEmail: text("from_email"),
   fromName: text("from_name").notNull().default("VibeWP"),
   secure: boolean("secure").notNull().default(false),
+  /**
+   * Which level this row serves: "global", "agency" or "site".
+   *
+   * One table for all three so the resolution chain is a single query pattern
+   * rather than three shapes that can disagree. Existing rows default to
+   * global, which is what they have always been.
+   */
+  scope: text("scope").notNull().default("global"),
+  agencyId: uuid("agency_id"),
+  siteId: uuid("site_id"),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

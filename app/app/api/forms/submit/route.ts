@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { formDefinitions, formSubmissions } from "@/lib/db/schema";
+import { formDefinitions, formSubmissions, sites } from "@/lib/db/schema";
+import { notifyNewLead } from "@/lib/mail/notify-lead";
 
 /**
  * Where a website's contact form posts.
@@ -224,17 +225,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Please fill in the form." }, { status: 400, headers });
   }
 
-  await db.insert(formSubmissions).values({
-    siteId: form.siteId,
-    formId: form.id,
-    data,
-    meta: {
-      ip,
-      userAgent: request.headers.get("user-agent")?.slice(0, 400) ?? null,
-      page: typeof body.page === "string" ? body.page.slice(0, 500) : null,
-      referrer: typeof body.referrer === "string" ? body.referrer.slice(0, 500) : null,
-    },
-  });
+  const [stored] = await db
+    .insert(formSubmissions)
+    .values({
+      siteId: form.siteId,
+      formId: form.id,
+      data,
+      meta: {
+        ip,
+        userAgent: request.headers.get("user-agent")?.slice(0, 400) ?? null,
+        page: typeof body.page === "string" ? body.page.slice(0, 500) : null,
+        referrer: typeof body.referrer === "string" ? body.referrer.slice(0, 500) : null,
+      },
+    })
+    .returning({ id: formSubmissions.id });
+
+  /*
+   * Notify AFTER storing, and never let it change the answer.
+   *
+   * The lead is safe the moment the row exists. Awaiting the send would make a
+   * slow mail server a slow form for the visitor, and failing on it would tell
+   * someone their enquiry did not go through when it did — losing the lead to
+   * protect the notification about it.
+   */
+  if (form.notifyEmails) {
+    const site = await db.query.sites.findFirst({ where: eq(sites.id, form.siteId) });
+    void notifyNewLead({
+      siteId: form.siteId,
+      siteName: site?.name ?? "your site",
+      to: form.notifyEmails,
+      formName: form.name,
+      data,
+      leadUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard?lead=${stored?.id ?? ""}`,
+    });
+  }
 
   /*
    * A form post gets a redirect, not JSON: without scripting the browser would
