@@ -1,7 +1,7 @@
 import { parse } from "node-html-parser";
 import { getSectionByNodeType, SECTIONS } from "@/lib/sections";
 import { esc, escAttr } from "./blocks";
-import { defaultSpan } from "@/lib/forms/static-markup";
+import { defaultSpan, staticFormMarkup } from "@/lib/forms/static-markup";
 
 /**
  * Page-level conversion between stored schemas and Gutenberg markup.
@@ -210,33 +210,27 @@ export function withPreviewPlaceholders(
     .join(";");
   const phStyle = phTokens ? ` style="${escAttr(phTokens)}"` : "";
 
+  /*
+   * The SAME renderer the live site uses, in inert mode.
+   *
+   * The canvas used to draw its own skeleton with its own classes, so the
+   * preview and the real form were two descriptions of one thing that drifted
+   * apart whenever either changed — exactly how the builder canvas came to
+   * disagree with WordPress before. One function, one stylesheet, and "does the
+   * preview match?" stops being a question anyone has to ask.
+   */
   const formPreview = formFields?.length
-    ? formFields
-        .map((f) => {
-          const span = typeof f.span === "number" ? Math.min(12, Math.max(1, f.span)) : defaultSpan(f.type);
-          const id = `ph-${escAttr(f.name)}`;
-          const ph = f.placeholder ? ` placeholder="${escAttr(f.placeholder)}"` : "";
-          const control =
-            f.type === "textarea"
-              ? `<textarea id="${id}" class="tall"${ph}></textarea>`
-              : f.type === "select"
-                ? `<select id="${id}">${(f.options ?? [])
-                    .map((o) => `<option>${esc(o)}</option>`)
-                    .join("")}</select>`
-                : `<input id="${id}" type="${escAttr(
-                    ["text", "email", "tel", "number", "date", "url"].includes(f.type) ? f.type : "text",
-                  )}"${ph}>`;
-          return (
-            `<label style="grid-column:span ${span}" for="${id}">` +
-            `<span>${esc(f.label || f.name)}${f.required ? "*" : ""}</span>${control}` +
-            "</label>"
-          );
-        })
-        .join("") + '<button type="button" class="yp-embed__send">Send</button>' + caption
-    : '<label style="grid-column:span 6"><span></span><i></i></label>' +
+    ? staticFormMarkup({
+        fields: formFields as Parameters<typeof staticFormMarkup>[0]["fields"],
+        token: formToken ?? "",
+        endpoint: "",
+        style: formStyle,
+        inert: true,
+      }) + caption
+    : '<div class="vibewp-form">' +
       '<label style="grid-column:span 6"><span></span><i></i></label>' +
       '<label style="grid-column:span 12"><span></span><i class="tall"></i></label>' +
-      "<b>Send</b><em>Add a form in Leads &amp; forms to see it here</em>";
+      "<b>Send</b><em>Add a form in Leads &amp; forms to see it here</em></div>"
 
   const navLinks = (pages?.length ? pages : [{ slug: "home", title: "Home" }, { slug: "services", title: "Services" }, { slug: "about", title: "About" }, { slug: "contact", title: "Contact" }])
     .map(
@@ -312,7 +306,7 @@ export function withPreviewPlaceholders(
      */
     .replace(
       /<div class="yp-embed__mount"[^>]*><\/div>\s*<script[^>]*><\/script>/g,
-      `<div class="yp-embed__ph"${phStyle}>${formPreview}</div>`,
+      `<div class="yp-embed__ph">${formPreview}</div>`,
     )
     .replace(
       /<!--\s*wp:social-links[^>]*?\/-->/g,

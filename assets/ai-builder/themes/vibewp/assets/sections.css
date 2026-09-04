@@ -3035,19 +3035,20 @@ body.yp-page {
    client's ACTUAL questions instead of grey bars: a preview that shows the
    labels they wrote is the difference between "this is your form" and "a
    section failed to load". */
+/* Now only a wrapper: the form inside carries the real vibewp-form classes, so
+   the dashed outline is all this contributes — the canvas saying "preview". */
 .yp-page .yp-embed__ph {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
+  display: block;
   gap: var(--vwf-gap, 0.9rem);
   /* The client's own tokens, so the canvas shows the background and spacing the
      live page will. The dashed border stays: it is the canvas saying "this is a
      preview", and is the one thing here that is ours rather than theirs. */
   max-width: var(--vwf-max, 34rem);
-  padding: var(--vwf-pad, 1.2rem);
-  background: var(--vwf-bg, transparent);
   border: 1px dashed var(--line);
   border-radius: var(--vwf-radius, 12px);
 }
+/* The fallback skeleton still needs the grid, since it has no real form. */
+.yp-page .yp-embed__ph > .vibewp-form { max-width: none; }
 .yp-page .yp-embed__ph label { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
 .yp-page .yp-embed__ph span {
   font-size: 0.85rem; font-weight: 600; color: var(--ink);

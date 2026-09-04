@@ -39,8 +39,21 @@ export function staticFormMarkup(opts: {
   submitLabel?: string;
   /** The form's saved styling, as tokens. */
   style?: Record<string, string>;
+  /**
+   * Render for the builder canvas: identical markup and classes, but a <div>
+   * instead of a <form> and a button that goes nowhere.
+   *
+   * The canvas used to draw its own skeleton with its own classes, so the
+   * preview and the real form were two stylesheets describing one thing and
+   * drifted apart every time either changed. Sharing the renderer is what makes
+   * "does it match?" stop being a question.
+   *
+   * It must not be a <form>: with no action a submit navigates the iframe, and
+   * with one it posts a real lead every time somebody looks at a page.
+   */
+  inert?: boolean;
 }): string {
-  const { fields, token, endpoint, submitLabel, style } = opts;
+  const { fields, token, endpoint, submitLabel, style, inert } = opts;
 
   /*
    * The client's styling, inline on the form.
@@ -85,15 +98,22 @@ export function staticFormMarkup(opts: {
     .join("");
 
   return (
-    `<form class="vibewp-form" method="post" action="${escAttr(endpoint)}"` +
-    (tokens ? ` style="${escAttr(tokens)}"` : "") +
-    ">" +
+    (inert
+      ? `<div class="vibewp-form"${tokens ? ` style="${escAttr(tokens)}"` : ""}>`
+      : `<form class="vibewp-form" method="post" action="${escAttr(endpoint)}"${
+          tokens ? ` style="${escAttr(tokens)}"` : ""
+        }>`) +
     controls +
-    // Off-screen, not display:none — bots increasingly skip the obvious tell.
-    '<div class="vibewp-form__hp" aria-hidden="true">' +
-    '<input type="text" name="website" tabindex="-1" autocomplete="off"></div>' +
-    `<input type="hidden" name="site" value="${escAttr(token)}">` +
-    `<button type="submit" class="vibewp-form__submit">${esc(submitLabel || "Send")}</button>` +
-    "</form>"
+    // The honeypot and the token are for real submissions only; the canvas has
+    // nothing to submit, and shipping them there would be noise.
+    (inert
+      ? ""
+      : '<div class="vibewp-form__hp" aria-hidden="true">' +
+        '<input type="text" name="website" tabindex="-1" autocomplete="off"></div>' +
+        `<input type="hidden" name="site" value="${escAttr(token)}">`) +
+    `<button type="${inert ? "button" : "submit"}" class="vibewp-form__submit">${esc(
+      submitLabel || "Send",
+    )}</button>` +
+    (inert ? "</div>" : "</form>")
   );
 }
