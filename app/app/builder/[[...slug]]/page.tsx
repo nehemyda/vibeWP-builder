@@ -84,9 +84,31 @@ export default async function BuilderPage({
    * than grey bars. Only the active one: a paused form is not what the live
    * page would show.
    */
-  const attachedForm = await db.query.formDefinitions.findFirst({
-    where: and(eq(formDefinitions.siteId, site.id), eq(formDefinitions.isActive, true)),
-  });
+  /*
+   * EVERY form on the site, keyed by its embed token.
+   *
+   * This took the first active form and handed it to the canvas whatever page
+   * was open, so the quote page drew the contact form's questions and a field
+   * added to the quote form never appeared. Which form a page shows is decided
+   * by the token in its own FormEmbed node, and the canvas switches pages
+   * without asking the server, so it needs them all.
+   */
+  const siteForms = await db
+    .select()
+    .from(formDefinitions)
+    .where(and(eq(formDefinitions.siteId, site.id), eq(formDefinitions.isActive, true)));
+
+  const formsByToken = Object.fromEntries(
+    siteForms
+      .filter((f) => f.embedToken)
+      .map((f) => [
+        f.embedToken as string,
+        {
+          fields: (f.fields as FormPreviewField[]) ?? [],
+          style: (f.style as Record<string, string>) ?? {},
+        },
+      ]),
+  );
 
   // Real contact details, so the canvas resolves the {{phone}}-style tokens
   // the generated content carries and shows what the live site will show.
@@ -174,9 +196,7 @@ export default async function BuilderPage({
       initialSchema={initialSchema}
       initialIntake={initialIntake}
       previewFacts={previewFacts}
-      formFields={(attachedForm?.fields as FormPreviewField[] | undefined) ?? []}
-      formToken={attachedForm?.embedToken ?? null}
-      formStyle={(attachedForm?.style as Record<string, string> | undefined) ?? {}}
+      formsByToken={formsByToken}
       /*
        * Read here rather than in the drawer: it is a server component, so the
        * hosting records never travel through a client action, and an unset

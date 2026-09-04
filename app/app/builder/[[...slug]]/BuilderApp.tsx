@@ -196,9 +196,7 @@ export function BuilderApp({
   initialChrome,
   initialIntake,
   previewFacts,
-  formFields,
-  formToken,
-  formStyle,
+  formsByToken,
   siteDetails,
   prompt,
   autostart,
@@ -222,12 +220,14 @@ export function BuilderApp({
   initialIntake: { data: IntakeData; completed: boolean };
   /** phone/email/address/hours, for resolving tokens in the canvas. */
   previewFacts: Record<string, string>;
-  /** The attached form's fields, so the canvas draws the real questions. */
-  formFields: FormPreviewField[];
-  /** Its embed token, so the canvas can link to the working form. */
-  formToken: string | null;
-  /** Its saved styling, so the canvas matches the live page. */
-  formStyle: Record<string, string>;
+  /**
+   * Every form on the site, keyed by embed token.
+   *
+   * Keyed rather than singular because the canvas switches pages on its own,
+   * and which form a page shows is decided by the token in its own FormEmbed
+   * node — not by which form happens to be first.
+   */
+  formsByToken: Record<string, { fields: FormPreviewField[]; style: Record<string, string> }>;
   /** Everything the site-details drawer shows. */
   siteDetails: SiteDetails;
   prompt: string | null;
@@ -272,7 +272,12 @@ export function BuilderApp({
    * the canvas kept drawing the old questions, so the reply and the screen
    * disagreed about what had just happened.
    */
-  const [fields, setFields] = useState(formFields);
+  const [forms, setForms] = useState(formsByToken);
+
+  /* Which form THIS page shows, read from the page on screen. */
+  const activeFormToken = ((schema?.nodes ?? []) as { type?: string; props?: { formToken?: string } }[])
+    .find((n) => n.type === "FormEmbed")?.props?.formToken;
+  const activeForm = activeFormToken ? forms[activeFormToken] : undefined;
   const [intake, setIntake] = useState(initialIntake);
   /*
    * Open on a first build, closed afterwards.
@@ -908,8 +913,14 @@ export function BuilderApp({
     }
 
     // A form edit changes the canvas as surely as a section edit does.
-    if (result.ok && "formFields" in result && result.formFields) {
-      setFields(result.formFields as typeof fields);
+    if (result.ok && "formFields" in result && result.formFields && activeFormToken) {
+      setForms((prev) => ({
+        ...prev,
+        [activeFormToken]: {
+          fields: result.formFields as FormPreviewField[],
+          style: prev[activeFormToken]?.style ?? {},
+        },
+      }));
     }
 
     // The instruction genuinely asked for the page to be written again.
@@ -1391,9 +1402,9 @@ export function BuilderApp({
                     // actually has. The exported site's navigation falls back
                     // to exactly this list.
                     pages.map((p) => ({ slug: p.slug, title: p.title })),
-                    fields,
-                    formToken ?? undefined,
-                    formStyle,
+                    activeForm?.fields ?? [],
+                    activeFormToken,
+                    activeForm?.style ?? {},
                   )}
                   // The palette the client chose, so the canvas is that site's
                   // colours rather than the theme's defaults.
