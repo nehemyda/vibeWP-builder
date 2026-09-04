@@ -21,20 +21,47 @@ import type { FormFieldSpec } from "@/app/actions/forms";
  * Rendered from the stored definition, so the fallback asks the same questions
  * as the real thing rather than a guess at them.
  */
+/**
+ * The width a field gets when nothing has set one.
+ *
+ * Type-aware, because 6 for everything put a textarea at half width — which no
+ * one has ever wanted, and which is what a form saved before spans existed
+ * still renders as. A long answer needs the row; a name does not.
+ */
+export function defaultSpan(type: string): number {
+  return type === "textarea" ? 12 : 6;
+}
+
 export function staticFormMarkup(opts: {
   fields: FormFieldSpec[];
   token: string;
   endpoint: string;
   submitLabel?: string;
+  /** The form's saved styling, as tokens. */
+  style?: Record<string, string>;
 }): string {
-  const { fields, token, endpoint, submitLabel } = opts;
+  const { fields, token, endpoint, submitLabel, style } = opts;
+
+  /*
+   * The client's styling, inline on the form.
+   *
+   * embed.js applies these when it renders, but the exported form must carry
+   * them itself — otherwise a form styled with a background renders without one
+   * until the script loads, and permanently if it never does. Keys are
+   * validated: these become CSS custom properties, and stored text must not be
+   * able to become anything else.
+   */
+  const tokens = Object.entries(style ?? {})
+    .filter(([k]) => /^[a-z0-9-]+$/i.test(k))
+    .map(([k, v]) => `--vwf-${k}:${String(v).replace(/[;"<>]/g, "")}`)
+    .join(";");
 
   const controls = fields
     .map((f) => {
       const id = `vwf-${escAttr(token)}-${escAttr(f.name)}`;
       const req = f.required ? " required" : "";
       const ph = f.placeholder ? ` placeholder="${escAttr(f.placeholder)}"` : "";
-      const span = typeof f.span === "number" ? Math.min(12, Math.max(1, f.span)) : 6;
+      const span = typeof f.span === "number" ? Math.min(12, Math.max(1, f.span)) : defaultSpan(f.type);
 
       let control: string;
       if (f.type === "textarea") {
@@ -58,7 +85,9 @@ export function staticFormMarkup(opts: {
     .join("");
 
   return (
-    `<form class="vibewp-form" method="post" action="${escAttr(endpoint)}">` +
+    `<form class="vibewp-form" method="post" action="${escAttr(endpoint)}"` +
+    (tokens ? ` style="${escAttr(tokens)}"` : "") +
+    ">" +
     controls +
     // Off-screen, not display:none — bots increasingly skip the obvious tell.
     '<div class="vibewp-form__hp" aria-hidden="true">' +

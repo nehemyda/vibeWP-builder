@@ -184,6 +184,7 @@ export function BuilderApp({
   previewFacts,
   formFields,
   formToken,
+  formStyle,
   siteDetails,
   prompt,
   autostart,
@@ -211,6 +212,8 @@ export function BuilderApp({
   formFields: FormPreviewField[];
   /** Its embed token, so the canvas can link to the working form. */
   formToken: string | null;
+  /** Its saved styling, so the canvas matches the live page. */
+  formStyle: Record<string, string>;
   /** Everything the site-details drawer shows. */
   siteDetails: SiteDetails;
   prompt: string | null;
@@ -1345,6 +1348,7 @@ export function BuilderApp({
                     pages.map((p) => ({ slug: p.slug, title: p.title })),
                     formFields,
                     formToken ?? undefined,
+                    formStyle,
                   )}
                   // The palette the client chose, so the canvas is that site's
                   // colours rather than the theme's defaults.

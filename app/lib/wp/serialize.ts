@@ -1,6 +1,7 @@
 import { parse } from "node-html-parser";
 import { getSectionByNodeType, SECTIONS } from "@/lib/sections";
 import { esc, escAttr } from "./blocks";
+import { defaultSpan } from "@/lib/forms/static-markup";
 
 /**
  * Page-level conversion between stored schemas and Gutenberg markup.
@@ -135,6 +136,12 @@ export function withPreviewPlaceholders(
   formFields?: FormPreviewField[],
   /** The attached form's embed token, so the canvas can link to the real thing. */
   formToken?: string,
+  /**
+   * The form's saved styling, so the canvas shows the same background and
+   * spacing the live page will. Without it the three views of one form —
+   * canvas, standalone preview and WordPress — disagreed on how it looks.
+   */
+  formStyle?: Record<string, string>,
 ): string {
   /*
    * The site title is a real value we hold, so the builder passes it and the
@@ -195,10 +202,18 @@ export function withPreviewPlaceholders(
    * looked at a page. Send is type="button" and goes nowhere — the link beside
    * it opens the form that really submits.
    */
+  /* Keys validated: these become custom properties, and stored text must not
+     be able to become anything else. */
+  const phTokens = Object.entries(formStyle ?? {})
+    .filter(([k]) => /^[a-z0-9-]+$/i.test(k))
+    .map(([k, v]) => `--vwf-${k}:${String(v).replace(/[;"<>]/g, "")}`)
+    .join(";");
+  const phStyle = phTokens ? ` style="${escAttr(phTokens)}"` : "";
+
   const formPreview = formFields?.length
     ? formFields
         .map((f) => {
-          const span = typeof f.span === "number" ? Math.min(12, Math.max(1, f.span)) : 6;
+          const span = typeof f.span === "number" ? Math.min(12, Math.max(1, f.span)) : defaultSpan(f.type);
           const id = `ph-${escAttr(f.name)}`;
           const ph = f.placeholder ? ` placeholder="${escAttr(f.placeholder)}"` : "";
           const control =
@@ -297,7 +312,7 @@ export function withPreviewPlaceholders(
      */
     .replace(
       /<div class="yp-embed__mount"[^>]*><\/div>\s*<script[^>]*><\/script>/g,
-      `<div class="yp-embed__ph">${formPreview}</div>`,
+      `<div class="yp-embed__ph"${phStyle}>${formPreview}</div>`,
     )
     .replace(
       /<!--\s*wp:social-links[^>]*?\/-->/g,

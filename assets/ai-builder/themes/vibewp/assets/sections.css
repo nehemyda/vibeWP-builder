@@ -3038,11 +3038,15 @@ body.yp-page {
 .yp-page .yp-embed__ph {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  gap: 0.9rem;
-  max-width: 34rem;
-  padding: 1.2rem;
+  gap: var(--vwf-gap, 0.9rem);
+  /* The client's own tokens, so the canvas shows the background and spacing the
+     live page will. The dashed border stays: it is the canvas saying "this is a
+     preview", and is the one thing here that is ours rather than theirs. */
+  max-width: var(--vwf-max, 34rem);
+  padding: var(--vwf-pad, 1.2rem);
+  background: var(--vwf-bg, transparent);
   border: 1px dashed var(--line);
-  border-radius: 12px;
+  border-radius: var(--vwf-radius, 12px);
 }
 .yp-page .yp-embed__ph label { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
 .yp-page .yp-embed__ph span {

@@ -77,7 +77,10 @@
 
   /** Clamped, because a bad span would collapse a row or overflow it. */
   function spanOf(f) {
-    var n = typeof f.span === "number" ? f.span : f.width === "full" ? 12 : 6;
+    /* Type-aware default: 6 for everything put a textarea at half width, which
+       is what a form saved before spans existed still renders as. */
+    var fallback = f.width === "full" || f.type === "textarea" ? 12 : 6;
+    var n = typeof f.span === "number" ? f.span : fallback;
     return Math.min(12, Math.max(1, Math.round(n)));
   }
 

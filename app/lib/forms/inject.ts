@@ -21,12 +21,16 @@ export async function withStaticForms(html: string, endpoint: string): Promise<s
   if (tokens.length === 0) return html;
 
   const unique = [...new Set(tokens)];
-  const forms = new Map<string, { fields: FormFieldSpec[] }>();
+  const forms = new Map<string, { fields: FormFieldSpec[]; style: Record<string, string> }>();
   for (const token of unique) {
     const form = await db.query.formDefinitions.findFirst({
       where: eq(formDefinitions.embedToken, token),
     });
-    if (form?.isActive) forms.set(token, { fields: (form.fields as FormFieldSpec[]) ?? [] });
+    if (form?.isActive)
+      forms.set(token, {
+        fields: (form.fields as FormFieldSpec[]) ?? [],
+        style: (form.style as Record<string, string>) ?? {},
+      });
   }
 
   return html.replace(
@@ -36,7 +40,7 @@ export async function withStaticForms(html: string, endpoint: string): Promise<s
       if (!form || form.fields.length === 0) return whole;
       return (
         `<div class="yp-embed__mount" data-vibewp-form="${token}">` +
-        staticFormMarkup({ fields: form.fields, token, endpoint }) +
+        staticFormMarkup({ fields: form.fields, token, endpoint, style: form.style }) +
         "</div>"
       );
     },
