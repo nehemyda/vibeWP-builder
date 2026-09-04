@@ -57,7 +57,7 @@ export default async function AdminSmtpSettingsPage({
       <div className={shell.twoCol}>
         <div className={shell.panel} style={{ padding: "1.4rem" }}>
           <h2 style={{ margin: "0 0 1rem", fontSize: "1rem" }}>Server settings</h2>
-          <form action={updateSmtpSettingsAction} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <form suppressHydrationWarning action={updateSmtpSettingsAction} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             <div>
               <label style={labelStyle}>Host</label>
               <input name="host" defaultValue={settings.host ?? ""} placeholder="smtp.sendgrid.net" style={inputStyle} />

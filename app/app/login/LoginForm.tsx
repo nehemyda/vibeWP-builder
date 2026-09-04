@@ -80,7 +80,7 @@ export function LoginForm({ prompt }: { prompt: string | null }) {
 
       <div className={styles.divider}>or continue with email</div>
 
-      <form onSubmit={onSubmit}>
+      <form suppressHydrationWarning onSubmit={onSubmit}>
         <div className={styles.field}>
           <label htmlFor="email">Email</label>
           <input

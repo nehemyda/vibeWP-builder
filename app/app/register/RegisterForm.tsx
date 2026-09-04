@@ -105,7 +105,7 @@ export function RegisterForm({ prompt }: { prompt: string | null }) {
 
       <div className={styles.divider}>or sign up with email</div>
 
-      <form onSubmit={onSubmit}>
+      <form suppressHydrationWarning onSubmit={onSubmit}>
         <div className={styles.fieldRow}>
           <div className={styles.field}>
             <label htmlFor="name">Full name</label>

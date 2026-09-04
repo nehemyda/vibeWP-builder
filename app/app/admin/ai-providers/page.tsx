@@ -72,7 +72,7 @@ export default async function AiProvidersPage({
       )}
 
       <div className={shell.panel} style={{ maxWidth: 520, padding: "1.4rem" }}>
-        <form
+        <form suppressHydrationWarning
           action={updateAiProviderSettingsAction}
           style={{ display: "flex", flexDirection: "column", gap: "1.3rem" }}
         >

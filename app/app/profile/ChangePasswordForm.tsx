@@ -48,7 +48,7 @@ export function ChangePasswordForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <form suppressHydrationWarning onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       {error && (
         <div style={{ color: "#b3261e", fontSize: "0.85rem" }}>{error}</div>
       )}

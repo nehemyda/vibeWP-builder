@@ -83,7 +83,21 @@ export function SmtpForm({
         )}
       </p>
 
-      <form action={action} style={{ display: "grid", gap: "0.8rem" }}>
+      {/*
+        suppressHydrationWarning because password managers inject attributes
+        into login-shaped forms before React hydrates — Myki adds
+        data-myki-form-1, 1Password and LastPass add their own. The server HTML
+        cannot contain them, so React reports a mismatch that is not ours and
+        that no change here can prevent.
+
+        Deliberately narrow: it covers this element's own attributes only, so a
+        genuine mismatch in the fields inside is still reported.
+      */}
+      <form
+        action={action}
+        suppressHydrationWarning
+        style={{ display: "grid", gap: "0.8rem" }}
+      >
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "0.8rem" }}>
           <div>
             <label style={label} htmlFor="host">Server</label>
