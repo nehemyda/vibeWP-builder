@@ -3035,90 +3035,53 @@ body.yp-page {
    client's ACTUAL questions instead of grey bars: a preview that shows the
    labels they wrote is the difference between "this is your form" and "a
    section failed to load". */
-/* Now only a wrapper: the form inside carries the real vibewp-form classes, so
-   the dashed outline is all this contributes — the canvas saying "preview". */
+/* Now only a wrapper.
+   Everything inside carries the real vibewp-form classes and is styled by the
+   rules below, so the dashed outline is all this contributes — the canvas
+   saying "preview".
+
+   It deliberately styles NOTHING within itself: the old skeleton rules here
+   targeted bare `label`, `span` and `i`, which then matched the real form's
+   own elements and, for one, made every label a column so the required
+   asterisk fell to its own line. A preview that restyles the thing it is
+   previewing is not a preview. */
 .yp-page .yp-embed__ph {
   display: block;
-  gap: var(--vwf-gap, 0.9rem);
-  /* The client's own tokens, so the canvas shows the background and spacing the
-     live page will. The dashed border stays: it is the canvas saying "this is a
-     preview", and is the one thing here that is ours rather than theirs. */
   max-width: var(--vwf-max, 34rem);
   border: 1px dashed var(--line);
   border-radius: var(--vwf-radius, 12px);
 }
-/* The fallback skeleton still needs the grid, since it has no real form. */
 .yp-page .yp-embed__ph > .vibewp-form { max-width: none; }
-.yp-page .yp-embed__ph label { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
-.yp-page .yp-embed__ph span {
-  font-size: 0.85rem; font-weight: 600; color: var(--ink);
-}
-/* An empty label still needs height, or the fallback skeleton collapses. */
-.yp-page .yp-embed__ph span:empty {
+
+/* The stand-in shown when no form is attached — bars, not fields, because
+   there are no questions to show yet. Scoped to its own class so it cannot
+   reach a real form. */
+.yp-page .yp-embed__skeleton label { display: flex; flex-direction: column; gap: 0.35rem; }
+.yp-page .yp-embed__skeleton span {
   display: block; height: 0.62rem; width: 6.5rem; border-radius: 4px; background: var(--line);
 }
-/* Real controls now, so they are styled as controls rather than as boxes.
-   font: inherit matters — a browser default would make the canvas form the one
-   thing on the page in a different typeface. */
-.yp-page .yp-embed__ph input,
-.yp-page .yp-embed__ph textarea,
-.yp-page .yp-embed__ph select {
-  width: 100%;
-  font: inherit;
-  font-size: 0.95rem;
-  color: var(--ink);
-  padding: 0.72rem 0.85rem;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--surface);
-}
-.yp-page .yp-embed__ph input:focus,
-.yp-page .yp-embed__ph textarea:focus,
-.yp-page .yp-embed__ph select:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
-}
-.yp-page .yp-embed__ph textarea.tall { height: 6rem; resize: vertical; }
-
-/* Kept for the no-form fallback, which still draws bars. */
-.yp-page .yp-embed__ph i {
+.yp-page .yp-embed__skeleton i {
   display: block; height: 2.6rem; border-radius: 9px;
   border: 1px solid var(--line); background: var(--surface);
 }
-.yp-page .yp-embed__ph i.tall { height: 6rem; }
-/* A dropdown reads as one at a glance because of the chevron, not the box. */
-.yp-page .yp-embed__ph i.pick {
-  background:
-    linear-gradient(45deg, transparent 49%, var(--muted) 49% 55%, transparent 55%) no-repeat
-      right 1.1rem top 1.15rem / 7px 7px,
-    linear-gradient(-45deg, transparent 49%, var(--muted) 49% 55%, transparent 55%) no-repeat
-      right 0.75rem top 1.15rem / 7px 7px,
-    var(--surface);
-}
-.yp-page .yp-embed__ph b,
-.yp-page .yp-embed__ph .yp-embed__send {
+.yp-page .yp-embed__skeleton i.tall { height: 6rem; }
+.yp-page .yp-embed__skeleton b {
   grid-column: span 12; justify-self: start;
-  padding: 0.7rem 1.4rem; border-radius: 9px; border: 0;
-  background: var(--primary); color: #fafafa;
-  font: inherit; font-size: 0.9rem; font-weight: 600;
-  /* Deliberately not a pointer: it is a real button that goes nowhere, and a
-     pointer would promise otherwise. */
-  cursor: default;
+  padding: 0.7rem 1.4rem; border-radius: 9px;
+  background: var(--primary); color: #fafafa; font-size: 0.9rem;
 }
-.yp-page .yp-embed__ph em {
-  grid-column: span 12;
-  font-style: normal; font-size: 0.78rem; color: var(--muted);
+.yp-page .yp-embed__skeleton em {
+  grid-column: span 12; font-style: normal; font-size: 0.78rem; color: var(--muted);
 }
-/* The one thing in the drawing that IS clickable, and it looks it. */
-.yp-page .yp-embed__ph .yp-embed__try {
-  grid-column: span 12;
-  justify-self: start;
+
+/* The one clickable thing in the preview, and it looks it. */
+.yp-page .yp-embed__try {
+  display: inline-block;
+  margin-top: 0.6rem;
   font-size: 0.8rem;
   color: var(--primary);
   text-decoration: underline;
   text-underline-offset: 2px;
-  cursor: pointer;
 }
 
 /* ── The embedded form, styled by the THEME ──

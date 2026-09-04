@@ -227,7 +227,7 @@ export function withPreviewPlaceholders(
         style: formStyle,
         inert: true,
       }) + caption
-    : '<div class="vibewp-form">' +
+    : '<div class="vibewp-form yp-embed__skeleton">' +
       '<label style="grid-column:span 6"><span></span><i></i></label>' +
       '<label style="grid-column:span 12"><span></span><i class="tall"></i></label>' +
       "<b>Send</b><em>Add a form in Leads &amp; forms to see it here</em></div>"
