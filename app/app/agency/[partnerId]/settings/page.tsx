@@ -178,7 +178,16 @@ export default async function AgencySettingsPage({
         </form>
       </div>
       <div style={{ marginTop: "1.6rem" }}>
-        <h2 style={{ margin: "0 0 0.7rem", fontSize: "1rem", fontWeight: 700 }}>Enquiry emails</h2>
+        {/*
+          Named for the agency, not the client. An agency does not receive these
+          enquiries — their clients do — and the account is not limited to
+          enquiries either: it is what we send AS, on behalf of every site they
+          manage. "Enquiry emails" was the client's heading, reused without
+          asking who was reading it.
+        */}
+        <h2 style={{ margin: "0 0 0.7rem", fontSize: "1rem", fontWeight: 700 }}>
+          Email for your client sites
+        </h2>
         <SmtpForm
           action={saveAgencySmtpAction.bind(null, agency.partnerId ?? "")}
           ownLabel="your agency"
