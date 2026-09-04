@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { businessProfiles, type sites, type profiles } from "@/lib/db/schema";
+import { businessProfiles, smtpSettings, type sites, type profiles } from "@/lib/db/schema";
 import type { resolveSitePaths } from "@/lib/site-paths";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CopyableText } from "@/components/dashboard/CopyableText";
@@ -9,11 +9,50 @@ import shell from "@/components/dashboard/dashboard-shell.module.css";
 import { smbNav } from "../nav";
 import { updateSiteSettingsAction } from "@/app/actions/sites";
 import { upsertBusinessProfileAction } from "@/app/actions/business-profile";
+import { SmtpForm } from "@/components/dashboard/SmtpForm";
+import { saveSiteSmtpAction, describeSmtpForSite } from "@/app/actions/smtp-scoped";
 
 type Profile = typeof profiles.$inferSelect;
 type Site = typeof sites.$inferSelect;
 type Role = Profile["role"];
 type Paths = Awaited<ReturnType<typeof resolveSitePaths>>;
+
+/**
+ * A client's own mail account.
+ *
+ * Optional: the platform sends everything by default, and this exists for a
+ * business that wants enquiry emails to come from THEIR address and name.
+ */
+async function smtpPanel(siteId: string, smbId: string) {
+  const own = await db.query.smtpSettings.findFirst({
+    where: and(eq(smtpSettings.scope, "site"), eq(smtpSettings.siteId, siteId)),
+  });
+  const active = await describeSmtpForSite(siteId);
+  return (
+    <div style={{ marginTop: "1.6rem" }}>
+      <h2 style={{ margin: "0 0 0.7rem", fontSize: "1rem", fontWeight: 700 }}>Enquiry emails</h2>
+      <SmtpForm
+        action={saveSiteSmtpAction.bind(null, smbId)}
+        ownLabel="this site"
+        activeLevel={active.configured ? active.level : null}
+        activeFrom={active.configured ? `${active.fromName} <${active.fromEmail}>` : null}
+        current={
+          own
+            ? {
+                host: own.host,
+                port: own.port,
+                username: own.username,
+                fromEmail: own.fromEmail,
+                fromName: own.fromName,
+                secure: own.secure,
+                hasPassword: Boolean(own.password),
+              }
+            : null
+        }
+      />
+    </div>
+  );
+}
 
 export async function SettingsView({
   profile,
@@ -140,6 +179,7 @@ export async function SettingsView({
           </button>
         </form>
       </div>
+      {await smtpPanel(site.id, site.smbId ?? "")}
     </DashboardShell>
   );
 }

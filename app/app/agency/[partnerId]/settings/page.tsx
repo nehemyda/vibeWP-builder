@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { businessProfiles, plans } from "@/lib/db/schema";
+import { businessProfiles, plans, smtpSettings } from "@/lib/db/schema";
 import { requireAgency } from "@/lib/auth/require-agency";
+import { SmtpForm } from "@/components/dashboard/SmtpForm";
+import { saveAgencySmtpAction } from "@/app/actions/smtp-scoped";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CopyableText } from "@/components/dashboard/CopyableText";
 import { BusinessDetailsFields } from "@/components/dashboard/BusinessDetailsFields";
@@ -40,6 +42,17 @@ export default async function AgencySettingsPage({
   }
 
   const basePath = `/agency/${agency.partnerId}`;
+
+  /*
+   * The agency's own mail account, and what actually sends.
+   *
+   * "Configured" and "in use" differ: an agency row only takes effect for a
+   * client that has not set up its own, so the sentence has to describe the
+   * chain rather than just this row.
+   */
+  const ownSmtp = await db.query.smtpSettings.findFirst({
+    where: and(eq(smtpSettings.scope, "agency"), eq(smtpSettings.agencyId, agency.id)),
+  });
   if (agency.partnerId !== partnerId) {
     redirect(`${basePath}/settings`);
   }
@@ -163,6 +176,35 @@ export default async function AgencySettingsPage({
             Save business details
           </button>
         </form>
+      </div>
+      <div style={{ marginTop: "1.6rem" }}>
+        <h2 style={{ margin: "0 0 0.7rem", fontSize: "1rem", fontWeight: 700 }}>Enquiry emails</h2>
+        <SmtpForm
+          action={saveAgencySmtpAction.bind(null, agency.partnerId ?? "")}
+          ownLabel="your agency"
+          activeLevel={ownSmtp?.host ? "agency" : "global"}
+          activeFrom={
+            ownSmtp?.host && ownSmtp.fromEmail
+              ? `${ownSmtp.fromName} <${ownSmtp.fromEmail}>`
+              : "the platform's address"
+          }
+          current={
+            ownSmtp
+              ? {
+                  host: ownSmtp.host,
+                  port: ownSmtp.port,
+                  username: ownSmtp.username,
+                  fromEmail: ownSmtp.fromEmail,
+                  fromName: ownSmtp.fromName,
+                  secure: ownSmtp.secure,
+                  hasPassword: Boolean(ownSmtp.password),
+                }
+              : null
+          }
+        />
+        <p style={{ marginTop: "0.7rem", fontSize: "0.78rem", color: "var(--muted, #79808f)" }}>
+          Used for every client site that hasn&rsquo;t set up its own.
+        </p>
       </div>
     </DashboardShell>
   );
