@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { tokensToCss, type DesignTokens } from "@/lib/design/tokens";
 import { ELEMENT_ROLES } from "@/lib/design/element-style";
+import { textPaths } from "@/lib/design/text-map";
 
 /** Only plain hex is allowed into the stylesheet. */
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
@@ -119,6 +120,38 @@ function roleUnder(from: Element | null, stopAt: Element): string | undefined {
  */
 const EDITOR_ACCENT = "#5b6bff";
 
+/** What each editable element said when editing began, so Escape can restore it. */
+const originalText = new WeakMap<Element, string>();
+
+/**
+ * Pairs the section's rendered text with the props it came from.
+ *
+ * Document order against declaration order, each element claimed once — see
+ * lib/design/text-map.ts for why matching by value is both sufficient and
+ * safe. Elements holding nothing but other elements are skipped: a container
+ * whose textContent happens to equal a child's would otherwise claim it.
+ */
+function matchText(
+  section: Element,
+  props: Record<string, unknown>,
+): Array<{ el: Element; path: string }> {
+  const wanted = textPaths(props);
+  const claimed = new Set<Element>();
+  const out: Array<{ el: Element; path: string }> = [];
+
+  const leaves = Array.from(section.querySelectorAll("*")).filter(
+    (el) => !Array.from(el.children).some((child) => (child.textContent ?? "").trim().length > 0),
+  );
+
+  for (const { path, value } of wanted) {
+    const hit = leaves.find((el) => !claimed.has(el) && (el.textContent ?? "").trim() === value);
+    if (!hit) continue;
+    claimed.add(hit);
+    out.push({ el: hit, path });
+  }
+  return out;
+}
+
 /**
  * Draws the hover and selection outlines by injecting one stylesheet.
  *
@@ -162,6 +195,8 @@ export function PreviewFrame({
   selection,
   onSelect,
   onGeometry,
+  editableProps,
+  onEditText,
 }: {
   /** Gutenberg block markup from schemaToGutenberg() — the same string exported. */
   html: string;
@@ -220,6 +255,16 @@ export function PreviewFrame({
    * mean they appeared in the markup we export, and in the height we measure.
    */
   onGeometry?: (boxes: SectionBox[]) => void;
+  /**
+   * The selected section's props, so its text can be matched to a prop path.
+   *
+   * Passed in rather than looked up here: the frame renders markup and knows
+   * nothing about the registry, and keeping it that way is what lets the same
+   * component serve the builder and the section library.
+   */
+  editableProps?: Record<string, unknown>;
+  /** Committed on blur, with the path the text came from. */
+  onEditText?: (path: string, value: string) => void;
 }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(MIN_HEIGHT);
@@ -234,13 +279,13 @@ export function PreviewFrame({
    * parent re-renders on every click, and re-attaching the whole apparatus on
    * each one is how a click starts costing a reflow.
    */
-  const handlers = useRef({ onNavigate, onSelect, onGeometry, selection });
+  const handlers = useRef({ onNavigate, onSelect, onGeometry, selection, onEditText });
   // Assigned in an effect rather than during render: writing a ref while
   // rendering is what React's own lint now rejects, and `selection` rides
   // along so attach() cannot paint an outline for a section that is no longer
   // the one selected.
   useEffect(() => {
-    handlers.current = { onNavigate, onSelect, onGeometry, selection };
+    handlers.current = { onNavigate, onSelect, onGeometry, selection, onEditText };
   });
 
   /*
@@ -508,6 +553,66 @@ export function PreviewFrame({
     if (!contentDoc?.body?.hasAttribute("data-vibewp-preview")) return;
     paintSelection(contentDoc, selection ?? null);
   }, [selection, doc]);
+
+  /*
+   * Type on the page.
+   *
+   * Only inside the SELECTED section: making the whole document editable
+   * would mean every stray click landed a caret somewhere, and the point of
+   * selecting a section first is that the client has said which part of the
+   * page they are working on.
+   *
+   * contentEditable is put on and taken off rather than left on, because an
+   * editable element swallows the click that would select something else.
+   */
+  useEffect(() => {
+    const contentDoc = ref.current?.contentDocument;
+    if (!contentDoc?.body?.hasAttribute("data-vibewp-preview")) return;
+
+    const cleanups: Array<() => void> = [];
+    const section =
+      selection?.kind === "node"
+        ? contentDoc.querySelector(`[data-vibewp-node="${selection.index}"]`)
+        : null;
+
+    if (section && editableProps) {
+      for (const { el, path } of matchText(section, editableProps)) {
+        el.setAttribute("contenteditable", "plaintext-only");
+        el.setAttribute("spellcheck", "true");
+
+        const commit = () => {
+          const next = (el.textContent ?? "").trim();
+          if (next) handlers.current.onEditText?.(path, next);
+        };
+        const onBlur = () => commit();
+        const onKeyDown = (event: KeyboardEvent) => {
+          // Enter commits; a heading is not a paragraph and a stray newline in
+          // one is never what was meant. Shift+Enter still breaks a line.
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            (el as HTMLElement).blur();
+          }
+          // Escape abandons the edit rather than committing half a word.
+          if (event.key === "Escape") {
+            event.preventDefault();
+            el.textContent = originalText.get(el) ?? el.textContent;
+            (el as HTMLElement).blur();
+          }
+        };
+        originalText.set(el, el.textContent ?? "");
+
+        el.addEventListener("blur", onBlur);
+        el.addEventListener("keydown", onKeyDown as EventListener);
+        cleanups.push(() => {
+          el.removeEventListener("blur", onBlur);
+          el.removeEventListener("keydown", onKeyDown as EventListener);
+          el.removeAttribute("contenteditable");
+          el.removeAttribute("spellcheck");
+        });
+      }
+    }
+    return () => cleanups.forEach((fn) => fn());
+  }, [selection, doc, editableProps]);
 
   return (
     <iframe

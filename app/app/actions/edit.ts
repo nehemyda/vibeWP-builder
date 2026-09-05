@@ -188,10 +188,13 @@ export type CanvasOp =
    * choices check — so the style panel deliberately offers nothing on chrome
    * and everything here lands on the strict path.
    */
-  | Extract<EditOp, { kind: "set_option" }>;
+  | Extract<EditOp, { kind: "set_option" }>
+  /* Typed on the page. No model involved — a path and a string. */
+  | Extract<EditOp, { kind: "set_text" }>;
 
 const CANVAS_OPS: CanvasOp["kind"][] = [
   "set_option",
+  "set_text",
   "swap_section",
   "move_section",
   "remove_section",
@@ -214,6 +217,10 @@ function describeCanvasOp(op: CanvasOp): string {
       return `Added the ${name(op.section)}`;
     case "set_option":
       return `Set ${op.option} to ${op.value} on the ${op.section}`;
+    case "set_text":
+      // Truncated: this becomes the revision's reason, and a whole paragraph
+      // of body copy in a history list is unreadable.
+      return `Edited the ${op.section} — "${op.value.slice(0, 60)}${op.value.length > 60 ? "…" : ""}"`;
   }
 }
 

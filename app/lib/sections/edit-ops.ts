@@ -1,5 +1,6 @@
 import { getSectionByKey, getSectionByNodeType } from "./index";
 import { isOptionField } from "./types";
+import { readPath, writePath } from "@/lib/design/text-map";
 
 /**
  * Structural edits to a page, as data.
@@ -118,6 +119,16 @@ export type EditOp =
       /** Registry key of the design to use instead, e.g. "hero-centered". */
       design: string;
     }
+  /**
+   * Rewrites one piece of copy, in place, from the canvas.
+   *
+   * Separate from rewrite_section because nothing is being written FOR the
+   * client — they typed it. No model, no generation, no interpretation: a path
+   * and a string. That is also why the path is validated against the stored
+   * props rather than trusted, since it arrives from a browser and the element
+   * it came from was identified by matching text.
+   */
+  | { kind: "set_text"; section: string; path: string; value: string }
   | { kind: "rewrite_section"; section: string; instruction: string }
   | { kind: "regenerate_page" }
   | { kind: "unsupported"; reason: string };
@@ -267,6 +278,36 @@ export function applyOp(
         ok: true,
         schema: { ...schema, nodes },
         describe: `Changed the ${previous?.name ?? "section"} to the ${design.name}.`,
+      };
+    }
+
+    case "set_text": {
+      const at = indexOfSection(nodes, op.section);
+      if (at < 0) return { ok: false, error: `There's no ${label(op.section)} on this page.` };
+
+      const props = (nodes[at].props ?? {}) as Record<string, unknown>;
+      const current = readPath(props, op.path);
+      /*
+       * The path has to name a string that is already there.
+       *
+       * It was derived by matching rendered text against the props, so a
+       * duplicate phrase or a stale canvas could hand back a path that no
+       * longer means what it did. Refusing anything that is not currently a
+       * string is what keeps that a failed edit rather than a new field
+       * invented in someone's page schema.
+       */
+      if (typeof current !== "string") {
+        return { ok: false, error: "That text can't be edited here." };
+      }
+      if (op.value.trim() === current.trim()) {
+        return { ok: false, error: "That text is unchanged." };
+      }
+
+      nodes[at] = { ...nodes[at], props: writePath(props, op.path, op.value) };
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe: `Edited the ${getSectionByNodeType(nodes[at].type)?.name ?? "section"}.`,
       };
     }
 

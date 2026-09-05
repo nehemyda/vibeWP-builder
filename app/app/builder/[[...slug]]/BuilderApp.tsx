@@ -1655,6 +1655,23 @@ export function BuilderApp({
                     if (!sel) setDesignFor(null);
                   }}
                   onGeometry={setBoxes}
+                  /*
+                   * Only the SELECTED section's props: the frame makes text
+                   * editable in that section alone, so handing it the whole
+                   * page would be work it throws away on every click.
+                   */
+                  editableProps={
+                    selection?.kind === "node" ? nodes[selection.index]?.props : undefined
+                  }
+                  onEditText={(path, value) => {
+                    if (selection?.kind !== "node") return;
+                    const ref = nodes[selection.index]?.type;
+                    if (!ref) return;
+                    void runCanvasOp(
+                      { kind: "set_text", section: ref, path, value },
+                      `Saving your edit to the ${labelOfSelection(selection)}`,
+                    );
+                  }}
                 />
               ) : (
                 <div className={styles.emptyCanvas}>

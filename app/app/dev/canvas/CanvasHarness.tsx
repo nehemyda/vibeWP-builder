@@ -15,6 +15,7 @@ import { Composer, WorkingCover } from "@/app/builder/[[...slug]]/Composer";
 import { StylePanel } from "@/app/builder/[[...slug]]/StylePanel";
 import type { DesignTokens } from "@/lib/design/tokens";
 import { ELEMENT_ROLES } from "@/lib/design/element-style";
+import { writePath } from "@/lib/design/text-map";
 import { SECTIONS } from "@/lib/sections";
 import styles from "@/app/builder/[[...slug]]/builder.module.css";
 import harness from "./harness.module.css";
@@ -62,6 +63,8 @@ export function CanvasHarness() {
   const [styleFor, setStyleFor] = useState<CanvasSelection | null>(null);
   /** Per-section settings, keyed by index — the harness's stand-in for props. */
   const [secStyle, setSecStyle] = useState<Record<number, Record<string, string>>>({});
+  /** Text the client typed, keyed by section index — the harness's stand-in for a save. */
+  const [edits, setEdits] = useState<Record<number, Record<string, unknown>>>({});
   const [boxes, setBoxes] = useState<SectionBox[]>([]);
   const [log, setLog] = useState<string[]>([]);
   const [order, setOrder] = useState<string[]>(FIXTURE);
@@ -93,7 +96,7 @@ export function CanvasHarness() {
         return {
           id: `n_${key}_${i}`,
           type: def.nodeType,
-          props: { ...(def.sample as object), ...(secStyle[i] ?? {}) },
+          props: { ...(def.sample as object), ...(secStyle[i] ?? {}), ...(edits[i] ?? {}) },
         };
       }),
     };
@@ -111,7 +114,7 @@ export function CanvasHarness() {
         { slug: "contact", title: "Contact" },
       ],
     );
-  }, [order, secStyle]);
+  }, [order, secStyle, edits]);
 
   const labelFor = (sel: CanvasSelection) => {
     if (sel.kind === "chrome") return sel.slot === "header" ? "Header" : "Footer";
@@ -140,6 +143,25 @@ export function CanvasHarness() {
             }}
             onGeometry={setBoxes}
             designTokens={tokens}
+            editableProps={
+              selection?.kind === "node"
+                ? {
+                    ...(getSectionByKey(order[selection.index])?.sample as object),
+                    ...(secStyle[selection.index] ?? {}),
+                    ...(edits[selection.index] ?? {}),
+                  }
+                : undefined
+            }
+            onEditText={(path, value) => {
+              if (selection?.kind !== "node") return;
+              const i = selection.index;
+              const base = {
+                ...(getSectionByKey(order[i])?.sample as object),
+                ...(edits[i] ?? {}),
+              } as Record<string, unknown>;
+              setEdits((prev) => ({ ...prev, [i]: writePath(base, path, value) }));
+              note(`text ${path} = ${JSON.stringify(value.slice(0, 40))}`);
+            }}
             onNavigate={(slug) => note(`navigate ${slug}`)}
           />
           <CanvasOverlay
