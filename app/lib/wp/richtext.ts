@@ -179,6 +179,24 @@ export function readRichText(el: ParsedElement | null, opts: ReadOptions = {}): 
   return el.childNodes.map(emit).join("").trim();
 }
 
+/**
+ * A stored value with its markup removed, for anywhere it is used as TEXT.
+ *
+ * Allowing emphasis inside a heading means a heading is no longer a plain
+ * string, and several things had quietly assumed it was — most seriously
+ * requireAlt(), which falls back to the heading for an image with no alt of
+ * its own. A bolded heading therefore shipped `alt="&lt;em&gt;Authentic…"` to
+ * the live site, which a screen reader reads out as entities.
+ *
+ * Only the allowed tags are removed. Anything else was never markup: a
+ * business that writes "Fresh <bread> daily" keeps its angle brackets.
+ */
+export function plainText(value: unknown): string {
+  const input = String(value ?? "");
+  if (!input.includes("<")) return input;
+  return input.replace(TAG, "").trim();
+}
+
 /** Whether a stored value carries any of the allowed markup. */
 export function hasRichText(value: unknown): boolean {
   return /<(?:strong|b|em|i|a|br)\b/i.test(String(value ?? ""));

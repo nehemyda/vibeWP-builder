@@ -15,7 +15,7 @@
  */
 
 import { esc, escAttr } from "./escape";
-import { renderRichText } from "./richtext";
+import { plainText, renderRichText } from "./richtext";
 
 /** Re-exported: these lived here for a long time and are imported widely. */
 export { esc, escAttr };
@@ -77,7 +77,12 @@ export function list(items: string[], className: string): string {
  */
 export function requireAlt(...candidates: Array<string | null | undefined>): string {
   for (const candidate of candidates) {
-    const trimmed = candidate?.trim();
+    /*
+     * plainText, because the usual fallback is the section's heading and a
+     * heading may now carry emphasis. Alt text is read aloud; markup in it is
+     * read aloud too.
+     */
+    const trimmed = plainText(candidate).trim();
     if (trimmed) return trimmed;
   }
   return "Photograph of this business";

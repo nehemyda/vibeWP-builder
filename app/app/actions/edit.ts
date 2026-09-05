@@ -1,5 +1,6 @@
 "use server";
 
+import { plainText } from "@/lib/wp/richtext";
 import { eq, and } from "drizzle-orm";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
@@ -629,7 +630,9 @@ async function runEdit(
       const def = getSectionByNodeType(n.type);
       const headingProp = (n.props as Record<string, unknown> | undefined)?.heading;
       const want = op.section.trim().toLowerCase();
-      return [n.type, def?.key, def?.name, typeof headingProp === "string" ? headingProp : undefined]
+      // plainText: a client naming a section says its words, not its markup.
+      // A bolded heading would otherwise never match anything they could type.
+      return [n.type, def?.key, def?.name, typeof headingProp === "string" ? plainText(headingProp) : undefined]
         .some((name) => name?.trim().toLowerCase() === want);
     });
     if (at < 0) return { ok: false, message: `I couldn't find a "${op.section}" section on this page.` };

@@ -1,3 +1,4 @@
+import { plainText } from "@/lib/wp/richtext";
 import { GoogleGenAI } from "@google/genai";
 import { getSectionByNodeType } from "@/lib/sections";
 import type { ResolvedSection } from "@/lib/sections/resolve";
@@ -119,7 +120,8 @@ export async function planEdit(opts: {
     .map((n, i) => {
       const def = getSectionByNodeType(n.type);
       const props = (n.props ?? {}) as Record<string, unknown>;
-      const headingText = typeof props.heading === "string" ? ` — “${props.heading}”` : "";
+      const headingText =
+        typeof props.heading === "string" ? ` — “${plainText(props.heading)}”` : "";
       const options = def
         ? Object.entries(def.fields)
             .filter(([, f]) => ["boolean", "choice", "number"].includes(f.type))
