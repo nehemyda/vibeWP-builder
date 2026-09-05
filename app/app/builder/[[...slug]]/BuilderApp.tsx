@@ -1020,6 +1020,9 @@ export function BuilderApp({
   function openStylePanel() {
     chatWasOpen.current = chatOpen;
     setChatOpen(false);
+    // One panel at a time on that edge, or two would stack and halve the
+    // canvas. They answer different questions and are never both wanted.
+    setDesignFor(null);
     setStyleOpen(true);
   }
 
@@ -1032,6 +1035,9 @@ export function BuilderApp({
   }
 
   function openDesignPanel(sel: CanvasSelection) {
+    // Same edge, so the style panel gives way — see openStylePanel.
+    setStyleOpen(false);
+    setStyleFor(null);
     const key = keyOfSelection(sel);
     const id = sel.kind === "chrome" ? sel.slot : `n${sel.index}`;
     // Remembered once per section, on the first open, so it is the design they
@@ -1646,10 +1652,6 @@ export function BuilderApp({
                   onStyle={(sel) => {
                     setStyleFor(sel);
                     openStylePanel();
-                    // The design picker and the style panel answer different
-                    // questions; showing both at once asks the client to hold
-                    // two ideas about one section.
-                    setDesignFor(null);
                   }}
                   onMove={(sel, direction) => {
                     if (sel.kind !== "node") return;

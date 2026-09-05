@@ -125,36 +125,6 @@ export function CanvasHarness() {
      * measured the harness's own layout instead of the overlay's.
      */
     <div className={harness.shell}>
-      {styleOpen && (
-        <StylePanel
-          tokens={tokens}
-          scope="Whole site"
-          section={
-            styleFor && styleFor.kind === "node"
-              ? {
-                  name: labelFor(styleFor),
-                  values: secStyle[styleFor.index] ?? {},
-                  onChange: (field, value) => {
-                    setSecStyle((prev) => ({
-                      ...prev,
-                      [styleFor.index]: { ...(prev[styleFor.index] ?? {}), [field]: value },
-                    }));
-                    note(`section ${styleFor.index} ${field}=${value}`);
-                  },
-                }
-              : undefined
-          }
-          onPreview={setTokens}
-          onCommit={(next) => {
-            setTokens(next);
-            note(`style ${JSON.stringify(next)}`);
-          }}
-          onClose={() => {
-            setStyleOpen(false);
-            setStyleFor(null);
-          }}
-        />
-      )}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", position: "relative" }}>
       {cover && <WorkingCover label={cover} />}
       <div className={styles.canvasScroll} style={{ flex: 1, minWidth: 0 }}>
@@ -205,6 +175,36 @@ export function CanvasHarness() {
       </div>
       </div>
 
+      {styleOpen && (
+        <StylePanel
+          tokens={tokens}
+          scope="Whole site"
+          section={
+            styleFor && styleFor.kind === "node"
+              ? {
+                  name: labelFor(styleFor),
+                  values: secStyle[styleFor.index] ?? {},
+                  onChange: (field, value) => {
+                    setSecStyle((prev) => ({
+                      ...prev,
+                      [styleFor.index]: { ...(prev[styleFor.index] ?? {}), [field]: value },
+                    }));
+                    note(`section ${styleFor.index} ${field}=${value}`);
+                  },
+                }
+              : undefined
+          }
+          onPreview={setTokens}
+          onCommit={(next) => {
+            setTokens(next);
+            note(`style ${JSON.stringify(next)}`);
+          }}
+          onClose={() => {
+            setStyleOpen(false);
+            setStyleFor(null);
+          }}
+        />
+      )}
       {panelFor && (
         <DesignPanel
           selection={panelFor}

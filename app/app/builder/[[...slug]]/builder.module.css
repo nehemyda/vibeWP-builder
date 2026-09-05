@@ -1278,12 +1278,16 @@
    canvas without changing the DOM order the rest of the shell relies on. */
 .stylePanel {
   /*
-   * -1, not 0. The canvas has no `order`, so it defaults to 0 too, and two
-   * equal orders fall back to DOM position — which put the style panel
-   * BETWEEN the canvas and the assistant instead of at the left edge. It has
-   * to sort ahead of the canvas, not merely tie with it.
+   * Right, with the assistant and the design picker.
+   *
+   * It was on the left, which is where it was first asked for — but every
+   * panel in this builder operates on the canvas, and putting one of them on
+   * the opposite edge means the canvas jumps sideways depending on which is
+   * open. The three are mutually exclusive, so they never compete for the
+   * space; and the convention everywhere else is structure on the left,
+   * properties on the right.
    */
-  order: -1;
+  order: 2;
   width: 300px;
   max-width: 100%;
   flex: none;
@@ -1291,7 +1295,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-right: 1px solid var(--line);
+  border-left: 1px solid var(--line);
   background: var(--surface);
 }
 .styleHeader {
@@ -1372,7 +1376,7 @@
     z-index: 40;
     width: 100%;
     max-width: none;
-    border-right: 0;
+    border-left: 0;
   }
 }
 
