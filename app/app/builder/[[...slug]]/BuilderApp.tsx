@@ -1017,6 +1017,23 @@ export function BuilderApp({
    * away on its launcher throughout, so nothing is lost; what it stops is a
    * three-column squeeze with the canvas as the narrowest of them.
    */
+  /**
+   * The three panels share the right-hand edge, so opening one closes the
+   * others.
+   *
+   * Routed through functions rather than each caller setting its own flag:
+   * making the PANELS exclusive was not enough, because the Ask AI launcher
+   * set chatOpen directly and happily opened chat beside a panel that was
+   * already there. Two columns on one edge halve the canvas, which is the
+   * thing being looked at.
+   */
+  function openChat() {
+    setStyleOpen(false);
+    setStyleFor(null);
+    setDesignFor(null);
+    setChatOpen(true);
+  }
+
   function openStylePanel() {
     chatWasOpen.current = chatOpen;
     setChatOpen(false);
@@ -1772,18 +1789,23 @@ export function BuilderApp({
             }}
             onPick={(design) => pickDesign(designFor, design)}
             onClose={() => {
-              setDesignFor(null);
               // Chat comes back, because it stepped aside for the panel.
-              setChatOpen(true);
+              openChat();
             }}
           />
         )}
 
-        {!chatOpen && !designFor && (
+        {/*
+          The launcher stays reachable while a panel is open, and swaps: it is
+          how someone styling a section asks a question about it without first
+          working out that they have to close something. openChat clears the
+          panels, so pressing it can no longer put two columns on one edge.
+        */}
+        {!chatOpen && (
           <button
             type="button"
             className={styles.chatFab}
-            onClick={() => setChatOpen(true)}
+            onClick={openChat}
             aria-label="Open assistant"
           >
             <span className={styles.chatFabIcon}>
