@@ -147,6 +147,68 @@ check(
   sameDesign.ok ? "" : sameDesign.error,
 );
 
+/*
+ * Copying sections about.
+ *
+ * The two that matter are IDS and what a style copy carries. A copy that kept
+ * the original's id would make every later op ambiguous, and a "style" that
+ * carried the heading with it would silently overwrite the target's words.
+ */
+const dup = applyOp(page, { kind: "duplicate_section", index: 1 });
+check("duplicates directly below the original", dup.ok && types(dup.schema) ===
+  "HeroSplit > ServicesEditorial > ServicesEditorial > Testimonials > CtaBand",
+  dup.ok ? types(dup.schema) : dup.error);
+check("the copy gets an id of its own", dup.ok &&
+  new Set((dup.schema.nodes ?? []).map((n) => n.id)).size === (dup.schema.nodes ?? []).length,
+  dup.ok ? (dup.schema.nodes ?? []).map((n) => n.id).join(",") : "");
+check("the copy's props are not shared with the original", dup.ok && (() => {
+  const nodes = dup.schema.nodes ?? [];
+  (nodes[2].props as Record<string, unknown>).heading = "changed";
+  return (nodes[1].props as Record<string, unknown>).heading === "Our Hand-Baked Offerings";
+})());
+check("refuses a position that is not on the page",
+  !applyOp(page, { kind: "duplicate_section", index: 99 }).ok);
+
+// Twice over: the id scheme has to survive its own output.
+const twice = (() => {
+  const one = applyOp(page, { kind: "duplicate_section", index: 1 });
+  return one.ok ? applyOp(one.schema, { kind: "duplicate_section", index: 1 }) : one;
+})();
+check("two duplicates in a row still have distinct ids", twice.ok &&
+  new Set((twice.schema.nodes ?? []).map((n) => n.id)).size === (twice.schema.nodes ?? []).length,
+  twice.ok ? (twice.schema.nodes ?? []).map((n) => n.id).join(",") : "");
+
+const pasted = applyOp(page, {
+  kind: "paste_section",
+  node: { id: "1", type: "Faq", props: { heading: "Pasted from another page" } },
+  afterIndex: 0,
+});
+check("pastes after the section it was invoked on", pasted.ok &&
+  types(pasted.schema) === "HeroSplit > Faq > ServicesEditorial > Testimonials > CtaBand",
+  pasted.ok ? types(pasted.schema) : pasted.error);
+check("a pasted node never keeps the id it arrived with", pasted.ok &&
+  pasted.schema.nodes![1].id !== "1", pasted.ok ? String(pasted.schema.nodes![1].id) : "");
+check("null position pastes at the end", (() => {
+  const r = applyOp(page, { kind: "paste_section", node: { type: "Faq", props: {} }, afterIndex: null });
+  return r.ok && types(r.schema).endsWith("CtaBand > Faq");
+})());
+check("refuses a section type that is not in the registry",
+  !applyOp(page, { kind: "paste_section", node: { type: "Nonsense", props: {} }, afterIndex: 0 }).ok);
+
+const styled = applyOp(page, { kind: "paste_style", index: 2, style: { headings: "large" } });
+check("a pasted style applies a setting the target declares",
+  styled.ok && styled.schema.nodes![2].props!.headings === "large",
+  styled.ok ? "" : styled.error);
+check("a pasted style leaves the target's words alone",
+  styled.ok && styled.schema.nodes![2].props!.heading === "What Our Customers Say");
+const partial = applyOp(page, { kind: "paste_style", index: 2, style: { headings: "large", nope: "x" } });
+check("drops a setting the target has no field for",
+  partial.ok && !("nope" in partial.schema.nodes![2].props!));
+check("refuses a value outside the field's choices",
+  !applyOp(page, { kind: "paste_style", index: 2, style: { headings: "enormous" } }).ok);
+check("refuses when the target shares no settings at all",
+  !applyOp(page, { kind: "paste_style", index: 2, style: { nope: "x" } }).ok);
+
 console.log(fails === 0 ? "\nALL EDIT TESTS PASS" : `\n${fails} FAILURE(S)`);
 
 /* A gate that always exits 0 gates nothing: chained from `npm run verify`,

@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { CanvasSelection, SectionBox } from "./PreviewFrame";
+import type { Clip } from "@/lib/design/clipboard";
 import { sameSelection } from "./PreviewFrame";
 import styles from "./builder.module.css";
 
@@ -34,6 +36,10 @@ export function CanvasOverlay({
   onStyle,
   onMove,
   onRemove,
+  onDuplicate,
+  onCopy,
+  onPaste,
+  getClip,
 }: {
   boxes: SectionBox[];
   selection: CanvasSelection | null;
@@ -46,7 +52,49 @@ export function CanvasOverlay({
   onStyle?: (selection: CanvasSelection) => void;
   onMove: (selection: CanvasSelection, direction: -1 | 1) => void;
   onRemove: (selection: CanvasSelection) => void;
+  /** Duplicate / copy / paste, in the overflow menu. */
+  onDuplicate?: (selection: CanvasSelection) => void;
+  onCopy?: (selection: CanvasSelection, what: "section" | "style") => void;
+  onPaste?: (selection: CanvasSelection, what: "section" | "style") => void;
+  /** Reads the clipboard, called when the menu opens. */
+  getClip?: () => Clip | null;
 }) {
+  /*
+   * The menu remembers WHICH selection it was opened for, rather than merely
+   * that it is open. The bar moves to whichever section is selected, so an
+   * open menu would otherwise travel with it and offer actions for a section
+   * the client has already left. Derived, not synchronised — there is no
+   * effect that can be out of step with the selection.
+   */
+  const [openFor, setOpenFor] = useState<string | null>(null);
+  const [clip, setClip] = useState<Clip | null>(null);
+  /*
+   * Which way the menu opens.
+   *
+   * A section near the bottom of the window put its menu below the fold —
+   * Paste, the item most likely to be wanted, was the one off-screen. Measured
+   * from the button rather than guessed from the section's position, because
+   * the canvas scrolls independently of the page.
+   */
+  const [dropUp, setDropUp] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const selectionId = selection ? JSON.stringify(selection) : "";
+  const menuOpen = openFor !== null && openFor === selectionId;
+  const setMenuOpen = (open: boolean) => setOpenFor(open ? selectionId : null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const away = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setOpenFor(null);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpenFor(null);
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [menuOpen]);
+
   const box = boxes.find((b) => sameSelection(b.selection, selection));
   if (!selection || !box) return null;
 
@@ -144,6 +192,102 @@ export function CanvasOverlay({
               >
                 ↓
               </button>
+              {(onDuplicate || onCopy || onPaste) && (
+                <div className={styles.selectionMenuWrap} ref={menuRef}>
+                  <button
+                    type="button"
+                    className={styles.selectionIcon}
+                    disabled={busy}
+                    title="More"
+                    aria-label="More actions"
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    onClick={(e) => {
+                      if (menuOpen) return setMenuOpen(false);
+                      /*
+                       * Read when the menu opens, not held in state. The
+                       * clipboard lives in sessionStorage and can have been
+                       * written on a different page of this same tab, so
+                       * anything cached here would go stale silently.
+                       */
+                      setClip(getClip?.() ?? null);
+                      const below = window.innerHeight - e.currentTarget.getBoundingClientRect().bottom;
+                      // The tallest the menu gets: four items plus its rule.
+                      setDropUp(below < 190);
+                      setMenuOpen(true);
+                    }}
+                  >
+                    ⋯
+                  </button>
+                  {menuOpen && (
+                    <div
+                      className={`${styles.selectionMenu} ${dropUp ? styles.selectionMenuUp : ""}`}
+                      role="menu"
+                    >
+                      {onDuplicate && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            onDuplicate(selection);
+                          }}
+                        >
+                          Duplicate section
+                        </button>
+                      )}
+                      {onCopy && (
+                        <>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setMenuOpen(false);
+                              onCopy(selection, "section");
+                            }}
+                          >
+                            Copy section
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setMenuOpen(false);
+                              onCopy(selection, "style");
+                            }}
+                          >
+                            Copy style
+                          </button>
+                        </>
+                      )}
+                      {/*
+                        Paste names what is on the clipboard. "Paste" alone is
+                        a guess about what will happen; "Paste Services grid"
+                        is not — and the clipboard survives moving between
+                        pages, so by the time it is used the client may well
+                        have forgotten what they took.
+                      */}
+                      {onPaste && clip && (
+                        <>
+                          <span className={styles.selectionMenuRule} />
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setMenuOpen(false);
+                              onPaste(selection, clip.kind);
+                            }}
+                          >
+                            {clip.kind === "style"
+                              ? `Paste style from ${clip.label}`
+                              : `Paste ${clip.label} below`}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               <button
                 type="button"
                 className={`${styles.selectionIcon} ${styles.selectionDanger}`}

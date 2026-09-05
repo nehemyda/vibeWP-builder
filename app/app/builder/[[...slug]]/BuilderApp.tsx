@@ -20,7 +20,13 @@ import {
 } from "@/app/actions/pages";
 import { detectIntent } from "@/lib/page-intent";
 import { getSectionByKey, getSectionByNodeType } from "@/lib/sections";
-import { applyCanvasOpAction, type CanvasOp } from "@/app/actions/edit";
+import {
+  applyCanvasOpAction,
+  applyCanvasPasteAction,
+  type CanvasOp,
+  type CanvasPasteOp,
+} from "@/app/actions/edit";
+import { readClip, writeClip, type Clip } from "@/lib/design/clipboard";
 import {
   schemaToGutenberg,
   sectionToTemplatePart,
@@ -978,14 +984,38 @@ export function BuilderApp({
    * "what did you just do" should find it there — and the history buttons and
    * "undo" read the same revision either way.
    */
-  async function runCanvasOp(op: CanvasOp, spoken: string) {
+
+  /*
+   * Copying is the one action here that changes nothing on the server, so it
+   * cannot report itself through the transcript the way every other click
+   * does — a line in the history saying "Copied the hero" would claim an edit
+   * that never happened. It gets a passing note instead.
+   */
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 2400);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  async function runCanvasPaste(op: CanvasPasteOp, spoken: string) {
+    return runCanvasOp(op as never, spoken, true);
+  }
+
+  async function runCanvasOp(op: CanvasOp, spoken: string, isPaste = false) {
     setCanvasBusy(spoken);
     const aiId = nextId();
     setMessages((prev) => [...prev, { id: aiId, role: "ai", text: `${spoken}…`, steps: [] }]);
 
     let result;
     try {
-      result = await applyCanvasOpAction({ siteId, slug: activeSlug, op });
+      result = isPaste
+        ? await applyCanvasPasteAction({
+            siteId,
+            slug: activeSlug,
+            op: op as unknown as CanvasPasteOp,
+          })
+        : await applyCanvasOpAction({ siteId, slug: activeSlug, op });
     } catch {
       const failed = "I couldn't reach the builder. Nothing was changed.";
       setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: failed } : m)));
@@ -1723,6 +1753,58 @@ export function BuilderApp({
                     setSelection(null);
                     setDesignFor(null);
                   }}
+                  getClip={() => readClip(siteId)}
+                  onDuplicate={(sel) => {
+                    if (sel.kind !== "node") return;
+                    void runCanvasOp(
+                      { kind: "duplicate_section", index: sel.index },
+                      `Duplicating the ${labelOfSelection(sel)}`,
+                    );
+                  }}
+                  onCopy={(sel, what) => {
+                    if (sel.kind !== "node") return;
+                    /*
+                     * Copying touches nothing on the server. It records where
+                     * the section is; paste is what reads it, and reads it
+                     * then rather than now — so a section edited between the
+                     * two pastes as it stands, not as it was.
+                     */
+                    const next: Clip = {
+                      siteId,
+                      slug: activeSlug,
+                      index: sel.index,
+                      label: labelOfSelection(sel),
+                      kind: what,
+                    };
+                    writeClip(next);
+                    setToast(
+                      what === "style"
+                        ? `Copied the ${next.label}'s style`
+                        : `Copied the ${next.label}`,
+                    );
+                  }}
+                  onPaste={(sel, what) => {
+                    const clip = readClip(siteId);
+                    if (sel.kind !== "node" || !clip) return;
+                    void runCanvasPaste(
+                      what === "style"
+                        ? {
+                            kind: "paste_style",
+                            fromSlug: clip.slug,
+                            fromIndex: clip.index,
+                            index: sel.index,
+                          }
+                        : {
+                            kind: "paste_section",
+                            fromSlug: clip.slug,
+                            fromIndex: clip.index,
+                            afterIndex: sel.index,
+                          },
+                      what === "style"
+                        ? `Pasting the style onto the ${labelOfSelection(sel)}`
+                        : `Pasting the ${clip.label}`,
+                    );
+                  }}
                 />
               )}
             </div>
@@ -1741,6 +1823,13 @@ export function BuilderApp({
           stop the client reading the reply they are waiting for.
         */}
         {canvasBusy && <WorkingCover label={canvasBusy} />}
+
+        {/* aria-live so the confirmation reaches a screen reader too. */}
+        {toast && (
+          <div className={styles.copyToast} role="status" aria-live="polite">
+            {toast}
+          </div>
+        )}
 
         {styleOpen && (
           <StylePanel

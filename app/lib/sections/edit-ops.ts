@@ -129,6 +129,24 @@ export type EditOp =
    * it came from was identified by matching text.
    */
   | { kind: "set_text"; section: string; path: string; value: string }
+  /*
+   * Copying sections about.
+   *
+   * ADDRESSED BY INDEX, unlike every op above, and deliberately so. Every
+   * other op names its target ("the FAQ", "Visit Our Bakery") because a
+   * sentence is how the planner refers to things. These three come from a
+   * click, and the first thing duplicating does is put two sections with the
+   * same name on one page — so a name stops identifying anything. An index
+   * from a click is exact and cannot become ambiguous later.
+   *
+   * `node` is resolved by the ACTION, never sent by the browser: for a paste
+   * from another page the action reads that page itself, under the same
+   * ownership check as any other write. A client that could post its own
+   * props could post anything.
+   */
+  | { kind: "duplicate_section"; index: number }
+  | { kind: "paste_section"; node: SchemaNode; afterIndex: number | null }
+  | { kind: "paste_style"; index: number; style: Record<string, string> }
   | { kind: "rewrite_section"; section: string; instruction: string }
   | { kind: "regenerate_page" }
   | { kind: "unsupported"; reason: string };
@@ -196,6 +214,25 @@ export type ApplyResult =
  * shape. The caller generates the copy, because that needs a model and this
  * has to stay pure.
  */
+/**
+ * A copy of a node with an id of its own.
+ *
+ * Reuses add_section's shape so a duplicated section is indistinguishable
+ * from one added fresh, and counts existing ids rather than trusting
+ * nodes.length — two duplicates in a row would otherwise collide.
+ */
+function freshNode(source: SchemaNode, nodes: SchemaNode[]): SchemaNode {
+  const def = getSectionByNodeType(source.type);
+  const stem = `n_${def?.key ?? source.type ?? "section"}`;
+  let n = nodes.length;
+  const taken = new Set(nodes.map((x) => x.id).filter(Boolean));
+  while (taken.has(`${stem}_${n}`)) n += 1;
+  return {
+    ...structuredClone(source),
+    id: `${stem}_${n}`,
+  };
+}
+
 export function applyOp(
   schema: PageSchema,
   op: EditOp,
@@ -308,6 +345,88 @@ export function applyOp(
         ok: true,
         schema: { ...schema, nodes },
         describe: `Edited the ${getSectionByNodeType(nodes[at].type)?.name ?? "section"}.`,
+      };
+    }
+
+    /*
+     * Copy, duplicate and paste.
+     *
+     * The three share one rule about IDS: a copied node must never keep the
+     * original's. Node ids address a section, so two nodes wearing the same id
+     * would make every later op ambiguous — which is the very problem
+     * index-addressing these ops was meant to avoid.
+     */
+    case "duplicate_section": {
+      const at = op.index;
+      if (at < 0 || at >= nodes.length) return { ok: false, error: "That section isn't on this page." };
+      const source = nodes[at];
+      const def = getSectionByNodeType(source.type);
+      if (def?.placement && def.placement !== "page") {
+        return { ok: false, error: `The ${def.name} belongs to the site's header or footer.` };
+      }
+      nodes.splice(at + 1, 0, freshNode(source, nodes));
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe: `Duplicated the ${def?.name ?? source.type}.`,
+      };
+    }
+
+    case "paste_section": {
+      const def = getSectionByNodeType(op.node.type);
+      if (!def) return { ok: false, error: "That section can't be pasted here." };
+      if (def.placement && def.placement !== "page") {
+        return { ok: false, error: `The ${def.name} belongs to the site's header or footer.` };
+      }
+      // null means "at the end" — pasting with nothing selected.
+      const at = op.afterIndex === null ? nodes.length : Math.min(op.afterIndex + 1, nodes.length);
+      nodes.splice(at, 0, freshNode(op.node, nodes));
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe: `Pasted the ${def.name}.`,
+      };
+    }
+
+    case "paste_style": {
+      const at = op.index;
+      if (at < 0 || at >= nodes.length) return { ok: false, error: "That section isn't on this page." };
+      const target = nodes[at];
+      const def = getSectionByNodeType(target.type);
+      if (!def) return { ok: false, error: "That section can't be styled." };
+
+      /*
+       * Only settings the TARGET declares, and only values it allows.
+       *
+       * A style copied from one design is a set of choices, and the design it
+       * lands on may not offer all of them — the same reasoning carry-props
+       * uses for a swap. Anything the target cannot express is dropped rather
+       * than written as a prop no renderer reads.
+       */
+      const applied: Record<string, unknown> = {};
+      const skipped: string[] = [];
+      for (const [key, value] of Object.entries(op.style)) {
+        const field = def.fields[key];
+        if (!field || !isOptionField(field)) {
+          skipped.push(key);
+          continue;
+        }
+        if (field.choices && !field.choices.includes(value)) {
+          skipped.push(key);
+          continue;
+        }
+        applied[key] = value;
+      }
+      if (Object.keys(applied).length === 0) {
+        return { ok: false, error: `The ${def.name} doesn't share any of those settings.` };
+      }
+      nodes[at] = { ...target, props: { ...(target.props ?? {}), ...applied } };
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe:
+          `Applied the copied style to the ${def.name}` +
+          (skipped.length ? `, minus ${skipped.length} setting${skipped.length > 1 ? "s" : ""} it doesn't have.` : "."),
       };
     }
 

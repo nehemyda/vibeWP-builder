@@ -176,6 +176,73 @@ export async function applyCanvasOpAction(opts: {
  * page, editing a form's fields, rewriting copy — have their own interfaces
  * where they can be confirmed properly.
  */
+/**
+ * Paste, resolved server-side.
+ *
+ * Reads the SOURCE page — always within this site, and behind the same
+ * canEditSite gate as every other write — turns it into a self-contained op,
+ * and hands that to the ordinary canvas path. So pasting shares the revision
+ * log, the refusal messages and the publish flow with everything else, and
+ * the browser still cannot post a section of its own invention.
+ */
+export async function applyCanvasPasteAction(opts: {
+  siteId: string;
+  slug: string;
+  op: CanvasPasteOp;
+}): Promise<EditResult> {
+  const { siteId, slug, op } = opts;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated.");
+  if (!(await canEditSite(user.id, siteId))) {
+    throw new Error("You don't have access to this site.");
+  }
+
+  const source = await db.query.sitePages.findFirst({
+    where: and(eq(sitePages.siteId, siteId), eq(sitePages.slug, op.fromSlug)),
+  });
+  if (!source) {
+    return { ok: false, message: "The page you copied from isn't there any more." };
+  }
+  const node = ((source.schemaJson ?? {}) as PageSchema).nodes?.[op.fromIndex];
+  if (!node) {
+    // The source page changed after the copy — a section was removed or moved.
+    return { ok: false, message: "What you copied isn't on that page any more. Copy it again." };
+  }
+
+  if (op.kind === "paste_section") {
+    return applyCanvasOpAction({
+      siteId,
+      slug,
+      op: { kind: "paste_section", node, afterIndex: op.afterIndex } as CanvasOp,
+    });
+  }
+
+  /*
+   * Style only: the declared settings, not the copy. Reading them from the
+   * source's own definition is what stops "copy style" quietly carrying the
+   * headline across with it.
+   */
+  const def = getSectionByNodeType(node.type);
+  const style: Record<string, string> = {};
+  for (const [key, spec] of Object.entries(def?.fields ?? {})) {
+    if (!isOptionField(spec)) continue;
+    const value = (node.props as Record<string, unknown> | undefined)?.[key];
+    if (typeof value === "string") style[key] = value;
+  }
+  if (Object.keys(style).length === 0) {
+    return { ok: false, message: "That section has no style settings to copy." };
+  }
+  return applyCanvasOpAction({
+    siteId,
+    slug,
+    op: { kind: "paste_style", index: op.index, style } as CanvasOp,
+  });
+}
+
 export type CanvasOp =
   | Extract<EditOp, { kind: "swap_section" }>
   | Extract<EditOp, { kind: "move_section" }>
@@ -191,7 +258,26 @@ export type CanvasOp =
    */
   | Extract<EditOp, { kind: "set_option" }>
   /* Typed on the page. No model involved — a path and a string. */
-  | Extract<EditOp, { kind: "set_text" }>;
+  | Extract<EditOp, { kind: "set_text" }>
+  /* Duplicating in place. Index-addressed; see the op's own note. */
+  | Extract<EditOp, { kind: "duplicate_section" }>
+  | Extract<EditOp, { kind: "paste_section" }>
+  | Extract<EditOp, { kind: "paste_style" }>;
+
+/**
+ * Pasting, which the canvas asks for differently from how applyOp performs it.
+ *
+ * The browser sends WHERE the thing was copied from — a page and a position —
+ * and never the section itself. The action reads that page under the same
+ * ownership check as any other write and resolves the node server-side.
+ *
+ * Accepting a node from the browser would mean accepting whatever props it
+ * chose to send, into a page that is then published to a live WordPress site.
+ * A reference cannot carry a payload.
+ */
+export type CanvasPasteOp =
+  | { kind: "paste_section"; fromSlug: string; fromIndex: number; afterIndex: number | null }
+  | { kind: "paste_style"; fromSlug: string; fromIndex: number; index: number };
 
 const CANVAS_OPS: CanvasOp["kind"][] = [
   "set_option",
@@ -201,6 +287,9 @@ const CANVAS_OPS: CanvasOp["kind"][] = [
   "remove_section",
   "add_section",
   "swap_chrome",
+  "duplicate_section",
+  "paste_section",
+  "paste_style",
 ];
 
 function describeCanvasOp(op: CanvasOp): string {
@@ -222,6 +311,17 @@ function describeCanvasOp(op: CanvasOp): string {
       // Truncated: this becomes the revision's reason, and a whole paragraph
       // of body copy in a history list is unreadable.
       return `Edited the ${op.section} — "${op.value.slice(0, 60)}${op.value.length > 60 ? "…" : ""}"`;
+    /*
+     * These three name a POSITION rather than a section, because that is all
+     * the click carried. applyOp knows which section sits there and says so in
+     * its own describe, which is what the client is shown.
+     */
+    case "duplicate_section":
+      return `Duplicated the section at position ${op.index + 1}`;
+    case "paste_section":
+      return `Pasted a ${getSectionByNodeType(op.node.type)?.name ?? "section"}`;
+    case "paste_style":
+      return `Pasted a style onto the section at position ${op.index + 1}`;
   }
 }
 

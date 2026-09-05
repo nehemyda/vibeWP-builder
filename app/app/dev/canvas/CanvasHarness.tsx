@@ -1,5 +1,6 @@
 "use client";
 
+import { readClip, writeClip } from "@/lib/design/clipboard";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -35,6 +36,8 @@ const FIXTURE = [
   "cta-band",
   "cta-band",
 ];
+
+const HARNESS_SITE = "dev-canvas";
 
 export function CanvasHarness() {
   /*
@@ -193,6 +196,41 @@ export function CanvasHarness() {
               setOrder(order.filter((_, i) => i !== sel.index));
               setSelection(null);
               note(`remove ${labelFor(sel)}`);
+            }}
+            /*
+             * The overflow menu. Duplicate and paste really do change the
+             * fixture here, because the point of this route is to see the
+             * canvas behave — a handler that only logged would not show
+             * whether the bar and outlines follow a new section.
+             */
+            getClip={() => readClip(HARNESS_SITE)}
+            onDuplicate={(sel) => {
+              if (sel.kind !== "node") return;
+              const next = [...order];
+              next.splice(sel.index + 1, 0, order[sel.index]);
+              setOrder(next);
+              note(`duplicate ${labelFor(sel)} → position ${sel.index + 2}`);
+            }}
+            onCopy={(sel, what) => {
+              if (sel.kind !== "node") return;
+              writeClip({
+                siteId: HARNESS_SITE,
+                slug: "home",
+                index: sel.index,
+                label: labelFor(sel),
+                kind: what,
+              });
+              note(`copy ${what} — ${labelFor(sel)}`);
+            }}
+            onPaste={(sel, what) => {
+              const clip = readClip(HARNESS_SITE);
+              if (sel.kind !== "node" || !clip) return;
+              if (what === "section") {
+                const next = [...order];
+                next.splice(sel.index + 1, 0, order[clip.index]);
+                setOrder(next);
+              }
+              note(`paste ${what} from ${clip.label} → after ${labelFor(sel)}`);
             }}
           />
         </div>
