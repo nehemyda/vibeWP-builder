@@ -3419,3 +3419,19 @@ body.yp-page {
 .yp-page .u-space--sm { --yp-space-scale: 0.75; }
 .yp-page .u-space--lg { --yp-space-scale: 1.3; }
 .yp-page .u-space--xl { --yp-space-scale: 1.6; }
+
+/* ---- element-level overrides ----
+   Applied to the element's own class token, so they sit at the same
+   specificity as the rule they override and win on source order — which
+   is why this block is at the end of the file and must stay there. */
+
+.yp-page .u-align--left { text-align: left; }
+.yp-page .u-align--center { text-align: center; }
+.yp-page .u-align--right { text-align: right; }
+
+/* The class lands on .wp-block-button, so the anchor inside is the target. */
+.yp-page .u-btn--square .wp-block-button__link { border-radius: 2px; }
+.yp-page .u-btn--rounded .wp-block-button__link { border-radius: var(--radius); }
+.yp-page .u-btn--pill .wp-block-button__link { border-radius: 999px; }
+.yp-page .u-btn--sm .wp-block-button__link { padding: 0.6rem 1.1rem; font-size: 0.88rem; }
+.yp-page .u-btn--lg .wp-block-button__link { padding: 1rem 1.9rem; font-size: 1.05rem; }

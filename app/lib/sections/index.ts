@@ -1,5 +1,6 @@
 import type { SectionDefinition } from "./types";
 import { SECTION_STYLE_FIELDS } from "@/lib/design/section-style";
+import { ELEMENT_STYLE_FIELDS } from "@/lib/design/element-style";
 import { HeaderSimple } from "./header-simple";
 import { HeaderCentered } from "./header-centered";
 import { HeaderCta } from "./header-cta";
@@ -229,7 +230,10 @@ const DEFINED: Array<SectionDefinition<any>> = [
 export const SECTIONS = DEFINED.map((section) =>
   (section.placement ?? "page") !== "page"
     ? section
-    : { ...section, fields: { ...SECTION_STYLE_FIELDS, ...section.fields } },
+    : {
+        ...section,
+        fields: { ...SECTION_STYLE_FIELDS, ...ELEMENT_STYLE_FIELDS, ...section.fields },
+      },
 );
 
 /** Keyed by the node type stored in page schemas, e.g. "HeroSplit". */

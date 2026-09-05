@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { tokensToCss, type DesignTokens } from "@/lib/design/tokens";
+import { ELEMENT_ROLES } from "@/lib/design/element-style";
 
 /** Only plain hex is allowed into the stylesheet. */
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
@@ -41,7 +42,18 @@ const MIN_HEIGHT = 520;
  * swap_chrome instead of quietly doing nothing.
  */
 export type CanvasSelection =
-  | { kind: "node"; index: number }
+  | {
+      kind: "node";
+      index: number;
+      /**
+       * A styleable element inside the section, when the click landed on one.
+       *
+       * Rides along with the section rather than replacing it: the overlay
+       * still outlines and labels the whole section, because that is what was
+       * clicked into, and only the style panel narrows to the element.
+       */
+      role?: string;
+    }
   | { kind: "chrome"; slot: "header" | "footer" };
 
 /** One section's position inside the frame, for the parent's overlay. */
@@ -68,6 +80,29 @@ function selectorFor(selection: CanvasSelection): string {
 }
 
 const SELECTABLE = "[data-vibewp-node],[data-vibewp-chrome]";
+
+/**
+ * Which styleable element the click landed in, if any.
+ *
+ * Walks up from what was hit to the section, testing each ancestor's classes
+ * against the roles. Nearest wins, so clicking a button inside a heading area
+ * selects the button rather than whatever encloses it.
+ *
+ * The role's own exclusions are honoured here too — .yp-logos__heading looks
+ * like a heading and is a caption, so it is not offered heading controls.
+ */
+function roleUnder(from: Element | null, stopAt: Element): string | undefined {
+  for (let node = from; node && node !== stopAt.parentElement; node = node.parentElement) {
+    const classes = node.getAttribute?.("class") ?? "";
+    if (!classes) continue;
+    for (const role of ELEMENT_ROLES) {
+      const hit = classes.match(new RegExp(role.match.source, "g"));
+      if (hit && hit.some((token) => !role.except.includes(token))) return role.key;
+    }
+    if (node === stopAt) break;
+  }
+  return undefined;
+}
 
 /**
  * The editor's own colour, written as a literal because this stylesheet is
@@ -337,7 +372,7 @@ export function PreviewFrame({
         const slot = section.getAttribute("data-vibewp-chrome");
         const picked: CanvasSelection | null =
           index !== null
-            ? { kind: "node", index: Number(index) }
+            ? { kind: "node", index: Number(index), role: roleUnder(el, section) }
             : slot === "header" || slot === "footer"
               ? { kind: "chrome", slot }
               : null;

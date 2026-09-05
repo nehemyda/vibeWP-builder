@@ -35,6 +35,7 @@ import { StylePanel } from "./StylePanel";
 import { saveDesignTokensAction } from "@/app/actions/design";
 import { sanitiseTokens, type DesignTokens } from "@/lib/design/tokens";
 import { SECTION_STYLE_OPTIONS } from "@/lib/design/section-style";
+import { ELEMENT_ROLES } from "@/lib/design/element-style";
 import { WordPressLockNotice } from "./WordPressLockNotice";
 import { SiteDetailsDrawer, type SiteDetails } from "./SiteDetailsDrawer";
 import type { WpEditLock } from "@/lib/wp/local-driver";
@@ -1643,6 +1644,10 @@ export function BuilderApp({
                   selection={selection}
                   onSelect={(sel) => {
                     setSelection(sel);
+                    // Clicking a different element while styling retargets the
+                    // panel — otherwise the controls describe one thing while
+                    // the outline is around another.
+                    if (sel?.kind === "node" && styleOpen) setStyleFor(sel);
                     // Clicking a different section while the panel is open
                     // retargets it, rather than leaving it pointed at the
                     // section that is no longer outlined.
@@ -1728,8 +1733,13 @@ export function BuilderApp({
               styleFor && styleFor.kind === "node" && nodes[styleFor.index]
                 ? {
                     name: labelOfSelection(styleFor),
+                    role: styleFor.role,
+                    onClearRole: () => setStyleFor({ kind: "node", index: styleFor.index }),
                     values: Object.fromEntries(
-                      SECTION_STYLE_OPTIONS.map((o) => [
+                      [
+                        ...SECTION_STYLE_OPTIONS,
+                        ...ELEMENT_ROLES.flatMap((r) => r.options),
+                      ].map((o) => [
                         o.field,
                         String(nodes[styleFor.index]?.props?.[o.field] ?? o.spec.default ?? "default"),
                       ]),

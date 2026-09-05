@@ -1,5 +1,6 @@
 import { parse } from "node-html-parser";
 import { styleClassesFor, styleFromClasses } from "@/lib/design/section-style";
+import { applyElementStyles, elementStylesFromHtml } from "@/lib/design/element-style";
 import { getSectionByNodeType, SECTIONS } from "@/lib/sections";
 import { esc, escAttr } from "./blocks";
 import { defaultSpan, staticFormMarkup } from "@/lib/forms/static-markup";
@@ -83,6 +84,9 @@ export function schemaToGutenberg(
        */
       const styleClasses = styleClassesFor(node.props);
       if (styleClasses) html = addClasses(html, styleClasses);
+      // Element overrides target their own class token rather than the root,
+      // so they land at the same specificity as the rule they override.
+      html = applyElementStyles(html, node.props);
       return opts?.markNodes ? markElement(html, "data-vibewp-node", String(index)) : html;
     })
     .filter(Boolean)
@@ -523,10 +527,11 @@ export function gutenbergToSchema(html: string): PageSchema | null {
        */
       const rootEl = root.querySelector(`.${section.rootClass}`);
       const style = rootEl ? styleFromClasses(rootEl.getAttribute("class") ?? "") : {};
+      const elementStyle = rootEl ? elementStylesFromHtml(rootEl.outerHTML) : {};
       nodes.push({
         id: `n_${section.key}`,
         type: section.nodeType,
-        props: { ...props, ...style },
+        props: { ...props, ...style, ...elementStyle },
       });
     }
   }

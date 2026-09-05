@@ -14,6 +14,7 @@ import { DesignPanel, type CatalogueEntry } from "@/app/builder/[[...slug]]/Desi
 import { Composer, WorkingCover } from "@/app/builder/[[...slug]]/Composer";
 import { StylePanel } from "@/app/builder/[[...slug]]/StylePanel";
 import type { DesignTokens } from "@/lib/design/tokens";
+import { ELEMENT_ROLES } from "@/lib/design/element-style";
 import { SECTIONS } from "@/lib/sections";
 import styles from "@/app/builder/[[...slug]]/builder.module.css";
 import harness from "./harness.module.css";
@@ -134,6 +135,7 @@ export function CanvasHarness() {
             selection={selection}
             onSelect={(sel) => {
               setSelection(sel);
+              if (sel?.kind === "node" && styleOpen) setStyleFor(sel);
               note(sel ? `select ${JSON.stringify(sel)} → ${labelFor(sel)}` : "deselect");
             }}
             onGeometry={setBoxes}
@@ -183,6 +185,8 @@ export function CanvasHarness() {
             styleFor && styleFor.kind === "node"
               ? {
                   name: labelFor(styleFor),
+                  role: styleFor.role,
+                  onClearRole: () => setStyleFor({ kind: "node", index: styleFor.index }),
                   values: secStyle[styleFor.index] ?? {},
                   onChange: (field, value) => {
                     setSecStyle((prev) => ({

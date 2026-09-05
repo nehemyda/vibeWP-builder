@@ -2,6 +2,7 @@
 
 import { DESIGN_TOKENS, TOKEN_GROUPS, type DesignTokens } from "@/lib/design/tokens";
 import { SECTION_STYLE_OPTIONS } from "@/lib/design/section-style";
+import { ELEMENT_ROLES } from "@/lib/design/element-style";
 import styles from "./builder.module.css";
 
 /**
@@ -55,6 +56,10 @@ export function StylePanel({
     name: string;
     values: Record<string, string>;
     onChange: (field: string, value: string) => void;
+    /** The element inside it that was clicked, if any. */
+    role?: string;
+    /** Back up to the whole section from the breadcrumb. */
+    onClearRole?: () => void;
   };
 }) {
   const set = (name: string, value: number) => ({ ...tokens, [name]: value });
@@ -65,7 +70,22 @@ export function StylePanel({
       <header className={styles.styleHeader}>
         <div>
           <strong className={styles.styleTitle}>Style</strong>
-          <span className={styles.styleScope}>{section ? section.name : scope}</span>
+          {/*
+            A breadcrumb once an element is selected, so the reach of these
+            controls is readable and the way back up is the same control that
+            says where you are.
+          */}
+          {section?.role ? (
+            <span className={styles.styleScope}>
+              <button type="button" className={styles.styleCrumb} onClick={section.onClearRole}>
+                {section.name}
+              </button>
+              {" › "}
+              {ELEMENT_ROLES.find((r) => r.key === section.role)?.label ?? section.role}
+            </span>
+          ) : (
+            <span className={styles.styleScope}>{section ? section.name : scope}</span>
+          )}
         </div>
         <button type="button" className={styles.designClose} onClick={onClose} aria-label="Close">
           ✕
@@ -73,7 +93,36 @@ export function StylePanel({
       </header>
 
       <div className={styles.styleBody}>
-        {section ? (
+        {section?.role ? (
+          <section className={styles.styleGroup}>
+            <h3 className={styles.styleGroupName}>
+              {ELEMENT_ROLES.find((r) => r.key === section.role)?.label}
+            </h3>
+            {(ELEMENT_ROLES.find((r) => r.key === section.role)?.options ?? []).map((option) => {
+              const value = section.values[option.field] ?? String(option.spec.default ?? "default");
+              return (
+                <div key={option.field} className={styles.styleRow}>
+                  <label className={styles.styleLabel} htmlFor={`el-${option.field}`}>
+                    <span>{option.spec.label}</span>
+                  </label>
+                  <select
+                    id={`el-${option.field}`}
+                    className={styles.styleSelect}
+                    value={value}
+                    disabled={busy}
+                    onChange={(e) => section.onChange(option.field, e.target.value)}
+                  >
+                    {(option.spec.choices ?? []).map((choice) => (
+                      <option key={choice} value={choice}>
+                        {choice}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
+          </section>
+        ) : section ? (
           <section className={styles.styleGroup}>
             <h3 className={styles.styleGroupName}>This section</h3>
             {SECTION_STYLE_OPTIONS.map((option) => {

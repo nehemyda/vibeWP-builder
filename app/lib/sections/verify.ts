@@ -2,6 +2,7 @@ import { parse, type HTMLElement } from "node-html-parser";
 import { SECTIONS } from "@/lib/sections";
 import { sectionPreviewMarkup, markElement, addClasses } from "@/lib/wp/serialize";
 import { allStyleClasses } from "@/lib/design/section-style";
+import { ELEMENT_ROLES, allElementClasses } from "@/lib/design/element-style";
 import { readThemeCss, findCollapsingAutoFitGrids } from "@/lib/sections/css-audit";
 
 /**
@@ -176,7 +177,35 @@ for (const cls of allStyleClasses()) {
     fail(`style utility .${cls} is emitted but never styled`);
   }
 }
-console.log(`  ${allStyleClasses().length} utilities, all styled`);
+for (const cls of allElementClasses()) {
+  if (!new RegExp(`\\.${cls.replace(/[-]/g, "\\-")}(?![\\w-])`).test(css)) {
+    fail(`element utility .${cls} is emitted but never styled`);
+  }
+}
+console.log(`  ${allStyleClasses().length + allElementClasses().length} utilities, all styled`);
+
+/*
+ * Every role exclusion still names a class that exists.
+ *
+ * `.yp-logos__heading` is excluded because it is a 0.74rem uppercase caption
+ * wearing the heading suffix — offering it the display-heading control would
+ * turn a caption into a headline. If that class is ever renamed, the exclusion
+ * silently stops protecting anything, and the only symptom is a caption that
+ * suddenly obeys a control it should not.
+ */
+console.log("\n== element role exclusions ==");
+for (const role of ELEMENT_ROLES) {
+  for (const cls of role.except) {
+    if (!new RegExp(`\\.${cls.replace(/[-]/g, "\\-")}(?![\\w-])`).test(css)) {
+      fail(`${role.key} excludes .${cls}, which no longer exists in the stylesheet`);
+    }
+  }
+  // And the role has to match something, or it is a control that reaches nothing.
+  const matches = css.match(new RegExp(role.match.source, "g")) ?? [];
+  const real = matches.filter((m) => !role.except.includes(m));
+  if (real.length === 0) fail(`element role "${role.key}" matches no class in the stylesheet`);
+  else console.log(`  ${role.key.padEnd(10)} ${new Set(real).size} classes, ${role.except.length} excluded`);
+}
 
 console.log(`\n== registry: ${SECTIONS.length} sections, keys/nodeTypes/rootClasses all unique ==`);
 console.log(fails === 0 ? "\nALL GATES PASS" : `\n${fails} FAILURE(S)`);

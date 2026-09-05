@@ -1415,3 +1415,17 @@
   color: var(--ink);
   text-transform: capitalize;
 }
+
+/* The section half of the breadcrumb, which is also the way back to it. */
+.styleCrumb {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.styleCrumb:hover { color: var(--ink); }
