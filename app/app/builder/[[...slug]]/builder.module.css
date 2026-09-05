@@ -1377,3 +1377,31 @@
   color: #fff;
   border-color: var(--ink);
 }
+
+/* The second action on the selection toolbar: same weight as Change design,
+   quieter, because most of the time the layout is already right. */
+.selectionSecondary {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: var(--ink);
+  font: 600 12px/1 inherit;
+  padding: 7px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.selectionSecondary:hover:not(:disabled) { border-color: var(--ink); }
+.selectionSecondary:disabled { opacity: 0.4; cursor: default; }
+
+.styleSelect {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  text-transform: capitalize;
+}

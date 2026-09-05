@@ -234,8 +234,24 @@ const after = declarations(reduceVars(afterRaw));
 console.log(`== token equivalence ==`);
 console.log(`  fixture ${before.length} declarations, current ${after.length} after reduction`);
 
-if (before.length !== after.length) {
-  fail(`declaration count changed: ${before.length} → ${after.length}`);
+/*
+ * ADDING rules is allowed; changing the ones that were there is not.
+ *
+ * The fixture is a PREFIX, not the whole file. New CSS — the per-section
+ * utility classes, say — lands at the end and shifts nothing, so the first
+ * N declarations must still match exactly. An insertion in the MIDDLE shifts
+ * every index after it and fails loudly, which is correct: source order
+ * decides which of two equally specific rules wins, and this file relies on
+ * that in at least seven places.
+ *
+ * What the gate cannot tell you is whether an APPENDED rule overrides
+ * something by source order. That is what appending CSS is for, so it is
+ * reported rather than judged.
+ */
+if (after.length < before.length) {
+  fail(`${before.length - after.length} declaration(s) disappeared`);
+} else if (after.length > before.length) {
+  console.log(`  ${after.length - before.length} declaration(s) added since the snapshot`);
 }
 
 const limit = Math.min(before.length, after.length);

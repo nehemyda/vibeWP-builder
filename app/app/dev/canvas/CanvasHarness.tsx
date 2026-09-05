@@ -58,6 +58,9 @@ export function CanvasHarness() {
   const [cover, setCover] = useState<string | null>(params.get("busy"));
   const [tokens, setTokens] = useState<DesignTokens>({});
   const [styleOpen, setStyleOpen] = useState(params.get("style") !== "0");
+  const [styleFor, setStyleFor] = useState<CanvasSelection | null>(null);
+  /** Per-section settings, keyed by index — the harness's stand-in for props. */
+  const [secStyle, setSecStyle] = useState<Record<number, Record<string, string>>>({});
   const [boxes, setBoxes] = useState<SectionBox[]>([]);
   const [log, setLog] = useState<string[]>([]);
   const [order, setOrder] = useState<string[]>(FIXTURE);
@@ -86,7 +89,11 @@ export function CanvasHarness() {
       schemaVersion: "1.0",
       nodes: order.map((key, i) => {
         const def = getSectionByKey(key)!;
-        return { id: `n_${key}_${i}`, type: def.nodeType, props: def.sample };
+        return {
+          id: `n_${key}_${i}`,
+          type: def.nodeType,
+          props: { ...(def.sample as object), ...(secStyle[i] ?? {}) },
+        };
       }),
     };
     const header = getSectionByKey("header-cta")!;
@@ -103,7 +110,7 @@ export function CanvasHarness() {
         { slug: "contact", title: "Contact" },
       ],
     );
-  }, [order]);
+  }, [order, secStyle]);
 
   const labelFor = (sel: CanvasSelection) => {
     if (sel.kind === "chrome") return sel.slot === "header" ? "Header" : "Footer";
@@ -122,12 +129,30 @@ export function CanvasHarness() {
         <StylePanel
           tokens={tokens}
           scope="Whole site"
+          section={
+            styleFor && styleFor.kind === "node"
+              ? {
+                  name: labelFor(styleFor),
+                  values: secStyle[styleFor.index] ?? {},
+                  onChange: (field, value) => {
+                    setSecStyle((prev) => ({
+                      ...prev,
+                      [styleFor.index]: { ...(prev[styleFor.index] ?? {}), [field]: value },
+                    }));
+                    note(`section ${styleFor.index} ${field}=${value}`);
+                  },
+                }
+              : undefined
+          }
           onPreview={setTokens}
           onCommit={(next) => {
             setTokens(next);
             note(`style ${JSON.stringify(next)}`);
           }}
-          onClose={() => setStyleOpen(false)}
+          onClose={() => {
+            setStyleOpen(false);
+            setStyleFor(null);
+          }}
         />
       )}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", position: "relative" }}>
@@ -149,6 +174,11 @@ export function CanvasHarness() {
             boxes={boxes}
             selection={selection}
             labelFor={labelFor}
+            onStyle={(sel) => {
+              setStyleFor(sel);
+              setStyleOpen(true);
+              setPanelFor(null);
+            }}
             onChangeDesign={(sel) => {
               setPanelFor(sel);
               setOrigin(keyOf(sel));

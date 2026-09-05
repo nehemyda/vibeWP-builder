@@ -180,9 +180,18 @@ export type CanvasOp =
   | Extract<EditOp, { kind: "move_section" }>
   | Extract<EditOp, { kind: "remove_section" }>
   | Extract<EditOp, { kind: "add_section" }>
-  | Extract<EditOp, { kind: "swap_chrome" }>;
+  | Extract<EditOp, { kind: "swap_chrome" }>
+  /*
+   * Only ever reaches a PAGE section from the canvas. A header's settings are
+   * intercepted earlier in runEdit and written to the site row, and that branch
+   * validates less strictly than applyOp does — no isOptionField guard, no
+   * choices check — so the style panel deliberately offers nothing on chrome
+   * and everything here lands on the strict path.
+   */
+  | Extract<EditOp, { kind: "set_option" }>;
 
 const CANVAS_OPS: CanvasOp["kind"][] = [
+  "set_option",
   "swap_section",
   "move_section",
   "remove_section",
@@ -203,6 +212,8 @@ function describeCanvasOp(op: CanvasOp): string {
       return `Removed the ${op.section}`;
     case "add_section":
       return `Added the ${name(op.section)}`;
+    case "set_option":
+      return `Set ${op.option} to ${op.value} on the ${op.section}`;
   }
 }
 

@@ -31,6 +31,7 @@ export function CanvasOverlay({
   labelFor,
   busy,
   onChangeDesign,
+  onStyle,
   onMove,
   onRemove,
 }: {
@@ -41,6 +42,8 @@ export function CanvasOverlay({
   /** An edit is in flight, so the controls must not fire twice. */
   busy?: boolean;
   onChangeDesign: (selection: CanvasSelection) => void;
+  /** Opens the style sidebar scoped to this section. */
+  onStyle?: (selection: CanvasSelection) => void;
   onMove: (selection: CanvasSelection, direction: -1 | 1) => void;
   onRemove: (selection: CanvasSelection) => void;
 }) {
@@ -97,6 +100,22 @@ export function CanvasOverlay({
           >
             Change design
           </button>
+          {/*
+            Style sits beside Change design because they are the two halves of
+            the same question — a different layout, or this one adjusted.
+            Chrome is excluded: a header's spacing is not a page section's
+            spacing, and its settings live on the site rather than the page.
+          */}
+          {!isChrome && onStyle && (
+            <button
+              type="button"
+              className={styles.selectionSecondary}
+              disabled={busy}
+              onClick={() => onStyle(selection)}
+            >
+              Style
+            </button>
+          )}
           {!isChrome && (
             <>
               {/*

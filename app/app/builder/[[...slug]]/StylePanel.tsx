@@ -1,6 +1,7 @@
 "use client";
 
 import { DESIGN_TOKENS, TOKEN_GROUPS, type DesignTokens } from "@/lib/design/tokens";
+import { SECTION_STYLE_OPTIONS } from "@/lib/design/section-style";
 import styles from "./builder.module.css";
 
 /**
@@ -31,6 +32,7 @@ export function StylePanel({
   onClose,
   busy,
   scope,
+  section,
 }: {
   tokens: DesignTokens;
   /** Live, unsaved — fires continuously while a slider moves. */
@@ -41,16 +43,29 @@ export function StylePanel({
   busy?: boolean;
   /** What these controls apply to, shown so the reach is never a guess. */
   scope: string;
+  /**
+   * A section's own settings, when one is selected.
+   *
+   * Present means the panel is showing THAT section rather than the whole
+   * site, and the site-wide sliders step aside — two sets of controls that
+   * both say "heading size" on one screen is a question about which one wins,
+   * and the answer would have to be explained rather than seen.
+   */
+  section?: {
+    name: string;
+    values: Record<string, string>;
+    onChange: (field: string, value: string) => void;
+  };
 }) {
   const set = (name: string, value: number) => ({ ...tokens, [name]: value });
   const dirty = DESIGN_TOKENS.some((t) => tokens[t.name] !== undefined && tokens[t.name] !== t.unset);
 
   return (
-    <aside className={styles.stylePanel} aria-label="Style this site">
+    <aside className={styles.stylePanel} aria-label="Style">
       <header className={styles.styleHeader}>
         <div>
           <strong className={styles.styleTitle}>Style</strong>
-          <span className={styles.styleScope}>{scope}</span>
+          <span className={styles.styleScope}>{section ? section.name : scope}</span>
         </div>
         <button type="button" className={styles.designClose} onClick={onClose} aria-label="Close">
           ✕
@@ -58,7 +73,36 @@ export function StylePanel({
       </header>
 
       <div className={styles.styleBody}>
-        {TOKEN_GROUPS.map((group) => (
+        {section ? (
+          <section className={styles.styleGroup}>
+            <h3 className={styles.styleGroupName}>This section</h3>
+            {SECTION_STYLE_OPTIONS.map((option) => {
+              const value = section.values[option.field] ?? String(option.spec.default ?? "default");
+              return (
+                <div key={option.field} className={styles.styleRow}>
+                  <label className={styles.styleLabel} htmlFor={`sec-${option.field}`}>
+                    <span>{option.spec.label}</span>
+                  </label>
+                  <select
+                    id={`sec-${option.field}`}
+                    className={styles.styleSelect}
+                    value={value}
+                    disabled={busy}
+                    onChange={(e) => section.onChange(option.field, e.target.value)}
+                  >
+                    {(option.spec.choices ?? []).map((choice) => (
+                      <option key={choice} value={choice}>
+                        {choice}
+                      </option>
+                    ))}
+                  </select>
+                  {option.spec.hint && <p className={styles.styleHint}>{option.spec.hint}</p>}
+                </div>
+              );
+            })}
+          </section>
+        ) : (
+          TOKEN_GROUPS.map((group) => (
           <section key={group} className={styles.styleGroup}>
             <h3 className={styles.styleGroupName}>{group}</h3>
             {DESIGN_TOKENS.filter((t) => t.group === group).map((spec) => {
@@ -91,19 +135,35 @@ export function StylePanel({
                 </div>
               );
             })}
-          </section>
-        ))}
+            </section>
+          ))
+        )}
       </div>
 
       <footer className={styles.styleFooter}>
-        <button
-          type="button"
-          className={styles.styleReset}
-          disabled={busy || !dirty}
-          onClick={() => onCommit({})}
-        >
-          {dirty ? "Back to the original design" : "Matching the original design"}
-        </button>
+        {section ? (
+          <button
+            type="button"
+            className={styles.styleReset}
+            disabled={busy}
+            onClick={() => {
+              for (const option of SECTION_STYLE_OPTIONS) {
+                section.onChange(option.field, String(option.spec.default ?? "default"));
+              }
+            }}
+          >
+            Reset this section
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={styles.styleReset}
+            disabled={busy || !dirty}
+            onClick={() => onCommit({})}
+          >
+            {dirty ? "Back to the original design" : "Matching the original design"}
+          </button>
+        )}
       </footer>
     </aside>
   );

@@ -158,6 +158,14 @@ for (const [placement, group] of byPlacement) {
        *    price list turning into bare headings. */
       const text = textOf(html);
       for (const [field, value] of Object.entries(props)) {
+        /*
+         * A setting's VALUE is a name, not copy. "default" or "airy" is never
+         * meant to appear on the page, so looking for it there reports every
+         * section as having lost content. carry-props' own ghost check exempts
+         * options for the same reason; this is its second copy.
+         */
+        const spec = to.fields[field];
+        if (spec && isOptionField(spec)) continue;
         const strings = visibleStrings(value, field);
         const lost = strings.filter((s) => !text.includes(s));
         if (lost.length) {

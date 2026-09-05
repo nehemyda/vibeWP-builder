@@ -1,6 +1,7 @@
 import { parse, type HTMLElement } from "node-html-parser";
 import { SECTIONS } from "@/lib/sections";
-import { sectionPreviewMarkup, markElement } from "@/lib/wp/serialize";
+import { sectionPreviewMarkup, markElement, addClasses } from "@/lib/wp/serialize";
+import { allStyleClasses } from "@/lib/design/section-style";
 import { readThemeCss, findCollapsingAutoFitGrids } from "@/lib/sections/css-audit";
 
 /**
@@ -135,16 +136,48 @@ for (const s of targets) {
     fail(`${s.key}: selection stamp landed outside .${s.rootClass}`);
   }
 
+  /*
+   * 9. A style class keeps the block valid.
+   *
+   * core/group rebuilds the element's class from the `className` in the block
+   * comment, so the two must agree exactly or WordPress regenerates different
+   * markup from what is stored and marks the section as containing unexpected
+   * content — the failure a class was chosen to avoid. Asserted rather than
+   * trusted, because it is invisible until someone opens wp-admin.
+   */
+  if (!isTemplatePart) {
+    const styled = addClasses(html, "u-space--lg");
+    const inComment = styled.match(/"className":"([^"]*)"/)?.[1];
+    const inElement = styled.match(/<[a-z]+[^>]*\sclass="([^"]*)"/)?.[1];
+    if (!inComment?.includes("u-space--lg")) {
+      fail(`${s.key}: a style class never reached the block comment`);
+    } else if (!inElement?.endsWith(inComment)) {
+      fail(`${s.key}: block comment and element class disagree — WordPress would reject it`);
+    }
+  }
+
   console.log(`  ${s.key.padEnd(20)} ${html.length} bytes, ${emitted.size} classes, preview ${previewText.length} chars`);
 }
 
-// 9. registry hygiene across ALL sections
+// 10. registry hygiene across ALL sections
 const keys = new Set<string>(), nodes = new Set<string>(), roots = new Set<string>();
 for (const s of SECTIONS) {
   if (keys.has(s.key)) fail(`duplicate key ${s.key}`); keys.add(s.key);
   if (nodes.has(s.nodeType)) fail(`duplicate nodeType ${s.nodeType}`); nodes.add(s.nodeType);
   if (roots.has(s.rootClass)) fail(`duplicate rootClass ${s.rootClass}`); roots.add(s.rootClass);
 }
+/*
+ * Every style utility resolves to a real rule. A control that emits a class
+ * the stylesheet does not define is a control that silently does nothing.
+ */
+console.log("\n== section style utilities ==");
+for (const cls of allStyleClasses()) {
+  if (!new RegExp(`\\.${cls.replace(/[-]/g, "\\-")}(?![\\w-])`).test(css)) {
+    fail(`style utility .${cls} is emitted but never styled`);
+  }
+}
+console.log(`  ${allStyleClasses().length} utilities, all styled`);
+
 console.log(`\n== registry: ${SECTIONS.length} sections, keys/nodeTypes/rootClasses all unique ==`);
 console.log(fails === 0 ? "\nALL GATES PASS" : `\n${fails} FAILURE(S)`);
 

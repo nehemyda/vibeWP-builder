@@ -1,4 +1,5 @@
 import { parse } from "node-html-parser";
+import { styleClassesFor, styleFromClasses } from "@/lib/design/section-style";
 import { getSectionByNodeType, SECTIONS } from "@/lib/sections";
 import { esc, escAttr } from "./blocks";
 import { defaultSpan, staticFormMarkup } from "@/lib/forms/static-markup";
@@ -70,11 +71,72 @@ export function schemaToGutenberg(
        * Skipped rather than thrown so one mistaken node can't fail an export.
        */
       if (section.placement && section.placement !== "page") return "";
-      const html = section.toGutenberg(node.props ?? {});
+      let html = section.toGutenberg(node.props ?? {});
+      /*
+       * The section's own style settings, as utility classes on its root.
+       *
+       * Applied here rather than in 62 toGutenberg bodies: a multiplier means
+       * the same thing in every design, so there is nothing per-section to
+       * decide. The class sets a scale token, and every size in the stylesheet
+       * already reads that token with a fallback — so scoping it to one
+       * section needs no per-section CSS either.
+       */
+      const styleClasses = styleClassesFor(node.props);
+      if (styleClasses) html = addClasses(html, styleClasses);
       return opts?.markNodes ? markElement(html, "data-vibewp-node", String(index)) : html;
     })
     .filter(Boolean)
     .join("\n\n");
+}
+
+/**
+ * Appends classes to the first element's `class` attribute.
+ *
+ * Same reasoning as markElement about which element is first, and the same
+ * assertion in verify.ts covers it. Unlike markElement this DOES reach the
+ * export, deliberately: a style the client chose has to travel with their
+ * content, and a class is the one carrier that survives the WordPress block
+ * editor — `className` is what a static block's save() emits.
+ */
+export function addClasses(html: string, classes: string): string {
+  /*
+   * BOTH the block comment and the element, or the block is invalid.
+   *
+   * core/group's save() rebuilds the element's class from the `className`
+   * attribute in the comment — `wp-block-group ` plus that value. Writing the
+   * utility classes into the HTML alone leaves the two disagreeing, so
+   * WordPress regenerates different markup from what is stored, block
+   * validation fails, and every styled section shows "this block contains
+   * unexpected or invalid content" in wp-admin. One click of Attempt Block
+   * Recovery then strips the styling.
+   *
+   * Which is the failure a class was chosen to avoid in the first place, so
+   * getting it wrong here would have been quietly self-defeating. verify.ts
+   * asserts the two agree for all 62 sections.
+   */
+  let out = html;
+
+  const comment = out.match(/^\s*<!--\s*wp:[a-z0-9/-]+\s+(\{.*?\})\s*-->/);
+  if (comment) {
+    const attrs = comment[1];
+    const patched = /"className"\s*:\s*"([^"]*)"/.test(attrs)
+      ? attrs.replace(/"className"\s*:\s*"([^"]*)"/, (_, had: string) =>
+          `"className":${JSON.stringify(`${had} ${classes}`.trim())}`)
+      : `${attrs.slice(0, -1)}${attrs === "{}" ? "" : ","}"className":${JSON.stringify(classes)}}`;
+    out = out.replace(attrs, patched);
+  }
+
+  const at = out.search(/<[a-zA-Z][\w-]*/);
+  if (at < 0) return out;
+  const tagEnd = out.indexOf(">", at);
+  if (tagEnd < 0) return out;
+  const tag = out.slice(at, tagEnd);
+  const existing = tag.match(/\sclass="([^"]*)"/);
+  if (!existing) {
+    return out.slice(0, tagEnd) + ` class="${escAttr(classes)}"` + out.slice(tagEnd);
+  }
+  const merged = `${existing[1]} ${classes}`.trim();
+  return out.slice(0, at) + tag.replace(/\sclass="[^"]*"/, ` class="${escAttr(merged)}"`) + out.slice(tagEnd);
 }
 
 /**
@@ -449,7 +511,23 @@ export function gutenbergToSchema(html: string): PageSchema | null {
     if (!section.fromGutenberg) continue;
     const props = section.fromGutenberg(root);
     if (props) {
-      nodes.push({ id: `n_${section.key}`, type: section.nodeType, props });
+      /*
+       * The style settings come back off the root's class list, here rather
+       * than in 62 parsers — the same one place they were written.
+       *
+       * Without this they would be destroyed on every pull from WordPress:
+       * this function rebuilds each node's props from scratch, so a setting no
+       * parser reads simply stops existing. That is why formToken had to go
+       * into a data attribute, and it is the reason section styling is carried
+       * by a class at all.
+       */
+      const rootEl = root.querySelector(`.${section.rootClass}`);
+      const style = rootEl ? styleFromClasses(rootEl.getAttribute("class") ?? "") : {};
+      nodes.push({
+        id: `n_${section.key}`,
+        type: section.nodeType,
+        props: { ...props, ...style },
+      });
     }
   }
 

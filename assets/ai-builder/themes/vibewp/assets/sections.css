@@ -90,12 +90,12 @@
      The max ends of these clamps are the previously verified desktop
      values, so wide layouts are byte-identical to before.
      ─────────────────────────────────────────────────────────────────── */
-  --space-section-top: calc(var(--wp--custom--space--section-top, clamp(2.25rem, 6vw, 4.5rem)) * var(--yp-space-scale, 1));
-  --space-section-bottom: calc(var(--wp--custom--space--section-bottom, clamp(1.5rem, 4vw, 3rem)) * var(--yp-space-scale, 1));
+  --space-section-top: var(--wp--custom--space--section-top, clamp(2.25rem, 6vw, 4.5rem));
+  --space-section-bottom: var(--wp--custom--space--section-bottom, clamp(1.5rem, 4vw, 3rem));
   /* Horizontal breathing room at the screen edge. */
-  --space-gutter: calc(var(--wp--custom--space--gutter, clamp(1.15rem, 4vw, 2rem)) * var(--yp-space-scale, 1));
+  --space-gutter: var(--wp--custom--space--gutter, clamp(1.15rem, 4vw, 2rem));
   /* Space between columns, and between stacked blocks once they collapse. */
-  --space-gap: calc(var(--wp--custom--space--gap, clamp(2rem, 5vw, 3.5rem)) * var(--yp-space-scale, 1));
+  --space-gap: var(--wp--custom--space--gap, clamp(2rem, 5vw, 3.5rem));
 
   --container: var(--wp--custom--layout--content-size, 1160px);
 }
@@ -137,13 +137,13 @@ body.yp-page {
 .yp-page .yp-hero {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 
 .yp-page .yp-hero__grid {
   display: grid;
   grid-template-columns: 1.08fr 0.92fr;
-  gap: var(--space-gap);
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
   align-items: center;
 }
 
@@ -415,7 +415,7 @@ body.yp-page {
 /* ---- responsive ---- */
 
 @media (max-width: 880px) {
-  .yp-page .yp-hero__grid { grid-template-columns: 1fr; gap: var(--space-gap); }
+  .yp-page .yp-hero__grid { grid-template-columns: 1fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); }
   /* Image above the copy once the columns collapse, so a phone leads with
      the visual rather than a wall of text. */
   .yp-page .yp-hero__media { order: -1; }
@@ -437,7 +437,7 @@ body.yp-page {
 .yp-page .yp-contact {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 
 /* Same box-sizing and block-gap resets the hero needs, for the same reasons:
@@ -607,13 +607,13 @@ body.yp-page {
 .yp-page .yp-cta {
   background: color-mix(in oklch, var(--primary) 8%, var(--surface));
   border-block: 1px solid color-mix(in oklch, var(--primary) 18%, transparent);
-  margin-block: var(--space-section-top) 0;
+  margin-block: calc(var(--space-section-top) * var(--yp-space-scale, 1)) 0;
 }
 
 .yp-page .yp-cta__inner {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -652,7 +652,7 @@ body.yp-page {
 .yp-page .yp-contact__grid {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
-  gap: var(--space-gap);
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
   align-items: start;
 }
 
@@ -787,7 +787,7 @@ body.yp-page {
 .yp-page .yp-hero-centered {
   max-width: var(--container);
   margin: 0 auto;
-  padding: calc(var(--space-section-top) * 1.25) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(calc(var(--space-section-top) * var(--yp-space-scale, 1)) * 1.25) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-hero-centered__inner {
   max-width: 46rem;
@@ -867,7 +867,7 @@ body.yp-page {
   width: 100%;
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -907,7 +907,7 @@ body.yp-page {
 .yp-page .yp-hero-stacked {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-hero-stacked__copy {
   max-width: 44rem;
@@ -946,12 +946,12 @@ body.yp-page {
 .yp-page .yp-hero-showcase {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-hero-showcase__grid {
   display: grid;
   grid-template-columns: 1.08fr 0.92fr;
-  gap: var(--space-gap);
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
   align-items: center;
 }
 .yp-page .yp-hero-showcase__copy {
@@ -1022,12 +1022,12 @@ body.yp-page {
 .yp-page .yp-hero-cards {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-hero-cards__grid-outer {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-gap);
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
   align-items: center;
 }
 .yp-page .yp-hero-cards__copy {
@@ -1146,8 +1146,8 @@ body.yp-page {
   position: relative;
   max-width: 48rem;
   margin: 0 auto;
-  padding: calc(var(--space-section-top) * 1.35) var(--space-gutter)
-           calc(var(--space-section-bottom) * 1.4);
+  padding: calc(calc(var(--space-section-top) * var(--yp-space-scale, 1)) * 1.35) calc(var(--space-gutter) * var(--yp-space-scale, 1))
+           calc(calc(var(--space-section-bottom) * var(--yp-space-scale, 1)) * 1.4);
   display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1.3rem;
 }
 .yp-page .yp-hero-aurora__heading {
@@ -1197,8 +1197,8 @@ body.yp-page {
 .yp-page .yp-hero-spotlight__inner {
   position: relative;
   max-width: 50rem; margin: 0 auto;
-  padding: calc(var(--space-section-top) * 1.4) var(--space-gutter)
-           calc(var(--space-section-bottom) * 1.4);
+  padding: calc(calc(var(--space-section-top) * var(--yp-space-scale, 1)) * 1.4) calc(var(--space-gutter) * var(--yp-space-scale, 1))
+           calc(calc(var(--space-section-bottom) * var(--yp-space-scale, 1)) * 1.4);
   display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1.25rem;
 }
 .yp-page .yp-hero-spotlight__eyebrow {
@@ -1241,11 +1241,11 @@ body.yp-page {
 
 .yp-page .yp-hero-duotone {
   max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-hero-duotone__grid {
   display: grid; grid-template-columns: 1fr 1fr;
-  gap: var(--space-gap); align-items: center;
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: center;
 }
 .yp-page .yp-hero-duotone__copy {
   display: flex; flex-direction: column; align-items: flex-start; gap: 1.3rem;
@@ -1289,7 +1289,7 @@ body.yp-page {
 }
 .yp-page .yp-hero-glass__inner {
   width: 100%; max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-hero-glass__card {
   max-width: 30rem;
@@ -1325,7 +1325,7 @@ body.yp-page {
 
 .yp-page .yp-hero-pattern {
   max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-hero-pattern__grid {
   display: grid;
@@ -1410,7 +1410,7 @@ body.yp-page {
 .yp-page .yp-contact-visit {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 
 .yp-page .yp-contact-cards__heading,
@@ -1484,7 +1484,7 @@ body.yp-page {
 .yp-page .yp-contact-callout__inner {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.9rem;
 }
 .yp-page .yp-contact-callout__eyebrow {
@@ -1528,7 +1528,7 @@ body.yp-page {
 
 .yp-page .yp-contact-hours__grid {
   display: grid; grid-template-columns: 1.1fr 0.9fr;
-  gap: var(--space-gap); align-items: start;
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: start;
 }
 .yp-page .yp-contact-hours__copy {
   display: flex; flex-direction: column; align-items: flex-start; gap: 1.1rem;
@@ -1565,7 +1565,7 @@ body.yp-page {
 
 .yp-page .yp-contact-visit__grid {
   display: grid; grid-template-columns: 1fr 1fr;
-  gap: var(--space-gap); align-items: center;
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: center;
 }
 .yp-page .yp-contact-visit__copy {
   display: flex; flex-direction: column; align-items: flex-start; gap: 1.1rem;
@@ -1599,8 +1599,8 @@ body.yp-page {
 .yp-page .yp-contact-band { background: #0b0f16; }
 .yp-page .yp-contact-band__inner {
   max-width: var(--container); margin: 0 auto;
-  padding: calc(var(--space-section-top) * 0.7) var(--space-gutter)
-           calc(var(--space-section-bottom) * 0.8);
+  padding: calc(calc(var(--space-section-top) * var(--yp-space-scale, 1)) * 0.7) calc(var(--space-gutter) * var(--yp-space-scale, 1))
+           calc(calc(var(--space-section-bottom) * var(--yp-space-scale, 1)) * 0.8);
   display: flex; flex-direction: column; gap: 1.6rem;
 }
 .yp-page .yp-contact-band__heading {
@@ -1653,7 +1653,7 @@ body.yp-page {
 .yp-page .yp-faqh, .yp-page .yp-faqo, .yp-page .yp-faqs, .yp-page .yp-ctabox,
 .yp-page .yp-ctadual {
   max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-alt__heading, .yp-page .yp-steps__heading, .yp-page .yp-stats__heading,
 .yp-page .yp-check__heading, .yp-page .yp-gallery__heading, .yp-page .yp-pricing__heading,
@@ -1671,7 +1671,7 @@ body.yp-page {
 
 /* ---- Alternating rows ---- */
 .yp-page .yp-alt__row {
-  display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-gap);
+  display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
   align-items: center; margin-top: 3rem;
 }
 /* The flip. One rule, and the page stops looking templated. */
@@ -1699,7 +1699,7 @@ body.yp-page {
 
 /* ---- Numbers band ---- */
 .yp-page .yp-stats { background: color-mix(in oklch, var(--primary) 6%, var(--surface)); border-block: 1px solid color-mix(in oklch, var(--primary) 14%, transparent); }
-.yp-page .yp-stats__inner { max-width: var(--container); margin: 0 auto; padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom); }
+.yp-page .yp-stats__inner { max-width: var(--container); margin: 0 auto; padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1)); }
 .yp-page .yp-stats__grid { display: grid; gap: 1.6rem 2.4rem; margin-top: 2.2rem;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); }
 .yp-page .yp-stats__item { display: grid; gap: 0.25rem; }
@@ -1707,7 +1707,7 @@ body.yp-page {
 .yp-page .yp-stats__label { margin: 0; font-size: calc(0.9rem * var(--yp-text-scale, 1)); color: var(--muted); }
 
 /* ---- Checklist: ticks via ::marker, not characters in the text ---- */
-.yp-page .yp-check__grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-gap); align-items: start; }
+.yp-page .yp-check__grid { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: start; }
 .yp-page .yp-check__copy { display: flex; flex-direction: column; align-items: flex-start; gap: 1.1rem; }
 .yp-page .yp-check__body { margin: 0; max-width: 44ch; font-size: calc(1.04rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-check__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; }
@@ -1837,7 +1837,7 @@ body.yp-page {
 
 /* ---- Promises ---- */
 .yp-page .yp-promise { background: var(--surface-2); border-block: 1px solid var(--line); }
-.yp-page .yp-promise__inner { max-width: var(--container); margin: 0 auto; padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom); }
+.yp-page .yp-promise__inner { max-width: var(--container); margin: 0 auto; padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1)); }
 .yp-page .yp-promise__grid { display: grid; gap: 1.4rem; margin-top: 2.2rem;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
 .yp-page .yp-promise__item { padding-left: 1.2rem; border-left: 3px solid color-mix(in oklch, var(--primary) 45%, transparent); }
@@ -1860,7 +1860,7 @@ body.yp-page {
 .yp-page .yp-compare__them { margin: 0; font-size: calc(0.95rem * var(--yp-text-scale, 1)); color: var(--muted); }
 
 /* ---- Offer ---- */
-.yp-page .yp-offer { max-width: var(--container); margin: 0 auto; padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom); }
+.yp-page .yp-offer { max-width: var(--container); margin: 0 auto; padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1)); }
 .yp-page .yp-offer__card {
   border-radius: 20px; padding: 2.4rem 2.6rem 2.6rem;
   background: color-mix(in oklch, var(--primary) 7%, var(--surface));
@@ -1884,7 +1884,7 @@ body.yp-page {
 /* ---- Logos: wordmarks, never other companies' logo files ---- */
 .yp-page .yp-logos { border-block: 1px solid var(--line); }
 .yp-page .yp-logos__inner { max-width: var(--container); margin: 0 auto;
-  padding: calc(var(--space-section-top) * 0.6) var(--space-gutter) calc(var(--space-section-bottom) * 0.7);
+  padding: calc(calc(var(--space-section-top) * var(--yp-space-scale, 1)) * 0.6) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(calc(var(--space-section-bottom) * var(--yp-space-scale, 1)) * 0.7);
   display: flex; flex-direction: column; align-items: center; gap: 1.2rem; text-align: center; }
 .yp-page .yp-logos__heading { margin: 0; font-family: var(--font-mono); font-size: calc(0.74rem * var(--yp-text-scale, 1)); font-weight: 600;
   letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
@@ -1903,7 +1903,7 @@ body.yp-page {
   font-family: var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--primary); }
 .yp-page .yp-faqg__list { border-top: 1px solid var(--line); }
 .yp-page .yp-faqg__item { border-bottom: 1px solid var(--line); }
-.yp-page .yp-faqh__grid { display: grid; grid-template-columns: 1.5fr 0.9fr; gap: var(--space-gap); align-items: start; }
+.yp-page .yp-faqh__grid { display: grid; grid-template-columns: 1.5fr 0.9fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: start; }
 .yp-page .yp-faqh__main { min-width: 0; }
 .yp-page .yp-faqh__list { margin-top: 1.6rem; border-top: 1px solid var(--line); }
 .yp-page .yp-faqh__item { border-bottom: 1px solid var(--line); }
@@ -1921,7 +1921,7 @@ body.yp-page {
   font-family: var(--font-mono); font-size: calc(0.95rem * var(--yp-text-scale, 1)); font-weight: 700; color: var(--primary); }
 .yp-page .yp-faqo__question { margin: 0 0 0.5rem; font-size: calc(1.15rem * var(--yp-text-scale, 1)); font-weight: 700; letter-spacing: -0.01em; }
 .yp-page .yp-faqo__answer { margin: 0; max-width: 68ch; font-size: calc(1rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
-.yp-page .yp-faqs__grid { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: var(--space-gap); align-items: start; }
+.yp-page .yp-faqs__grid { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: start; }
 /* Heading follows the reader down a long list. No script needed. */
 .yp-page .yp-faqs__aside { position: sticky; top: 2rem; display: grid; gap: 0.8rem; }
 .yp-page .yp-faqs__body { margin: 0; font-size: calc(1rem * var(--yp-text-scale, 1)); color: var(--ink-2); max-width: 34ch; }
@@ -1953,7 +1953,7 @@ body.yp-page {
 .yp-page .yp-ctasplit { background: color-mix(in oklch, var(--primary) 8%, var(--surface));
   border-block: 1px solid color-mix(in oklch, var(--primary) 18%, transparent); }
 .yp-page .yp-ctasplit__inner { max-width: var(--container); margin: 0 auto;
-  padding: calc(var(--space-section-top) * 0.7) var(--space-gutter) calc(var(--space-section-bottom) * 0.8);
+  padding: calc(calc(var(--space-section-top) * var(--yp-space-scale, 1)) * 0.7) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(calc(var(--space-section-bottom) * var(--yp-space-scale, 1)) * 0.8);
   display: flex; align-items: center; justify-content: space-between; gap: 1.6rem; flex-wrap: wrap; }
 .yp-page .yp-ctasplit__copy { display: grid; gap: 0.35rem; }
 .yp-page .yp-ctasplit__heading { margin: 0; font-size: calc(clamp(1.4rem, 2.4vw, 1.9rem) * var(--yp-display-scale, 1)); font-weight: 800; letter-spacing: -0.02em; }
@@ -1975,7 +1975,7 @@ body.yp-page {
 .yp-page .yp-ctaimg::after { content: ""; position: absolute; inset: 0; z-index: -1;
   background: linear-gradient(to top, rgba(8,11,16,0.82) 0%, rgba(8,11,16,0.5) 60%, rgba(8,11,16,0.3) 100%); }
 .yp-page .yp-ctaimg__inner { position: relative; width: 100%; max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.9rem; }
 .yp-page .yp-ctaimg__heading { margin: 0; color: #fff; font-size: calc(clamp(1.9rem, 3.4vw, 2.9rem) * var(--yp-display-scale, 1)); font-weight: 800; letter-spacing: -0.03em; text-wrap: balance; }
 .yp-page .yp-ctaimg__body { margin: 0; color: rgba(255,255,255,0.84); font-size: calc(1.05rem * var(--yp-text-scale, 1)); max-width: 46ch; }
@@ -1994,7 +1994,7 @@ body.yp-page {
 
 .yp-page .yp-ctastrip { background: var(--ink); }
 .yp-page .yp-ctastrip__inner { max-width: var(--container); margin: 0 auto;
-  padding: 1.1rem var(--space-gutter); display: flex; align-items: center; justify-content: center;
+  padding: 1.1rem calc(var(--space-gutter) * var(--yp-space-scale, 1)); display: flex; align-items: center; justify-content: center;
   gap: 1.2rem; flex-wrap: wrap; text-align: center; }
 .yp-page .yp-ctastrip__text { margin: 0; color: #fff; font-size: calc(1.02rem * var(--yp-text-scale, 1)); font-weight: 600; }
 .yp-page .yp-ctastrip__actions { display: flex; gap: 0.6rem; flex: none; }
@@ -2361,7 +2361,7 @@ body.yp-page {
 }
 .yp-page .yp-hdr__inner, .yp-page .yp-hdrb__inner, .yp-page .yp-hdrm__inner {
   max-width: var(--container); margin: 0 auto;
-  padding: 1.05rem var(--space-gutter);
+  padding: 1.05rem calc(var(--space-gutter) * var(--yp-space-scale, 1));
   display: flex; align-items: center; gap: 1.5rem;
 }
 .yp-page .yp-hdr__inner { justify-content: space-between; }
@@ -2373,7 +2373,7 @@ body.yp-page {
 
 .yp-page .yp-hdrc__inner {
   max-width: var(--container); margin: 0 auto;
-  padding: 1.5rem var(--space-gutter) 1.1rem;
+  padding: 1.5rem calc(var(--space-gutter) * var(--yp-space-scale, 1)) 1.1rem;
   display: flex; flex-direction: column; align-items: center; gap: 0.9rem;
 }
 .yp-page .yp-hdrc__brand { font-size: calc(1.5rem * var(--yp-text-scale, 1)); }
@@ -2382,7 +2382,7 @@ body.yp-page {
 .yp-page .yp-hdrt__bar { background: var(--ink); }
 .yp-page .yp-hdrt__bar-inner {
   max-width: var(--container); margin: 0 auto;
-  padding: 0.5rem var(--space-gutter);
+  padding: 0.5rem calc(var(--space-gutter) * var(--yp-space-scale, 1));
   display: flex; align-items: center; justify-content: flex-end; gap: 1.4rem; flex-wrap: wrap;
 }
 .yp-page .yp-hdrt__phone { margin: 0; }
@@ -2396,7 +2396,7 @@ body.yp-page {
 }
 .yp-page .yp-hdrt__main {
   max-width: var(--container); margin: 0 auto;
-  padding: 1.05rem var(--space-gutter);
+  padding: 1.05rem calc(var(--space-gutter) * var(--yp-space-scale, 1));
   display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;
 }
 
@@ -2488,7 +2488,7 @@ body.yp-page {
 .yp-page .yp-ftr__inner {
   max-width: var(--container);
   margin: 0 auto;
-  padding: 3.2rem var(--space-gutter) 2.4rem;
+  padding: 3.2rem calc(var(--space-gutter) * var(--yp-space-scale, 1)) 2.4rem;
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 1.4rem; flex-wrap: wrap;
 }
@@ -2501,7 +2501,7 @@ body.yp-page {
 .yp-page .yp-ftrk__inner {
   max-width: var(--container);
   margin: 0 auto;
-  padding: 4.4rem var(--space-gutter) 2rem;
+  padding: 4.4rem calc(var(--space-gutter) * var(--yp-space-scale, 1)) 2rem;
 }
 /*
  * EXPLICIT tracks, not `1.4fr repeat(auto-fit, …)`.
@@ -2573,7 +2573,7 @@ body.yp-page {
 /* ---- 4. Final ask ---- */
 .yp-page .yp-ftrx__inner {
   max-width: var(--container); margin: 0 auto;
-  padding: 4.6rem var(--space-gutter) 2rem;
+  padding: 4.6rem calc(var(--space-gutter) * var(--yp-space-scale, 1)) 2rem;
 }
 .yp-page .yp-ftrx__cta {
   display: flex; flex-direction: column; align-items: center; text-align: center;
@@ -2596,7 +2596,7 @@ body.yp-page {
 /* ---- 5. Social ---- */
 .yp-page .yp-ftrs__inner {
   max-width: var(--container); margin: 0 auto;
-  padding: 4rem var(--space-gutter) 2.2rem;
+  padding: 4rem calc(var(--space-gutter) * var(--yp-space-scale, 1)) 2.2rem;
   display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1.15rem;
 }
 .yp-page .yp-ftrs__brand { font-size: calc(1.55rem * var(--yp-text-scale, 1)); }
@@ -2662,7 +2662,7 @@ body.yp-page {
 .yp-page .yp-svcp, .yp-page .yp-svca {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 
 .yp-page .yp-svcs__heading, .yp-page .yp-svcf__heading,
@@ -2693,7 +2693,7 @@ body.yp-page {
 .yp-page .yp-svcs__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-  gap: var(--space-gutter);
+  gap: calc(var(--space-gutter) * var(--yp-space-scale, 1));
   margin-top: 2.4rem;
 }
 
@@ -2749,7 +2749,7 @@ body.yp-page {
 .yp-page .yp-svcf__grid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-  gap: var(--space-gap);
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
   margin-top: 2.4rem;
   align-items: start;
 }
@@ -2834,7 +2834,7 @@ body.yp-page {
   counter-increment: svce;
   display: grid;
   grid-template-columns: 3.25rem minmax(0, 0.85fr) minmax(0, 1.25fr);
-  column-gap: var(--space-gutter);
+  column-gap: calc(var(--space-gutter) * var(--yp-space-scale, 1));
   align-items: start;
   padding: 2rem 0;
   border-bottom: 1px solid var(--line);
@@ -2888,7 +2888,7 @@ body.yp-page {
 
 .yp-page .yp-svcp__groups {
   display: grid;
-  gap: var(--space-gap);
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
   margin-top: 2.6rem;
 }
 
@@ -3051,7 +3051,7 @@ body.yp-page {
   width: 100%;
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-embed__heading {
   margin: 0 0 0.6rem;
@@ -3237,7 +3237,7 @@ body.yp-page {
 /* ── Form with reassurance: copy left, form right ── */
 .yp-page .yp-formx {
   width: 100%; max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-formx__inner {
   display: grid; grid-template-columns: 1fr 1.15fr; gap: clamp(2rem, 5vw, 4.5rem);
@@ -3276,7 +3276,7 @@ body.yp-page {
 /* ── Form on a card, over a tinted band ── */
 .yp-page .yp-formc {
   background: var(--surface-2);
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-formc__inner { max-width: 40rem; margin: 0 auto; text-align: center; }
 .yp-page .yp-formc__eyebrow {
@@ -3299,7 +3299,7 @@ body.yp-page {
 /* ── Form with contact details beside it ── */
 .yp-page .yp-formd {
   width: 100%; max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-formd__inner {
   display: grid; grid-template-columns: 1.3fr 0.85fr; gap: clamp(2rem, 5vw, 4rem);
@@ -3340,7 +3340,7 @@ body.yp-page {
 /* ── Form with a photograph ── */
 .yp-page .yp-formp {
   width: 100%; max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-formp__inner {
   display: grid; grid-template-columns: 1fr 1fr; gap: clamp(1.6rem, 4vw, 3.5rem);
@@ -3366,7 +3366,7 @@ body.yp-page {
 /* ── Form on a dark band ── */
 .yp-page .yp-formb {
   background: var(--ink);
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-formb__inner { max-width: 38rem; margin: 0 auto; }
 .yp-page .yp-formb__heading {
@@ -3387,3 +3387,35 @@ body.yp-page {
 .yp-page .yp-formb__form .yp-embed__ph em { color: rgba(255, 255, 255, 0.6); }
 .yp-page .yp-formb__form .vibewp-form__control { background: #fff; color: var(--ink); }
 .yp-page .yp-formb__form .vibewp-form__control::placeholder { color: var(--muted); }
+
+/* ============================================================
+   PER-SECTION STYLE UTILITIES
+
+   A scale token set on a section's ROOT is inherited by everything
+   inside it, and every size in this file already reads those tokens
+   with a fallback of 1. So scoping a multiplier to one section needs
+   no per-section CSS at all — just a class that sets the token.
+
+   A CLASS, not an inline style: `className` is what a static Gutenberg
+   block's save() emits, so it round-trips through the WordPress editor.
+   An inline custom property does not — core regenerates the block's
+   HTML from its attributes, finds no style attribute, and marks every
+   section as containing unexpected content.
+
+   The value set is finite because the controls are bounded, which is
+   what lets them be written out as real CSS in the one stylesheet the
+   canvas and the exported site both load.
+   ============================================================ */
+
+.yp-page .u-headings--xs { --yp-display-scale: 0.8; }
+.yp-page .u-headings--sm { --yp-display-scale: 0.9; }
+.yp-page .u-headings--lg { --yp-display-scale: 1.15; }
+.yp-page .u-headings--xl { --yp-display-scale: 1.3; }
+
+.yp-page .u-text--sm { --yp-text-scale: 0.9; }
+.yp-page .u-text--lg { --yp-text-scale: 1.12; }
+
+.yp-page .u-space--xs { --yp-space-scale: 0.5; }
+.yp-page .u-space--sm { --yp-space-scale: 0.75; }
+.yp-page .u-space--lg { --yp-space-scale: 1.3; }
+.yp-page .u-space--xl { --yp-space-scale: 1.6; }

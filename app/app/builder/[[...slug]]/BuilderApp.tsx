@@ -34,6 +34,7 @@ import { DesignPanel, type CatalogueEntry } from "./DesignPanel";
 import { StylePanel } from "./StylePanel";
 import { saveDesignTokensAction } from "@/app/actions/design";
 import { sanitiseTokens, type DesignTokens } from "@/lib/design/tokens";
+import { SECTION_STYLE_OPTIONS } from "@/lib/design/section-style";
 import { WordPressLockNotice } from "./WordPressLockNotice";
 import { SiteDetailsDrawer, type SiteDetails } from "./SiteDetailsDrawer";
 import type { WpEditLock } from "@/lib/wp/local-driver";
@@ -362,6 +363,8 @@ export function BuilderApp({
   /* ---- hand-set design values ---- */
   const [designTokens, setDesignTokens] = useState<DesignTokens>(initialDesignTokens);
   const [styleOpen, setStyleOpen] = useState(false);
+  /** Which section the style panel is showing, or null for the whole site. */
+  const [styleFor, setStyleFor] = useState<CanvasSelection | null>(null);
   /** Seeded from the server so an already-exported site shows its links on load. */
   const [wpUrl, setWpUrl] = useState<string | null>(initialWpUrl);
   const [pages, setPages] = useState<PageSummary[]>(initialPages);
@@ -1266,7 +1269,10 @@ export function BuilderApp({
           <button
             type="button"
             className={`${styles.detailsBtn} ${styleOpen ? styles.detailsBtnOn : ""}`}
-            onClick={() => setStyleOpen((open) => !open)}
+            onClick={() => {
+              setStyleFor(null);
+              setStyleOpen((open) => !open);
+            }}
             title="Heading size, spacing, corners and page width"
             aria-pressed={styleOpen}
           >
@@ -1612,6 +1618,14 @@ export function BuilderApp({
                   labelFor={labelOfSelection}
                   busy={Boolean(canvasBusy) || generating}
                   onChangeDesign={openDesignPanel}
+                  onStyle={(sel) => {
+                    setStyleFor(sel);
+                    setStyleOpen(true);
+                    // The design picker and the style panel answer different
+                    // questions; showing both at once asks the client to hold
+                    // two ideas about one section.
+                    setDesignFor(null);
+                  }}
                   onMove={(sel, direction) => {
                     if (sel.kind !== "node") return;
                     const to = sel.index + direction;
@@ -1666,6 +1680,33 @@ export function BuilderApp({
           <StylePanel
             tokens={designTokens}
             scope={siteName}
+            section={
+              styleFor && styleFor.kind === "node" && nodes[styleFor.index]
+                ? {
+                    name: labelOfSelection(styleFor),
+                    values: Object.fromEntries(
+                      SECTION_STYLE_OPTIONS.map((o) => [
+                        o.field,
+                        String(nodes[styleFor.index]?.props?.[o.field] ?? o.spec.default ?? "default"),
+                      ]),
+                    ),
+                    /*
+                     * Dispatched as set_option, the operation that already
+                     * exists — so it is validated against the field's choices,
+                     * written with a revision, and undoable, with no new code
+                     * and no second path to keep in step with chat.
+                     */
+                    onChange: (field, value) => {
+                      const ref = nodes[styleFor.index]?.type;
+                      if (!ref) return;
+                      void runCanvasOp(
+                        { kind: "set_option", section: ref, option: field, value },
+                        `Restyling the ${labelOfSelection(styleFor)}`,
+                      );
+                    },
+                  }
+                : undefined
+            }
             busy={Boolean(canvasBusy)}
             /*
              * Preview writes state only, so the canvas tracks the slider
@@ -1680,7 +1721,10 @@ export function BuilderApp({
                 if (result.ok) setDesignTokens(result.tokens);
               });
             }}
-            onClose={() => setStyleOpen(false)}
+            onClose={() => {
+              setStyleOpen(false);
+              setStyleFor(null);
+            }}
           />
         )}
 
