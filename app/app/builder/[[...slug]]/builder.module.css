@@ -1277,7 +1277,13 @@
    same edge would make them feel like one. `order: 0` puts it before the
    canvas without changing the DOM order the rest of the shell relies on. */
 .stylePanel {
-  order: 0;
+  /*
+   * -1, not 0. The canvas has no `order`, so it defaults to 0 too, and two
+   * equal orders fall back to DOM position — which put the style panel
+   * BETWEEN the canvas and the assistant instead of at the left edge. It has
+   * to sort ahead of the canvas, not merely tie with it.
+   */
+  order: -1;
   width: 300px;
   max-width: 100%;
   flex: none;

@@ -365,6 +365,8 @@ export function BuilderApp({
   const [styleOpen, setStyleOpen] = useState(false);
   /** Which section the style panel is showing, or null for the whole site. */
   const [styleFor, setStyleFor] = useState<CanvasSelection | null>(null);
+  /** Whether chat was open before the style panel took its place. */
+  const chatWasOpen = useRef(true);
   /** Seeded from the server so an already-exported site shows its links on load. */
   const [wpUrl, setWpUrl] = useState<string | null>(initialWpUrl);
   const [pages, setPages] = useState<PageSummary[]>(initialPages);
@@ -1007,6 +1009,28 @@ export function BuilderApp({
     setCanvasBusy(null);
   }
 
+  /*
+   * Chat steps aside while styling, and comes back afterwards.
+   *
+   * Styling is a looking task — you want the widest canvas you can get and
+   * your eye on the page, not on a transcript. The assistant is one click
+   * away on its launcher throughout, so nothing is lost; what it stops is a
+   * three-column squeeze with the canvas as the narrowest of them.
+   */
+  function openStylePanel() {
+    chatWasOpen.current = chatOpen;
+    setChatOpen(false);
+    setStyleOpen(true);
+  }
+
+  function closeStylePanel() {
+    setStyleOpen(false);
+    setStyleFor(null);
+    // Back to whatever it was, rather than assuming it was open — a client who
+    // had deliberately collapsed chat should not find it reopened for them.
+    setChatOpen(chatWasOpen.current);
+  }
+
   function openDesignPanel(sel: CanvasSelection) {
     const key = keyOfSelection(sel);
     const id = sel.kind === "chrome" ? sel.slot : `n${sel.index}`;
@@ -1271,7 +1295,8 @@ export function BuilderApp({
             className={`${styles.detailsBtn} ${styleOpen ? styles.detailsBtnOn : ""}`}
             onClick={() => {
               setStyleFor(null);
-              setStyleOpen((open) => !open);
+              if (styleOpen) closeStylePanel();
+              else openStylePanel();
             }}
             title="Heading size, spacing, corners and page width"
             aria-pressed={styleOpen}
@@ -1620,7 +1645,7 @@ export function BuilderApp({
                   onChangeDesign={openDesignPanel}
                   onStyle={(sel) => {
                     setStyleFor(sel);
-                    setStyleOpen(true);
+                    openStylePanel();
                     // The design picker and the style panel answer different
                     // questions; showing both at once asks the client to hold
                     // two ideas about one section.
@@ -1721,10 +1746,7 @@ export function BuilderApp({
                 if (result.ok) setDesignTokens(result.tokens);
               });
             }}
-            onClose={() => {
-              setStyleOpen(false);
-              setStyleFor(null);
-            }}
+            onClose={closeStylePanel}
           />
         )}
 
