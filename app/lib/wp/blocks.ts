@@ -14,10 +14,11 @@
  * app had never imported.
  */
 
-export const esc = (s: unknown): string =>
-  String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+import { esc, escAttr } from "./escape";
+import { renderRichText } from "./richtext";
 
-export const escAttr = (s: unknown): string => esc(s).replace(/"/g, "&quot;");
+/** Re-exported: these lived here for a long time and are imported widely. */
+export { esc, escAttr };
 
 export type ButtonVariant = "primary" | "outline" | "ghost";
 
@@ -45,19 +46,19 @@ export function paragraph(text: string, className?: string): string {
   const attrs = className ? ` {"className":"${className}"}` : "";
   const cls = className ? ` class="${className}"` : "";
   return `<!-- wp:paragraph${attrs} -->
-<p${cls}>${esc(text)}</p>
+<p${cls}>${renderRichText(text)}</p>
 <!-- /wp:paragraph -->`;
 }
 
 export function heading(text: string, level: 1 | 2 | 3 | 4 | 5 | 6, className: string): string {
   return `<!-- wp:heading {"level":${level},"className":"${className}"} -->
-<h${level} class="wp-block-heading ${className}">${esc(text)}</h${level}>
+<h${level} class="wp-block-heading ${className}">${renderRichText(text)}</h${level}>
 <!-- /wp:heading -->`;
 }
 
 export function list(items: string[], className: string): string {
   const inner = items
-    .map((i) => `<!-- wp:list-item --><li>${esc(i)}</li><!-- /wp:list-item -->`)
+    .map((i) => `<!-- wp:list-item --><li>${renderRichText(i)}</li><!-- /wp:list-item -->`)
     .join("");
   return `<!-- wp:list {"className":"${className}"} -->
 <ul class="wp-block-list ${className}">${inner}</ul>

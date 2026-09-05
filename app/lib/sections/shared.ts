@@ -1,4 +1,5 @@
 import type { HTMLElement } from "node-html-parser";
+import { readRichText } from "@/lib/wp/richtext";
 
 /**
  * Parsing helpers every section needs.
@@ -18,7 +19,18 @@ export type SectionImage = {
   height?: number;
 };
 
-export const text = (el: HTMLElement | null): string => (el ? el.textContent.trim() : "");
+/**
+ * Reads an element's copy back into a prop.
+ *
+ * Goes through readRichText rather than textContent so a bolded word survives
+ * a pull from WordPress — gutenbergToSchema rebuilds every prop from the
+ * markup, so anything no parser reads is destroyed. For copy with no markup
+ * in it this returns exactly what textContent.trim() did.
+ *
+ * Links are dropped, because every <a> a section renders is generated from a
+ * separate href field rather than stored in the copy. See ReadOptions.
+ */
+export const text = (el: HTMLElement | null): string => readRichText(el, { links: false });
 
 /** Reads core/button blocks back, recovering the variant from its class. */
 export function parseActions(scope: HTMLElement): Action[] {

@@ -4,6 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { tokensToCss, type DesignTokens } from "@/lib/design/tokens";
 import { ELEMENT_ROLES } from "@/lib/design/element-style";
 import { textPaths } from "@/lib/design/text-map";
+import { readRichTextDom } from "@/lib/wp/richtext";
+import {
+  activeTextCommands,
+  hideTextToolbar,
+  mountTextToolbar,
+  placeTextToolbar,
+  runTextCommand,
+  type TextCommand,
+} from "@/lib/design/text-toolbar";
 
 /** Only plain hex is allowed into the stylesheet. */
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
@@ -121,7 +130,8 @@ function roleUnder(from: Element | null, stopAt: Element): string | undefined {
 const EDITOR_ACCENT = "#5b6bff";
 
 /** What each editable element said when editing began, so Escape can restore it. */
-const originalText = new WeakMap<Element, string>();
+/** The markup a field had when it became editable, so Escape can restore it. */
+const originalHtml = new WeakMap<Element, string>();
 
 /**
  * Pairs the section's rendered text with the props it came from.
@@ -280,12 +290,28 @@ export function PreviewFrame({
    * each one is how a click starts costing a reflow.
    */
   const handlers = useRef({ onNavigate, onSelect, onGeometry, selection, onEditText });
+  /*
+   * The editable props, by identity-free reference.
+   *
+   * The editing effect cannot depend on the props OBJECT: the parent builds it
+   * fresh on every render, so every render tore the editors down and put them
+   * back. Invisible while typing, and fatal for the formatting bar — the
+   * canvas re-measures its outline boxes on scroll, which is a render, which
+   * closed the bar the moment anyone scrolled.
+   *
+   * So the effect keys on the props' CONTENT and reads the object from here.
+   */
+  const editableRef = useRef(editableProps);
+  const editableKey = editableProps ? JSON.stringify(editableProps) : "";
   // Assigned in an effect rather than during render: writing a ref while
   // rendering is what React's own lint now rejects, and `selection` rides
   // along so attach() cannot paint an outline for a section that is no longer
   // the one selected.
   useEffect(() => {
     handlers.current = { onNavigate, onSelect, onGeometry, selection, onEditText };
+    // Declared before the editing effect, so it is assigned before that effect
+    // reads it on the same commit.
+    editableRef.current = editableProps;
   });
 
   /*
@@ -387,6 +413,13 @@ export function PreviewFrame({
        */
       const onLinkClick = (event: MouseEvent) => {
         const el = event.target as Element | null;
+        /*
+         * The formatting bar is builder chrome painted into the page, not part
+         * of the page. Without this, clicking Bold found no section under the
+         * cursor, deselected everything, and tore down the very editor the
+         * click was aimed at.
+         */
+        if (el?.closest?.("#vibewp-text-toolbar")) return;
         const link = el?.closest?.("[data-vibewp-slug]");
         const slug = link?.getAttribute("data-vibewp-slug");
         if (slug) {
@@ -575,16 +608,119 @@ export function PreviewFrame({
         ? contentDoc.querySelector(`[data-vibewp-node="${selection.index}"]`)
         : null;
 
-    if (section && editableProps) {
-      for (const { el, path } of matchText(section, editableProps)) {
-        el.setAttribute("contenteditable", "plaintext-only");
-        el.setAttribute("spellcheck", "true");
+    const props = editableRef.current;
+    if (section && props) {
+      /*
+       * The formatting bar, mounted once for the whole document and moved to
+       * whichever selection is live. One element rather than one per field:
+       * a section can have thirty editable strings in it.
+       */
+      const toolbar = mountTextToolbar(contentDoc);
+      const editable = new Set<Element>();
 
-        const commit = () => {
-          const next = (el.textContent ?? "").trim();
-          if (next) handlers.current.onEditText?.(path, next);
+      /* Selection is a document-level fact, so the listeners are too. */
+      const refreshToolbar = () => {
+        const sel = contentDoc.getSelection();
+        const anchor = sel?.anchorNode;
+        const host =
+          anchor && (anchor.nodeType === 1 ? (anchor as Element) : anchor.parentElement);
+        const field = host?.closest("[contenteditable]") ?? null;
+
+        // Nothing selected, a caret rather than a range, or a selection that
+        // has wandered outside the fields we made editable.
+        if (!sel || sel.isCollapsed || !field || !editable.has(field)) {
+          hideTextToolbar(contentDoc);
+          return;
+        }
+        const rect = sel.getRangeAt(0).getBoundingClientRect();
+        if (!rect.width && !rect.height) {
+          hideTextToolbar(contentDoc);
+          return;
+        }
+        placeTextToolbar(toolbar, rect, contentDoc);
+
+        const active = activeTextCommands(contentDoc);
+        toolbar.querySelectorAll<HTMLElement>("[data-command]").forEach((button) => {
+          const command = button.dataset.command as TextCommand;
+          button.setAttribute("aria-pressed", active.has(command) ? "true" : "false");
+        });
+      };
+
+      /*
+       * mousedown, not click. Pressing a button in the bar would otherwise
+       * move focus out of the field, and the browser discards the selection
+       * the command is supposed to act on before the command ever runs.
+       */
+      const onToolbarDown = (event: Event) => {
+        const button = (event.target as Element | null)?.closest?.("[data-command]");
+        if (!button) return;
+        event.preventDefault();
+        runTextCommand(contentDoc, (button as HTMLElement).dataset.command as TextCommand);
+        refreshToolbar();
+        /*
+         * Deliberately NOT committing here.
+         *
+         * A commit re-renders the schema, which rebuilds the iframe's srcDoc,
+         * which throws away the document the client is working in — caret,
+         * selection and all. Doing that on every press meant bold worked once
+         * and then italic had nothing left to act on.
+         *
+         * The formatting lives in the live DOM until the field is committed
+         * the way typing already is: on blur, or on Enter. Clicking away is a
+         * blur, so nothing can be lost by waiting.
+         */
+      };
+      toolbar.addEventListener("mousedown", onToolbarDown);
+
+      const onSelectionChange = () => refreshToolbar();
+      contentDoc.addEventListener("selectionchange", onSelectionChange);
+      contentDoc.defaultView?.addEventListener("scroll", onSelectionChange, { passive: true });
+
+      cleanups.push(() => {
+        toolbar.removeEventListener("mousedown", onToolbarDown);
+        contentDoc.removeEventListener("selectionchange", onSelectionChange);
+        contentDoc.defaultView?.removeEventListener("scroll", onSelectionChange);
+        hideTextToolbar(contentDoc);
+      });
+
+      /** Path per field, so the toolbar can commit one it did not close over. */
+      const pathOf = new WeakMap<Element, string>();
+      /** What each field last sent up, so a commit can be a no-op. */
+      const committed = new WeakMap<Element, string>();
+
+      const commitField = (el: Element) => {
+        const path = pathOf.get(el);
+        if (!path) return;
+        /*
+         * Read through the same allow-list the server uses. A contenteditable
+         * hands back whatever the engine felt like inserting, and a paste out
+         * of a word processor brings a stylesheet with it.
+         */
+        const next = readRichTextDom(el, { links: false });
+        // Empty would delete the copy; that is what the delete key is for.
+        if (!next || next === committed.get(el)) return;
+        committed.set(el, next);
+        handlers.current.onEditText?.(path, next);
+      };
+
+      for (const { el, path } of matchText(section, props)) {
+        /*
+         * "true", not "plaintext-only". plaintext-only strips every tag on
+         * input, so bold was impossible by construction — the button ran, the
+         * markup appeared, and the browser removed it again.
+         */
+        el.setAttribute("contenteditable", "true");
+        el.setAttribute("spellcheck", "true");
+        editable.add(el);
+        pathOf.set(el, path);
+
+        const commit = () => commitField(el);
+        const onBlur = (event: FocusEvent) => {
+          // Moving focus to the toolbar is not leaving the field.
+          if ((event.relatedTarget as Element | null)?.closest?.("#vibewp-text-toolbar")) return;
+          hideTextToolbar(contentDoc);
+          commit();
         };
-        const onBlur = () => commit();
         const onKeyDown = (event: KeyboardEvent) => {
           // Enter commits; a heading is not a paragraph and a stray newline in
           // one is never what was meant. Shift+Enter still breaks a line.
@@ -595,24 +731,36 @@ export function PreviewFrame({
           // Escape abandons the edit rather than committing half a word.
           if (event.key === "Escape") {
             event.preventDefault();
-            el.textContent = originalText.get(el) ?? el.textContent;
+            el.innerHTML = originalHtml.get(el) ?? el.innerHTML;
             (el as HTMLElement).blur();
           }
         };
-        originalText.set(el, el.textContent ?? "");
+        originalHtml.set(el, el.innerHTML);
+        committed.set(el, readRichTextDom(el, { links: false }));
 
-        el.addEventListener("blur", onBlur);
+        el.addEventListener("blur", onBlur as EventListener);
         el.addEventListener("keydown", onKeyDown as EventListener);
         cleanups.push(() => {
-          el.removeEventListener("blur", onBlur);
+          el.removeEventListener("blur", onBlur as EventListener);
           el.removeEventListener("keydown", onKeyDown as EventListener);
+          /*
+           * Last chance to save the work.
+           *
+           * blur is the only thing that commits a formatting change — unlike
+           * typing, pressing Bold produces no keystroke — and blur is not
+           * guaranteed: focus can move to another frame, or the section can be
+           * deselected by something that never touched the field. Committing
+           * here too means the worst case is a redundant write, which the
+           * comparison above turns into nothing at all.
+           */
+          commitField(el);
           el.removeAttribute("contenteditable");
           el.removeAttribute("spellcheck");
         });
       }
     }
     return () => cleanups.forEach((fn) => fn());
-  }, [selection, doc, editableProps]);
+  }, [selection, doc, editableKey]);
 
   return (
     <iframe
