@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { tokensToCss, type DesignTokens } from "@/lib/design/tokens";
 import { ELEMENT_ROLES } from "@/lib/design/element-style";
 import { textPaths } from "@/lib/design/text-map";
-import { readRichTextDom } from "@/lib/wp/richtext";
+import { plainText, readRichTextDom } from "@/lib/wp/richtext";
 import {
   activeTextCommands,
   hideTextToolbar,
@@ -170,6 +170,9 @@ const originalHtml = new WeakMap<Element, string>();
  * safe. Elements holding nothing but other elements are skipped: a container
  * whose textContent happens to equal a child's would otherwise claim it.
  */
+/** Tags that are formatting WITHIN a field rather than a field of their own. */
+const INLINE_FORMAT = new Set(["STRONG", "B", "EM", "I", "A", "BR"]);
+
 function matchText(
   section: Element,
   props: Record<string, unknown>,
@@ -178,12 +181,35 @@ function matchText(
   const claimed = new Set<Element>();
   const out: Array<{ el: Element; path: string }> = [];
 
-  const leaves = Array.from(section.querySelectorAll("*")).filter(
-    (el) => !Array.from(el.children).some((child) => (child.textContent ?? "").trim().length > 0),
-  );
+  /*
+   * Emphasis is part of a field, not a child of one.
+   *
+   * A heading a client has italicised renders as <h1><em>…</em></h1>. Under
+   * the old rule the <h1> had an element child with text in it, so it was not
+   * a leaf and never became editable — the reported "I can't edit the hero
+   * heading" was exactly this, on the one heading that had been italicised.
+   * And the <em> WAS a leaf, so had the values matched it would have made the
+   * emphasis itself the editable field and dropped it on the next commit.
+   *
+   * So inline formatting is transparent here: it neither disqualifies its
+   * parent nor stands in for it.
+   */
+  const leaves = Array.from(section.querySelectorAll("*")).filter((el) => {
+    if (INLINE_FORMAT.has(el.tagName)) return false;
+    return !Array.from(el.children).some(
+      (child) =>
+        !INLINE_FORMAT.has(child.tagName) && (child.textContent ?? "").trim().length > 0,
+    );
+  });
 
   for (const { path, value } of wanted) {
-    const hit = leaves.find((el) => !claimed.has(el) && (el.textContent ?? "").trim() === value);
+    /*
+     * Compared as words. The prop may carry markup; the DOM reports text.
+     * plainText is what makes "<em>Authentic…</em>" pair with the heading a
+     * client can actually see.
+     */
+    const want = plainText(value).trim();
+    const hit = leaves.find((el) => !claimed.has(el) && (el.textContent ?? "").trim() === want);
     if (!hit) continue;
     claimed.add(hit);
     out.push({ el: hit, path });
