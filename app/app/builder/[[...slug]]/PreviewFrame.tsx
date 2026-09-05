@@ -130,6 +130,35 @@ function roleUnder(from: Element | null, stopAt: Element): string | undefined {
 const EDITOR_ACCENT = "#5b6bff";
 
 /** What each editable element said when editing began, so Escape can restore it. */
+/**
+ * The caret position under a point, across engines.
+ *
+ * caretRangeFromPoint is what Chromium and WebKit implement and is not on a
+ * standards track; Firefox implements caretPositionFromPoint instead. Neither
+ * is present everywhere, so a miss simply means no caret is placed and the
+ * client clicks once more — the old behaviour, rather than a broken one.
+ */
+function caretRangeAt(doc: Document, x: number, y: number): Range | null {
+  type WithCaret = Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (
+      x: number,
+      y: number,
+    ) => { offsetNode: Node; offset: number } | null;
+  };
+  const d = doc as WithCaret;
+  if (typeof d.caretRangeFromPoint === "function") return d.caretRangeFromPoint(x, y);
+  if (typeof d.caretPositionFromPoint === "function") {
+    const pos = d.caretPositionFromPoint(x, y);
+    if (!pos) return null;
+    const range = doc.createRange();
+    range.setStart(pos.offsetNode, pos.offset);
+    range.collapse(true);
+    return range;
+  }
+  return null;
+}
+
 /** The markup a field had when it became editable, so Escape can restore it. */
 const originalHtml = new WeakMap<Element, string>();
 
@@ -193,6 +222,26 @@ function paintSelection(doc: Document, selection: CanvasSelection | null): void 
     selected
       ? `${selected} { outline: 2px solid ${EDITOR_ACCENT} !important; outline-offset: -2px; }`
       : "",
+    /*
+     * The field being typed in.
+     *
+     * Without this it wore the SITE's focus ring — sections.css gives
+     * :focus-visible an outline in var(--primary), so the box around the
+     * paragraph you are editing was drawn in the client's own brand colour.
+     * That breaks the rule EDITOR_ACCENT exists for: builder chrome has to be
+     * distinguishable from the site, or the client cannot tell which marks
+     * are ours and which are theirs.
+     *
+     * Offset outward, so it frames the words rather than crossing them.
+     */
+    `[contenteditable="true"]:focus, [contenteditable="true"]:focus-visible {`,
+    `  outline: 2px solid color-mix(in srgb, ${EDITOR_ACCENT} 70%, transparent) !important;`,
+    `  outline-offset: 3px; border-radius: 3px;`,
+    `}`,
+    /* The highlight over selected words, so it reads as ours too. */
+    `[contenteditable="true"]::selection {`,
+    `  background: color-mix(in srgb, ${EDITOR_ACCENT} 26%, transparent);`,
+    `}`,
   ].join("\n");
 }
 
@@ -302,7 +351,11 @@ export function PreviewFrame({
    * So the effect keys on the props' CONTENT and reads the object from here.
    */
   const editableRef = useRef(editableProps);
+  /** Where a click landed, waiting for the fields to become editable. */
+  const pendingCaret = useRef<{ x: number; y: number } | null>(null);
   const editableKey = editableProps ? JSON.stringify(editableProps) : "";
+  /* Same reasoning as editableKey: content, so a re-render is not a teardown. */
+  const selectionKey = selection ? JSON.stringify(selection) : "";
   // Assigned in an effect rather than during render: writing a ref while
   // rendering is what React's own lint now rejects, and `selection` rides
   // along so attach() cannot paint an outline for a section that is no longer
@@ -454,7 +507,23 @@ export function PreviewFrame({
             : slot === "header" || slot === "footer"
               ? { kind: "chrome", slot }
               : null;
-        if (picked) handlers.current.onSelect?.(picked);
+        /*
+         * Clicking inside the section that is already selected must not
+         * re-select it. The parent builds a fresh selection object each time,
+         * and that new identity tore the editors down and closed the
+         * formatting bar — which is precisely the click that had just
+         * finished selecting the words the bar was for.
+         */
+        const current = handlers.current.selection;
+        if (picked && JSON.stringify(picked) !== JSON.stringify(current)) {
+          /*
+           * Where the caret should land, so one click both selects the
+           * section and puts the cursor in the words that were clicked.
+           * Applied once the fields below have been made editable.
+           */
+          pendingCaret.current = { x: event.clientX, y: event.clientY };
+          handlers.current.onSelect?.(picked);
+        }
       };
       contentDoc.addEventListener("click", onLinkClick);
       cleanups.push(() => contentDoc.removeEventListener("click", onLinkClick));
@@ -603,9 +672,10 @@ export function PreviewFrame({
     if (!contentDoc?.body?.hasAttribute("data-vibewp-preview")) return;
 
     const cleanups: Array<() => void> = [];
+    const chosen = handlers.current.selection;
     const section =
-      selection?.kind === "node"
-        ? contentDoc.querySelector(`[data-vibewp-node="${selection.index}"]`)
+      chosen?.kind === "node"
+        ? contentDoc.querySelector(`[data-vibewp-node="${chosen.index}"]`)
         : null;
 
     const props = editableRef.current;
@@ -758,9 +828,57 @@ export function PreviewFrame({
           el.removeAttribute("spellcheck");
         });
       }
+
+      /*
+       * ONE click to start typing, not two.
+       *
+       * A field only becomes editable after its section is selected, so the
+       * click that selects a section lands on text that is not yet editable
+       * and puts no caret anywhere. That made every edit a double click: one
+       * to select the section, one to reach the words.
+       *
+       * The selecting click's coordinates are kept, and the caret is placed
+       * from them here, on the first commit where the fields exist.
+       */
+      const point = pendingCaret.current;
+      pendingCaret.current = null;
+      /*
+       * Unless words are already selected.
+       *
+       * Dragging across a section that is not selected yet selects the text
+       * first and the section second, so this runs with a live range in hand.
+       * Placing a caret would collapse it — the drag would select, and then
+       * instantly unselect, which is what it did.
+       */
+      const existing = contentDoc.getSelection();
+      const dragged = !!existing && existing.rangeCount > 0 && !existing.isCollapsed;
+      if (point && !dragged) {
+        const caret = caretRangeAt(contentDoc, point.x, point.y);
+        const host = caret?.startContainer;
+        const field = (host?.nodeType === 1 ? (host as Element) : host?.parentElement)?.closest(
+          "[contenteditable]",
+        );
+        // A click on a section's padding resolves to no field, and should not
+        // drag focus into the nearest paragraph.
+        if (caret && field && editable.has(field)) {
+          // preventScroll: focus() would otherwise jump the canvas, and the
+          // thing just clicked is by definition already in view.
+          (field as HTMLElement).focus({ preventScroll: true });
+          const sel = contentDoc.getSelection();
+          sel?.removeAllRanges();
+          sel?.addRange(caret);
+        }
+      }
+
+      /*
+       * A selection can predate the editor: dragging across a section that was
+       * not selected yet selects the words first and the section second, so by
+       * the time the bar exists its selectionchange has already been and gone.
+       */
+      refreshToolbar();
     }
     return () => cleanups.forEach((fn) => fn());
-  }, [selection, doc, editableKey]);
+  }, [selectionKey, doc, editableKey]);
 
   return (
     <iframe
