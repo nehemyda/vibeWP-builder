@@ -526,28 +526,75 @@ export async function writeBusinessOptions(opts: {
 export async function writeThemePalette(opts: {
   installPath: string;
   colors: Record<string, string>;
+  /**
+   * The client's hand-set design values, as settings.custom.
+   *
+   * WordPress emits that block as --wp--custom--*, which is what the
+   * stylesheet's global override layer reads. Without this the style panel
+   * moves the builder canvas and nothing else: the site would publish at the
+   * theme's defaults while the preview showed the client's choices — the exact
+   * divergence the shared-stylesheet architecture exists to prevent.
+   */
+  tokens?: Record<string, number>;
 }): Promise<void> {
-  const { installPath, colors } = opts;
+  const { installPath, colors, tokens } = opts;
   const path = join(installPath, "wp-content", "themes", "vibewp", "theme.json");
 
   const raw = await readFile(path, "utf8");
   const theme = JSON.parse(raw) as {
-    settings?: { color?: { palette?: Array<{ slug: string; name?: string; color: string }> } };
+    settings?: {
+      color?: { palette?: Array<{ slug: string; name?: string; color: string }> };
+      custom?: Record<string, unknown>;
+    };
   };
 
   const palette = theme.settings?.color?.palette;
-  if (!Array.isArray(palette)) return;
-
-  for (const entry of palette) {
-    const next = colors[entry.slug];
-    /*
-     * Re-validated here even though the action already sanitised it. This value
-     * is written to a file that is served as CSS to every visitor, and being
-     * the last gate before that, it does not get to assume an earlier one ran.
-     */
-    if (typeof next === "string" && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(next)) {
-      entry.color = next;
+  if (Array.isArray(palette)) {
+    for (const entry of palette) {
+      const next = colors[entry.slug];
+      /*
+       * Re-validated here even though the action already sanitised it. This value
+       * is written to a file that is served as CSS to every visitor, and being
+       * the last gate before that, it does not get to assume an earlier one ran.
+       */
+      if (typeof next === "string" && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(next)) {
+        entry.color = next;
+      }
     }
+  }
+
+  if (tokens && theme.settings) {
+    /*
+     * REPLACED, not merged. A token the client has set back to the design's own
+     * value is stored as absent, so merging would leave the previous override
+     * in the file forever and "reset" would silently do nothing on the live
+     * site while working perfectly in the builder.
+     *
+     * Names are camelCase because that is what WordPress kebab-cases into the
+     * custom property: ypDisplayScale becomes --wp--custom--yp-display-scale.
+     */
+    /*
+     * Lengths carry their unit; multipliers must not.
+     *
+     * WordPress emits these values verbatim, so a bare 20 becomes
+     * `--wp--custom--yp-radius: 20` and `border-radius: 20` is invalid CSS —
+     * the declaration is dropped and the corner silently keeps the theme's
+     * value. The canvas got this right because tokensToCss appends px there;
+     * writing the same numbers to a different destination is exactly where
+     * that kind of difference hides.
+     */
+    const AS_LENGTH = new Set(["ypRadius", "ypContainer"]);
+    const custom: Record<string, number | string> = {};
+    for (const [name, value] of Object.entries(tokens)) {
+      if (!Number.isFinite(value)) continue;
+      // Only our own vocabulary reaches the file, whatever the caller passed.
+      const camel = name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+      if (!/^(ypDisplayScale|ypTextScale|ypSpaceScale|radius|container)$/.test(camel)) continue;
+      const key = camel === "radius" ? "ypRadius" : camel === "container" ? "ypContainer" : camel;
+      custom[key] = AS_LENGTH.has(key) ? `${value}px` : value;
+    }
+    if (Object.keys(custom).length > 0) theme.settings.custom = custom;
+    else delete theme.settings.custom;
   }
 
   await writeFile(path, `${JSON.stringify(theme, null, "\t")}\n`, "utf8");

@@ -1,7 +1,7 @@
 import type { FieldSpec } from "@/lib/sections/types";
 
 /**
- * Styling one ELEMENT inside a section — its heading, its buttons.
+ * Styling one ELEMENT inside a section — its heading, its buttons, its photo.
  *
  * ─────────────────────────────────────────────────────────────────────
  * WHY ROLES ARE DECLARED, NOT DERIVED FROM THE CLASS NAME
@@ -38,7 +38,7 @@ import type { FieldSpec } from "@/lib/sections/types";
  *
  * WHAT THIS DELIBERATELY DOES NOT DO
  *
- * It styles the section's OWN heading and buttons, not each repeated item
+ * It styles the section's OWN heading, buttons and photo, not each repeated item
  * inside it. Per-instance styling needs per-instance identity in the markup,
  * and we keep builder attributes out of a client's exported content on
  * purpose. A card title in a grid of six is a different role, not this one.
@@ -107,6 +107,36 @@ export const ELEMENT_ROLES: ElementRole[] = [
           default: "default",
         },
         classes: { small: "u-btn--sm", default: "", large: "u-btn--lg" },
+      },
+    ],
+  },
+  {
+    key: "image",
+    label: "Photo",
+    // Every section's photo frame, whatever its family calls it.
+    match: /yp-[a-z0-9-]+__(?:frame|media)\b/g,
+    except: [],
+    options: [
+      {
+        field: "imageRadius",
+        spec: {
+          type: "choice",
+          label: "Corner shape",
+          choices: ["default", "square", "rounded", "circle"],
+          default: "default",
+        },
+        classes: { default: "", square: "u-img--square", rounded: "u-img--rounded", circle: "u-img--circle" },
+      },
+      {
+        field: "imageRatio",
+        spec: {
+          type: "choice",
+          label: "Crop",
+          hint: "Leave as designed unless the photograph needs a different shape.",
+          choices: ["default", "square", "landscape", "portrait"],
+          default: "default",
+        },
+        classes: { default: "", square: "u-img--1x1", landscape: "u-img--16x9", portrait: "u-img--4x5" },
       },
     ],
   },

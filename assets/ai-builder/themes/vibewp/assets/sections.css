@@ -3435,3 +3435,52 @@ body.yp-page {
 .yp-page .u-btn--pill .wp-block-button__link { border-radius: 999px; }
 .yp-page .u-btn--sm .wp-block-button__link { padding: 0.6rem 1.1rem; font-size: 0.88rem; }
 .yp-page .u-btn--lg .wp-block-button__link { padding: 1rem 1.9rem; font-size: 1.05rem; }
+
+/* ============================================================
+   THE GLOBAL OVERRIDE LAYER
+
+   Where a site's own design values enter. WordPress emits
+   settings.custom from theme.json as --wp--custom--*, and this is
+   the one place those are read; everything above reads the short
+   name with a fallback, so an unset site renders exactly as it did
+   before this block existed.
+
+   APPENDED, not merged into the :root block at the top, for two
+   reasons. It supersedes by source order, which is what an override
+   layer should do. And inserting declarations into that block would
+   shift every declaration index after it, which is precisely the
+   change verify-tokens.ts is built to refuse — appending is reported
+   and allowed, insertion is not.
+
+   The builder canvas emits the SHORT names directly into its own
+   :root after this stylesheet, so it wins there. Same values, one
+   step earlier in the chain, because an iframe has no WordPress to
+   read theme.json for it.
+   ============================================================ */
+
+:root {
+  --yp-display-scale: var(--wp--custom--yp-display-scale, 1);
+  --yp-text-scale: var(--wp--custom--yp-text-scale, 1);
+  --yp-space-scale: var(--wp--custom--yp-space-scale, 1);
+  --radius: var(--wp--custom--yp-radius, 10px);
+
+  /*
+   * The page width, reading the property WordPress actually emits.
+   *
+   * The declaration above reads --wp--custom--layout--content-size, which
+   * theme.json never produces — settings.layout.contentSize comes out as
+   * --wp--style--global--content-size. Dead since it was written, and
+   * invisible because both values happened to be 1160px.
+   */
+  --container: var(--wp--custom--yp-container, var(--wp--style--global--content-size, 1160px));
+}
+
+/* Photo frames. The class lands on the frame, so the <img> inside is the
+   target for the crop — object-fit is what makes a ratio a crop rather than
+   a squash. */
+.yp-page .u-img--square img { border-radius: 0; }
+.yp-page .u-img--rounded img { border-radius: var(--radius); }
+.yp-page .u-img--circle img { border-radius: 50%; }
+.yp-page .u-img--1x1 img { aspect-ratio: 1 / 1; object-fit: cover; width: 100%; height: auto; }
+.yp-page .u-img--16x9 img { aspect-ratio: 16 / 9; object-fit: cover; width: 100%; height: auto; }
+.yp-page .u-img--4x5 img { aspect-ratio: 4 / 5; object-fit: cover; width: 100%; height: auto; }

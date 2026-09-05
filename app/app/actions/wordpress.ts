@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { sites, sitePages, siteInstallations, profiles } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
 import { requireAlt } from "@/lib/wp/blocks";
+import { sanitiseTokens } from "@/lib/design/tokens";
 import { withStaticForms } from "@/lib/forms/inject";
 import { schemaToGutenberg, sectionToTemplatePart, withSiteLogo } from "@/lib/wp/serialize";
 import { resolveBrandColors } from "@/lib/brand/palettes";
@@ -333,7 +334,7 @@ export async function exportToWordPressAction(
     }
 
     /*
-     * Brand colours into theme.json.
+     * Brand colours AND the client's design values into theme.json.
      *
      * After syncTheme for the same reason as the template parts: it replaces
      * the theme directory wholesale. One write restyles every section, because
@@ -343,6 +344,9 @@ export async function exportToWordPressAction(
       await writeThemePalette({
         installPath: installation.installPath,
         colors: resolveBrandColors(site.brandPaletteKey, site.brandColors),
+        // Sanitised again on the way out: a value stored when a range was
+        // wider must not reach a published stylesheet now that it is narrower.
+        tokens: sanitiseTokens(site.designTokens),
       });
     } catch (err) {
       // Non-fatal: the theme's own defaults are a working palette.
