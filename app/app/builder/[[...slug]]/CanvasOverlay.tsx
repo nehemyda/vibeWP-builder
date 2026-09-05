@@ -33,7 +33,8 @@ export function CanvasOverlay({
   labelFor,
   busy,
   onChangeDesign,
-  onStyle,
+  onEdit,
+  editing,
   onMove,
   onRemove,
   onDuplicate,
@@ -48,8 +49,13 @@ export function CanvasOverlay({
   /** An edit is in flight, so the controls must not fire twice. */
   busy?: boolean;
   onChangeDesign: (selection: CanvasSelection) => void;
-  /** Opens the style sidebar scoped to this section. */
-  onStyle?: (selection: CanvasSelection) => void;
+  /**
+   * Enters edit mode on this section: its text becomes typeable and the
+   * sidebar opens on its settings. A toggle — pressing it again leaves.
+   */
+  onEdit?: (selection: CanvasSelection) => void;
+  /** Whether THIS section is the one being edited, for the pressed state. */
+  editing?: boolean;
   onMove: (selection: CanvasSelection, direction: -1 | 1) => void;
   onRemove: (selection: CanvasSelection) => void;
   /** Duplicate / copy / paste, in the overflow menu. */
@@ -149,19 +155,27 @@ export function CanvasOverlay({
             Change design
           </button>
           {/*
-            Style sits beside Change design because they are the two halves of
-            the same question — a different layout, or this one adjusted.
+            Edit sits beside Change design because they are the two halves of
+            the same question — a different layout, or this one worked on.
             Chrome is excluded: a header's spacing is not a page section's
             spacing, and its settings live on the site rather than the page.
+
+            It is a MODE, not a panel button, which is why it shows a pressed
+            state. Selecting a section used to make all of its text typeable
+            straight away, so every click landed a caret somewhere and there
+            was no way to simply point at a section. Now nothing is editable
+            until this is on.
           */}
-          {!isChrome && onStyle && (
+          {!isChrome && onEdit && (
             <button
               type="button"
-              className={styles.selectionSecondary}
+              className={`${styles.selectionSecondary} ${editing ? styles.selectionSecondaryOn : ""}`}
               disabled={busy}
-              onClick={() => onStyle(selection)}
+              aria-pressed={!!editing}
+              title={editing ? "Stop editing this section" : "Edit this section's text and settings"}
+              onClick={() => onEdit(selection)}
             >
-              Style
+              {editing ? "Done" : "Edit"}
             </button>
           )}
           {!isChrome && (

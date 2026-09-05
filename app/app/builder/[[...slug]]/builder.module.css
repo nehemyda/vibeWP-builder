@@ -1510,3 +1510,17 @@
 
 /* Opened upward, when the section sits too near the bottom of the window. */
 .selectionMenuUp { top: auto; bottom: calc(100% + 6px); }
+
+/*
+ * Edit, while it is on.
+ *
+ * Filled rather than outlined, because it is a mode the client is in rather
+ * than a button they pressed — the same distinction the toolbar's pressed
+ * Bold makes.
+ */
+.selectionSecondaryOn {
+  background: var(--ink, #131922);
+  border-color: var(--ink, #131922);
+  color: var(--surface, #fff);
+}
+.selectionSecondaryOn:hover:not(:disabled) { filter: brightness(1.15); }

@@ -369,6 +369,16 @@ export function BuilderApp({
 
   /* ---- hand-set design values ---- */
   const [designTokens, setDesignTokens] = useState<DesignTokens>(initialDesignTokens);
+  /*
+   * Which section is being EDITED, as opposed to merely selected.
+   *
+   * Selecting a section used to make every string in it typeable at once, so
+   * there was no way to just point at one: clicking to move or duplicate a
+   * section dropped a caret into whatever word was under the cursor. Editing
+   * is a mode now, entered from the section bar, and nothing is editable
+   * until it is on.
+   */
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
   /** Which section the style panel is showing, or null for the whole site. */
   const [styleFor, setStyleFor] = useState<CanvasSelection | null>(null);
@@ -1077,6 +1087,7 @@ export function BuilderApp({
   function closeStylePanel() {
     setStyleOpen(false);
     setStyleFor(null);
+    setEditingIndex(null);
     // Back to whatever it was, rather than assuming it was open — a client who
     // had deliberately collapsed chat should not find it reopened for them.
     setChatOpen(chatWasOpen.current);
@@ -1674,6 +1685,20 @@ export function BuilderApp({
                   selection={selection}
                   onSelect={(sel) => {
                     setSelection(sel);
+                    /*
+                     * Leaving a section leaves its edit mode.
+                     *
+                     * Without this the mode outlives the visit: come back to a
+                     * section edited earlier and it would be typeable again
+                     * without anyone pressing Edit — which is most of the
+                     * behaviour the mode was added to remove. Indices also
+                     * shift when sections are moved or duplicated, so a
+                     * remembered one can end up naming a different section
+                     * altogether.
+                     */
+                    if (sel?.kind !== "node" || sel.index !== editingIndex) {
+                      setEditingIndex(null);
+                    }
                     // Clicking a different element while styling retargets the
                     // panel — otherwise the controls describe one thing while
                     // the outline is around another.
@@ -1690,8 +1715,15 @@ export function BuilderApp({
                    * editable in that section alone, so handing it the whole
                    * page would be work it throws away on every click.
                    */
+                  /*
+                   * undefined unless this section is in edit mode, which is
+                   * the whole gate: PreviewFrame makes nothing editable
+                   * without props to match text against.
+                   */
                   editableProps={
-                    selection?.kind === "node" ? nodes[selection.index]?.props : undefined
+                    selection?.kind === "node" && editingIndex === selection.index
+                      ? nodes[selection.index]?.props
+                      : undefined
                   }
                   onEditText={(path, value) => {
                     if (selection?.kind !== "node") return;
@@ -1718,7 +1750,16 @@ export function BuilderApp({
                   labelFor={labelOfSelection}
                   busy={Boolean(canvasBusy) || generating}
                   onChangeDesign={openDesignPanel}
-                  onStyle={(sel) => {
+                  editing={selection?.kind === "node" && editingIndex === selection.index}
+                  onEdit={(sel) => {
+                    if (sel.kind !== "node") return;
+                    if (editingIndex === sel.index) {
+                      // Done. The panel goes with it — they were entered together.
+                      setEditingIndex(null);
+                      closeStylePanel();
+                      return;
+                    }
+                    setEditingIndex(sel.index);
                     setStyleFor(sel);
                     openStylePanel();
                   }}

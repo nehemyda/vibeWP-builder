@@ -71,6 +71,8 @@ export function CanvasHarness() {
   const [boxes, setBoxes] = useState<SectionBox[]>([]);
   const [log, setLog] = useState<string[]>([]);
   const [order, setOrder] = useState<string[]>(FIXTURE);
+  /** Which section is in edit mode. Nothing is typeable without one. */
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [panelFor, setPanelFor] = useState<CanvasSelection | null>(fromUrl);
   const [origin, setOrigin] = useState<string | undefined>(undefined);
 
@@ -141,13 +143,15 @@ export function CanvasHarness() {
             selection={selection}
             onSelect={(sel) => {
               setSelection(sel);
+              // Leaving a section leaves its edit mode — see BuilderApp.
+              if (sel?.kind !== "node" || sel.index !== editingIndex) setEditingIndex(null);
               if (sel?.kind === "node" && styleOpen) setStyleFor(sel);
               note(sel ? `select ${JSON.stringify(sel)} → ${labelFor(sel)}` : "deselect");
             }}
             onGeometry={setBoxes}
             designTokens={tokens}
             editableProps={
-              selection?.kind === "node"
+              selection?.kind === "node" && editingIndex === selection.index
                 ? {
                     ...(getSectionByKey(order[selection.index])?.sample as object),
                     ...(secStyle[selection.index] ?? {}),
@@ -171,10 +175,20 @@ export function CanvasHarness() {
             boxes={boxes}
             selection={selection}
             labelFor={labelFor}
-            onStyle={(sel) => {
+            editing={selection?.kind === "node" && editingIndex === selection.index}
+            onEdit={(sel) => {
+              if (sel.kind !== "node") return;
+              if (editingIndex === sel.index) {
+                setEditingIndex(null);
+                setStyleOpen(false);
+                note(`done editing ${labelFor(sel)}`);
+                return;
+              }
+              setEditingIndex(sel.index);
               setStyleFor(sel);
               setStyleOpen(true);
               setPanelFor(null);
+              note(`edit ${labelFor(sel)}`);
             }}
             onChangeDesign={(sel) => {
               setPanelFor(sel);
