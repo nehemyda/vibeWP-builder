@@ -30,6 +30,9 @@ import {
 import { readClip, writeClip, type Clip } from "@/lib/design/clipboard";
 import { setSectionImageAction } from "@/app/actions/edit";
 import { MediaPanel } from "./MediaPanel";
+import { PartsPanel } from "./PartsPanel";
+import { SECTION_PARTS, fieldFor as visibilityField } from "@/lib/design/part-visibility";
+import { PART_ORDER_FIELD } from "@/lib/design/part-order";
 import {
   schemaToGutenberg,
   sectionToTemplatePart,
@@ -392,6 +395,13 @@ export function BuilderApp({
     label: string;
   } | null>(null);
   const [mediaOpen, setMediaOpen] = useState(false);
+  /*
+   * Which parts the selected section actually rendered, reported by the
+   * canvas. Read from the page rather than from a registry of which section
+   * owns an eyebrow: the markup is the truth about what is there, and a
+   * second description of it would drift the first time a design changed.
+   */
+  const [renderedParts, setRenderedParts] = useState<string[]>([]);
   const [styleOpen, setStyleOpen] = useState(false);
   /** Which section the style panel is showing, or null for the whole site. */
   const [styleFor, setStyleFor] = useState<CanvasSelection | null>(null);
@@ -1760,6 +1770,7 @@ export function BuilderApp({
                       ? nodes[selection.index]?.props
                       : undefined
                   }
+                  onParts={setRenderedParts}
                   onPickImage={(path) => {
                     if (selection?.kind !== "node") return;
                     setMediaTarget({
@@ -1953,6 +1964,67 @@ export function BuilderApp({
                 ? {
                     name: labelOfSelection(styleFor),
                     role: styleFor.role,
+                    parts: (
+                      <PartsPanel
+                        parts={renderedParts}
+                        /*
+                         * The stored order if there is one, otherwise the
+                         * order the section rendered in — which is the same
+                         * thing "unset" means to the serializer.
+                         */
+                        order={
+                          String(nodes[styleFor.index]?.props?.[PART_ORDER_FIELD] ?? "")
+                            .split(",")
+                            .map((x) => x.trim())
+                            .filter(Boolean).length >= 2
+                            ? String(nodes[styleFor.index]?.props?.[PART_ORDER_FIELD])
+                                .split(",")
+                                .map((x) => x.trim())
+                                .filter(Boolean)
+                            : renderedParts
+                        }
+                        visibility={Object.fromEntries(
+                          SECTION_PARTS.map((p) => [
+                            visibilityField(p.key),
+                            String(
+                              nodes[styleFor.index]?.props?.[visibilityField(p.key)] ?? "all",
+                            ),
+                          ]),
+                        )}
+                        busy={Boolean(canvasBusy)}
+                        onReorder={(next) => {
+                          const ref = nodes[styleFor.index]?.type;
+                          if (!ref) return;
+                          void runCanvasOp(
+                            { kind: "move_part", section: ref, order: next.join(",") },
+                            `Rearranging the ${labelOfSelection(styleFor)}`,
+                          );
+                        }}
+                        onSetVisibility={(part, value) => {
+                          const ref = nodes[styleFor.index]?.type;
+                          if (!ref) return;
+                          // set_option, so it is validated against the field's
+                          // choices and logged like every other change.
+                          void runCanvasOp(
+                            {
+                              kind: "set_option",
+                              section: ref,
+                              option: visibilityField(part),
+                              value,
+                            },
+                            `Changing what shows in the ${labelOfSelection(styleFor)}`,
+                          );
+                        }}
+                        onDelete={(part) => {
+                          const ref = nodes[styleFor.index]?.type;
+                          if (!ref) return;
+                          void runCanvasOp(
+                            { kind: "remove_part", section: ref, part },
+                            `Removing part of the ${labelOfSelection(styleFor)}`,
+                          );
+                        }}
+                      />
+                    ),
                     onClearRole: () => setStyleFor({ kind: "node", index: styleFor.index }),
                     values: Object.fromEntries(
                       [

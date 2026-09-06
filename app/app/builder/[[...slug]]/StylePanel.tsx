@@ -53,6 +53,8 @@ export function StylePanel({
    * and the answer would have to be explained rather than seen.
    */
   section?: {
+    /** The parts list, rendered by the caller so this stays presentational. */
+    parts?: React.ReactNode;
     name: string;
     values: Record<string, string>;
     onChange: (field: string, value: string) => void;
@@ -123,6 +125,18 @@ export function StylePanel({
             })}
           </section>
         ) : section ? (
+          <>
+            {/*
+              The parts, above the section's own settings, because arranging
+              what is there comes before deciding how it looks — and because
+              "where has my eyebrow gone" is answered here.
+            */}
+            {section.parts && (
+              <section className={styles.styleGroup}>
+                <h3 className={styles.styleGroupName}>Parts</h3>
+                {section.parts}
+              </section>
+            )}
           <section className={styles.styleGroup}>
             <h3 className={styles.styleGroupName}>This section</h3>
             {SECTION_STYLE_OPTIONS.map((option) => {
@@ -150,6 +164,7 @@ export function StylePanel({
               );
             })}
           </section>
+          </>
         ) : (
           TOKEN_GROUPS.map((group) => (
           <section key={group} className={styles.styleGroup}>

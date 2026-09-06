@@ -6,6 +6,7 @@ import { ELEMENT_ROLES } from "@/lib/design/element-style";
 import { textPaths } from "@/lib/design/text-map";
 import { plainText, readRichTextDom } from "@/lib/wp/richtext";
 import { imagePaths } from "@/lib/design/image-map";
+import { SECTION_PARTS } from "@/lib/design/part-visibility";
 import {
   activeTextCommands,
   hideTextToolbar,
@@ -293,6 +294,7 @@ export function PreviewFrame({
   editableProps,
   onEditText,
   onPickImage,
+  onParts,
 }: {
   /** Gutenberg block markup from schemaToGutenberg() — the same string exported. */
   html: string;
@@ -360,6 +362,15 @@ export function PreviewFrame({
    */
   editableProps?: Record<string, unknown>;
   /**
+   * Which parts the section being edited actually rendered, in page order.
+   *
+   * Reported from the DOM rather than worked out from the registry, for the
+   * same reason text and photographs are found by looking: the markup is what
+   * is on the page, and anything else is a description of it that can be
+   * wrong.
+   */
+  onParts?: (parts: string[]) => void;
+  /**
    * A photograph in the section being edited was clicked, named by its path.
    *
    * Only in edit mode, like typing: outside it a click on a picture means
@@ -382,7 +393,15 @@ export function PreviewFrame({
    * parent re-renders on every click, and re-attaching the whole apparatus on
    * each one is how a click starts costing a reflow.
    */
-  const handlers = useRef({ onNavigate, onSelect, onGeometry, selection, onEditText, onPickImage });
+  const handlers = useRef({
+    onNavigate,
+    onSelect,
+    onGeometry,
+    selection,
+    onEditText,
+    onPickImage,
+    onParts,
+  });
   /*
    * The editable props, by identity-free reference.
    *
@@ -405,7 +424,15 @@ export function PreviewFrame({
   // along so attach() cannot paint an outline for a section that is no longer
   // the one selected.
   useEffect(() => {
-    handlers.current = { onNavigate, onSelect, onGeometry, selection, onEditText, onPickImage };
+    handlers.current = {
+      onNavigate,
+      onSelect,
+      onGeometry,
+      selection,
+      onEditText,
+      onPickImage,
+      onParts,
+    };
     // Declared before the editing effect, so it is assigned before that effect
     // reads it on the same commit.
     editableRef.current = editableProps;
@@ -736,6 +763,24 @@ export function PreviewFrame({
        * edit landing on the wrong one — and the operation re-checks the path
        * against the stored props before writing anyway.
        */
+      /*
+       * The parts present, in the order they appear. Matched on the class each
+       * part wears, the same table the serializer reorders and hides by, so
+       * the panel can never offer a control for something that is not there.
+       */
+      const found: string[] = [];
+      for (const el of Array.from(section.querySelectorAll("[class*='__']"))) {
+        for (const part of SECTION_PARTS) {
+          const token = Array.from(el.classList).find((c) =>
+            new RegExp(`^${part.match.source.replace(/\\b$/, "")}$`).test(c),
+          );
+          if (token && !part.except.includes(token) && !found.includes(part.key)) {
+            found.push(part.key);
+          }
+        }
+      }
+      handlers.current.onParts?.(found);
+
       const seen = new Set<Element>();
       for (const { path, image } of imagePaths(props)) {
         const img = Array.from(section.querySelectorAll("img")).find(

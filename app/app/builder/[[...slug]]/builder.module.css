@@ -1706,3 +1706,114 @@
 @media (max-width: 900px) {
   .mediaPanel { width: 100%; border-left: 0; }
 }
+
+/* ── The parts of a section ─────────────────────────────────────────── */
+
+.partsEmpty { margin: 4px 0 0; font-size: 12px; color: var(--muted, #757b83); }
+
+.partsList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  /*
+   * minmax(0, 1fr), not the default `auto`.
+   *
+   * An implicit grid column sizes to the MAX-CONTENT of its items, so the one
+   * row showing "Delete / Keep" made every row 326px wide inside a 270px
+   * panel — and pushed Keep, the way out of the confirmation, off the edge of
+   * the screen. minmax(0, …) is what lets the column be narrower than its
+   * widest child.
+   */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+.partRow {
+  /* flex: none — a shrunk row hides the controls at its right-hand end. */
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 7px;
+  background: var(--card, #fff);
+}
+.partRowDragging { opacity: 0.45; }
+/* The line lands ABOVE the row being hovered, which is where it will go. */
+.partRowOver { box-shadow: inset 0 2px 0 var(--ink, #131922); }
+/* A hidden part still reads as present, just not painted. */
+.partRowHidden .partName { opacity: 0.5; text-decoration: line-through; }
+
+.partGrip { cursor: grab; color: var(--muted, #9aa0aa); font-size: 12px; line-height: 1; }
+.partRow:active .partGrip { cursor: grabbing; }
+
+.partName {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.partNudge { flex: none; display: flex; gap: 1px; }
+.partNudge button {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 1px 3px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ink-2, #4e5661);
+  cursor: pointer;
+}
+.partNudge button:hover:not(:disabled) { color: var(--ink, #131922); }
+.partNudge button:disabled { opacity: 0.25; cursor: default; }
+
+.partShow {
+  /* Shrinkable: the confirm buttons need the room, and a truncated select is
+     better than a control pushed out of the panel. */
+  flex: 0 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 4px;
+  max-width: 108px;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 5px;
+  background: var(--surface, #fff);
+  color: var(--ink, #131922);
+}
+
+.partDelete {
+  flex: none;
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0 3px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted, #9aa0aa);
+  cursor: pointer;
+}
+.partDelete:hover:not(:disabled) { color: var(--warn, #b42318); }
+.partDelete:disabled { opacity: 0.3; cursor: default; }
+
+.partConfirm { flex: none; display: flex; gap: 4px; }
+.partConfirm button {
+  appearance: none;
+  border: 1px solid var(--border, #e3e5e9);
+  background: var(--surface, #fff);
+  border-radius: 5px;
+  padding: 2px 6px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.partConfirmYes {
+  border-color: var(--warn, #b42318) !important;
+  background: var(--warn, #b42318) !important;
+  color: #fff;
+}
