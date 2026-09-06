@@ -1,3 +1,5 @@
+import { VISIBILITY, fieldFor } from "@/lib/design/part-visibility";
+import { schemaToGutenberg, gutenbergToSchema } from "@/lib/wp/serialize";
 import { imagePaths } from "@/lib/design/image-map";
 import { parse, type HTMLElement } from "node-html-parser";
 import { SECTIONS } from "@/lib/sections";
@@ -217,6 +219,53 @@ for (const role of ELEMENT_ROLES) {
  * pointing at Pexels on live sites. A section that starts keeping an image
  * somewhere new must not be able to reintroduce that silently.
  */
+/*
+ * Hiding a part must survive a pull from WordPress.
+ *
+ * gutenbergToSchema rebuilds every prop from the markup, so a setting no
+ * parser reads is destroyed on every sync — the client would find everything
+ * they had hidden visible again, with no event to explain it. And the hide
+ * classes have to land in BOTH the Gutenberg comment and the element, or core
+ * regenerates one from the other and calls the block invalid in wp-admin.
+ */
+console.log("\n== part visibility round-trips ==");
+{
+  const def = SECTIONS.find((x) => x.key === "hero-duotone")!;
+  for (const v of VISIBILITY) {
+    const schema = {
+      nodes: [
+        {
+          id: "n1",
+          type: def.nodeType,
+          props: { ...(def.sample as object), [fieldFor("heading")]: v.value },
+        },
+      ],
+    };
+    const html = schemaToGutenberg(schema as never);
+    if (v.classes.some((c) => !html.includes(c))) fail(`"${v.value}" did not emit its classes`);
+    const back = gutenbergToSchema(html);
+    if (!back) {
+      fail(`"${v.value}" did not parse back at all`);
+      continue;
+    }
+    const got =
+      ((back.nodes?.[0]?.props as Record<string, unknown>)?.[fieldFor("heading")] as string) ?? "all";
+    if (got !== v.value) fail(`"${v.value}" read back as "${got}"`);
+    if (schemaToGutenberg(back as never) !== html) fail(`"${v.value}" did not round-trip`);
+    // Comment and element must carry the same classes.
+    if (v.classes.length) {
+      const comment = /"className":"([^"]*yp-hero-duotone__heading[^"]*)"/.exec(html)?.[1] ?? "";
+      const element = /<h1 class="([^"]*yp-hero-duotone__heading[^"]*)"/.exec(html)?.[1] ?? "";
+      for (const c of v.classes) {
+        if (!comment.includes(c) || !element.includes(c)) {
+          fail(`"${v.value}": ${c} is not on both the comment and the element`);
+        }
+      }
+    }
+  }
+  console.log(`  ${VISIBILITY.length} settings, emitted and read back`);
+}
+
 console.log("\n== photographs reachable by path ==");
 {
   let found = 0;
