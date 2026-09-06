@@ -1,3 +1,4 @@
+import { imagePaths } from "@/lib/design/image-map";
 import { parse, type HTMLElement } from "node-html-parser";
 import { SECTIONS } from "@/lib/sections";
 import { sectionPreviewMarkup, markElement, addClasses } from "@/lib/wp/serialize";
@@ -205,6 +206,33 @@ for (const role of ELEMENT_ROLES) {
   const real = matches.filter((m) => !role.except.includes(m));
   if (real.length === 0) fail(`element role "${role.key}" matches no class in the stylesheet`);
   else console.log(`  ${role.key.padEnd(10)} ${new Set(real).size} classes, ${role.except.length} excluded`);
+}
+
+/*
+ * Every photograph a section holds must be REACHABLE BY PATH.
+ *
+ * The export copies images into the client's media library by walking these
+ * paths, and it used to walk only props.image — so a gallery's three photos,
+ * and six more across three other families, were never copied and stayed
+ * pointing at Pexels on live sites. A section that starts keeping an image
+ * somewhere new must not be able to reintroduce that silently.
+ */
+console.log("\n== photographs reachable by path ==");
+{
+  let found = 0;
+  let sectionsWithImages = 0;
+  for (const section of SECTIONS) {
+    const paths = imagePaths(section.sample as Record<string, unknown>);
+    if (!paths.length) continue;
+    sectionsWithImages += 1;
+    found += paths.length;
+    for (const { path, image } of paths) {
+      if (!image.url) fail(`${section.key}: image at ${path} has no url`);
+    }
+  }
+  // A floor rather than an exact count, so adding a section is not a failure.
+  if (found < 19) fail(`only ${found} photographs reachable; 19 were before`);
+  else console.log(`  ${found} photographs across ${sectionsWithImages} sections`);
 }
 
 console.log(`\n== registry: ${SECTIONS.length} sections, keys/nodeTypes/rootClasses all unique ==`);
