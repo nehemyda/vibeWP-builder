@@ -7,6 +7,9 @@
  * seen going wrong: a section landing at the end when a position was asked for,
  * and an anchor named by its heading rather than its node type.
  */
+import { SECTIONS } from "./index";
+import { schemaToGutenberg } from "@/lib/wp/serialize";
+import { partOrderFromHtml } from "@/lib/design/part-order";
 import { applyOp, type PageSchema } from "./edit-ops";
 
 const page: PageSchema = {
@@ -208,6 +211,55 @@ check("refuses a value outside the field's choices",
   !applyOp(page, { kind: "paste_style", index: 2, style: { headings: "enormous" } }).ok);
 check("refuses when the target shares no settings at all",
   !applyOp(page, { kind: "paste_style", index: 2, style: { nope: "x" } }).ok);
+
+/*
+ * Reordering and removing a part.
+ *
+ * The reorder is checked through the MARKUP, not the prop: storing an order
+ * nothing acts on would pass a test on the prop alone and change nothing on
+ * the page. And removal has to leave the rest of the section standing —
+ * emptying a field is a blunt instrument, and the blunt version of it takes
+ * the whole stack with it.
+ */
+const hero = SECTIONS.find((x) => x.key === "hero-duotone")!;
+const heroPage = (): PageSchema => ({
+  nodes: [{ id: "n1", type: hero.nodeType, props: { ...(hero.sample as object) } }],
+});
+const orderOf = (s: PageSchema) => partOrderFromHtml(schemaToGutenberg(s as never));
+
+const partMoved = applyOp(heroPage(), {
+  kind: "move_part",
+  section: hero.nodeType,
+  order: "body,heading,eyebrow,actions",
+});
+check(
+  "move_part reorders the markup, not just the prop",
+  partMoved.ok && orderOf(partMoved.schema).startsWith("body,heading,eyebrow,actions"),
+  partMoved.ok ? orderOf(partMoved.schema) : partMoved.error,
+);
+check(
+  "move_part refuses a part it does not know",
+  !applyOp(heroPage(), { kind: "move_part", section: hero.nodeType, order: "heading,nonsense" }).ok,
+);
+
+const partRemoved = applyOp(heroPage(), {
+  kind: "remove_part",
+  section: hero.nodeType,
+  part: "eyebrow",
+});
+check(
+  "remove_part takes the part out of the markup",
+  partRemoved.ok && !orderOf(partRemoved.schema).includes("eyebrow"),
+  partRemoved.ok ? orderOf(partRemoved.schema) : partRemoved.error,
+);
+check(
+  "remove_part leaves the rest of the section standing",
+  partRemoved.ok && schemaToGutenberg(partRemoved.schema as never).includes("yp-hero-duotone__heading"),
+);
+check(
+  "remove_part refuses a part this section has not got",
+  !applyOp(heroPage(), { kind: "remove_part", section: hero.nodeType, part: "intro" }).ok,
+);
 
 console.log(fails === 0 ? "\nALL EDIT TESTS PASS" : `\n${fails} FAILURE(S)`);
 

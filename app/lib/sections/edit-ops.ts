@@ -1,6 +1,26 @@
 import { getSectionByKey, getSectionByNodeType } from "./index";
 import { isOptionField } from "./types";
 import { readImage, writeImage, type ImageValue } from "@/lib/design/image-map";
+import { SECTION_PARTS } from "@/lib/design/part-visibility";
+import { PART_ORDER_FIELD } from "@/lib/design/part-order";
+
+const PART_KEYS = new Set(SECTION_PARTS.map((p) => p.key));
+
+/**
+ * The props a part is rendered from.
+ *
+ * Only the ones a section actually declares are cleared, so this can list
+ * every name a part goes by across the registry without inventing fields on
+ * sections that have none of them.
+ */
+const PART_FIELDS: Record<string, string[]> = {
+  eyebrow: ["eyebrow", "kicker", "label"],
+  heading: ["heading", "title"],
+  intro: ["intro", "lede", "standfirst"],
+  body: ["body", "text", "description"],
+  actions: ["actions", "buttons", "cta"],
+  media: ["image", "photo"],
+};
 import { readPath, writePath } from "@/lib/design/text-map";
 
 /**
@@ -155,6 +175,17 @@ export type EditOp =
    * serve an image from anywhere we did not put it.
    */
   | { kind: "set_image"; section: string; path: string; image: ImageValue }
+  /*
+   * Moving one part of a section up or down its stack, and removing one.
+   *
+   * `order` is the WHOLE new order rather than a delta, because the canvas
+   * knows what it is looking at and the server should not have to guess which
+   * parts exist. remove_part clears the fields the part is built from, which
+   * is what makes it a real deletion rather than a hidden one — and what
+   * makes it undoable, since the revision holds the words.
+   */
+  | { kind: "move_part"; section: string; order: string }
+  | { kind: "remove_part"; section: string; part: string }
   | { kind: "duplicate_section"; index: number }
   | { kind: "paste_section"; node: SchemaNode; afterIndex: number | null }
   | { kind: "paste_style"; index: number; style: Record<string, string> }
@@ -386,6 +417,56 @@ export function applyOp(
         ok: true,
         schema: { ...schema, nodes },
         describe: `Changed a picture in the ${def?.name ?? op.section}.`,
+      };
+    }
+
+    case "move_part": {
+      const at = indexOfSection(nodes, op.section);
+      if (at < 0) return { ok: false, error: `There's no ${label(op.section)} on this page.` };
+      const order = op.order.split(",").map((x) => x.trim()).filter(Boolean);
+      if (order.length < 2) return { ok: false, error: "There's nothing to reorder there." };
+      const unknown = order.filter((k) => !PART_KEYS.has(k));
+      if (unknown.length) return { ok: false, error: `I don't know a part called "${unknown[0]}".` };
+
+      nodes[at] = {
+        ...nodes[at],
+        props: { ...(nodes[at].props ?? {}), [PART_ORDER_FIELD]: order.join(",") },
+      };
+      const def = getSectionByNodeType(nodes[at].type);
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe: `Reordered the ${def?.name ?? op.section}.`,
+      };
+    }
+
+    case "remove_part": {
+      const at = indexOfSection(nodes, op.section);
+      if (at < 0) return { ok: false, error: `There's no ${label(op.section)} on this page.` };
+      const def = getSectionByNodeType(nodes[at].type);
+      if (!def) return { ok: false, error: "That section can't be changed." };
+      if (!PART_KEYS.has(op.part)) return { ok: false, error: `I don't know a part called "${op.part}".` };
+
+      const props = { ...(nodes[at].props ?? {}) } as Record<string, unknown>;
+      /*
+       * A part is deleted by emptying the fields it is rendered from — every
+       * section already omits a part whose field is empty, so nothing needs to
+       * learn about deletion. Which fields those are is decided by what the
+       * section DECLARES, not by a table mapping parts to field names: a
+       * table would be a second description of each section, free to drift.
+       */
+      const emptied = PART_FIELDS[op.part]?.filter((f) => f in def.fields && props[f] !== undefined) ?? [];
+      if (emptied.length === 0) {
+        return { ok: false, error: "That part isn't something this section has." };
+      }
+      for (const field of emptied) {
+        props[field] = Array.isArray(props[field]) ? [] : "";
+      }
+      nodes[at] = { ...nodes[at], props };
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe: `Removed the ${op.part} from the ${def.name}.`,
       };
     }
 

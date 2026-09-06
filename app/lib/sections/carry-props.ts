@@ -490,6 +490,22 @@ function wrapSingleKey(strings: unknown, key: string): Props[] | undefined {
  * Without this every carried image would be reported as discarded, because an
  * alt attribute is not body copy and a href is not a sentence.
  */
+/**
+ * Fields describing the section's OWN STRUCTURE rather than its content.
+ *
+ * Neither content nor a setting, and so a third category. partOrder names
+ * the parts of one design in one arrangement — carry it into a design built
+ * from different parts and it means nothing, which is the same reason a
+ * layout choice is not carried either. But unlike a setting it is also not
+ * something to default: the target's natural order is what "unset" already
+ * means.
+ *
+ * Dropped silently, because there is nothing to tell the client. Reported as
+ * lost, the swap gate rightly complained that "heading,body,actions" had gone
+ * missing — words no one wrote and no one will miss.
+ */
+export const STRUCTURAL_FIELDS = new Set(["partOrder"]);
+
 const ATTRIBUTE_ONLY = new Set([
   "url",
   "alt",
@@ -581,6 +597,8 @@ export function carryProps(from: AnySection, fromProps: Props, to: AnySection): 
      * setting; otherwise the target's own default, because a layout choice made
      * for one design says nothing about another.
      */
+    if (STRUCTURAL_FIELDS.has(field)) continue;
+
     if (isOptionField(spec)) {
       const mine = source[field];
       if (mine !== undefined && sameKind(describe(mine), describe(targetSample[field]))) {
@@ -662,7 +680,7 @@ export function carryProps(from: AnySection, fromProps: Props, to: AnySection): 
     if (used.has(key) || explained.has(key)) continue;
     if (describe(value).kind === "nil") continue;
     const spec = from.fields[key];
-    if (spec && isOptionField(spec)) continue;
+    if (STRUCTURAL_FIELDS.has(key) || (spec && isOptionField(spec))) continue;
     dropped.add(key);
   }
 
@@ -853,7 +871,7 @@ function findGhosts(to: AnySection, props: Props): string[] {
      * content that vanished.
      */
     const spec = to.fields[field];
-    if (spec && isOptionField(spec)) continue;
+    if (STRUCTURAL_FIELDS.has(field) || (spec && isOptionField(spec))) continue;
 
     /*
      * Does removing it change anything at all?

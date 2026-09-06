@@ -93,9 +93,28 @@ const SPEC: FieldSpec = {
  * there, and a registry of which section has an eyebrow would be a second
  * copy of that truth, free to drift.
  */
-export const PART_VISIBILITY_OPTIONS: Record<string, FieldSpec> = Object.fromEntries(
-  SECTION_PARTS.map((p) => [fieldFor(p.key), { ...SPEC, label: `Show ${p.label.toLowerCase()}` }]),
-);
+export const PART_VISIBILITY_OPTIONS: Record<string, FieldSpec> = {
+  ...Object.fromEntries(
+    SECTION_PARTS.map((p) => [fieldFor(p.key), { ...SPEC, label: `Show ${p.label.toLowerCase()}` }]),
+  ),
+  /*
+   * Declared so it is a known field rather than stray content.
+   *
+   * carry-props sorts every prop into content, setting or ghost by what the
+   * registry says about it. An undeclared partOrder would be read as words
+   * the client wrote, and a design swap would report "you will lose
+   * heading,body,actions" — which is not copy, and not lost.
+   *
+   * Not a choice: its values are orderings, not a fixed list. So it is not an
+   * option field either, and set_option will not touch it — the reorder has
+   * an operation of its own.
+   */
+  partOrder: {
+    type: "text",
+    label: "Order of the parts",
+    hint: "Set by dragging in the editor. A comma-separated list of part names.",
+  },
+};
 
 /** Applies the visibility classes to the emitted markup. */
 export function applyPartVisibility(

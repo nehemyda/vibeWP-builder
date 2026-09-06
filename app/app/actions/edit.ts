@@ -323,6 +323,8 @@ export type CanvasOp =
   | Extract<EditOp, { kind: "set_text" }>
   /* Duplicating in place. Index-addressed; see the op's own note. */
   | Extract<EditOp, { kind: "set_image" }>
+  | Extract<EditOp, { kind: "move_part" }>
+  | Extract<EditOp, { kind: "remove_part" }>
   | Extract<EditOp, { kind: "duplicate_section" }>
   | Extract<EditOp, { kind: "paste_section" }>
   | Extract<EditOp, { kind: "paste_style" }>;
@@ -351,6 +353,8 @@ const CANVAS_OPS: CanvasOp["kind"][] = [
   "add_section",
   "swap_chrome",
   "set_image",
+  "move_part",
+  "remove_part",
   "duplicate_section",
   "paste_section",
   "paste_style",
@@ -382,6 +386,10 @@ function describeCanvasOp(op: CanvasOp): string {
      */
     case "set_image":
       return `Changed a picture in the ${op.section}`;
+    case "move_part":
+      return `Reordered the ${op.section}`;
+    case "remove_part":
+      return `Removed the ${op.part} from the ${op.section}`;
     case "duplicate_section":
       return `Duplicated the section at position ${op.index + 1}`;
     case "paste_section":

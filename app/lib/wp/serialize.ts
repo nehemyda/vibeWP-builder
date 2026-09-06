@@ -2,6 +2,7 @@ import { parse } from "node-html-parser";
 import { styleClassesFor, styleFromClasses } from "@/lib/design/section-style";
 import { applyElementStyles, elementStylesFromHtml } from "@/lib/design/element-style";
 import { applyPartVisibility, partVisibilityFromHtml } from "@/lib/design/part-visibility";
+import { applyPartOrder, partOrderFromHtml, PART_ORDER_FIELD } from "@/lib/design/part-order";
 import { getSectionByNodeType, SECTIONS } from "@/lib/sections";
 import { esc, escAttr } from "./blocks";
 import { defaultSpan, staticFormMarkup } from "@/lib/forms/static-markup";
@@ -89,6 +90,12 @@ export function schemaToGutenberg(
       // so they land at the same specificity as the rule they override.
       html = applyElementStyles(html, node.props);
       html = applyPartVisibility(html, node.props);
+      /*
+       * Last, so it moves blocks that already carry their classes. Ordering
+       * before the class passes would leave their regexes matching markup
+       * that had since been rearranged — same classes, different places.
+       */
+      html = applyPartOrder(html, node.props);
       return opts?.markNodes ? markElement(html, "data-vibewp-node", String(index)) : html;
     })
     .filter(Boolean)
@@ -531,10 +538,17 @@ export function gutenbergToSchema(html: string): PageSchema | null {
       const style = rootEl ? styleFromClasses(rootEl.getAttribute("class") ?? "") : {};
       const elementStyle = rootEl ? elementStylesFromHtml(rootEl.outerHTML) : {};
       const partVisibility = rootEl ? partVisibilityFromHtml(rootEl.outerHTML) : {};
+      /*
+       * The order is read from the sequence the blocks are in, which IS the
+       * fact — nothing had to be stamped into the client's exported content
+       * for a reorder to survive a pull from WordPress.
+       */
+      const order = rootEl ? partOrderFromHtml(rootEl.outerHTML) : "";
+      const partOrder = order.includes(",") ? { [PART_ORDER_FIELD]: order } : {};
       nodes.push({
         id: `n_${section.key}`,
         type: section.nodeType,
-        props: { ...props, ...style, ...elementStyle, ...partVisibility },
+        props: { ...props, ...style, ...elementStyle, ...partVisibility, ...partOrder },
       });
     }
   }

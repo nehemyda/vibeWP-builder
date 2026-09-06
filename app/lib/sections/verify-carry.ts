@@ -1,7 +1,13 @@
 import { parse } from "node-html-parser";
 import { SECTIONS } from "@/lib/sections";
 import { isOptionField, type SectionDefinition } from "./types";
-import { carryProps, describe, mountsForm, visibleStrings } from "./carry-props";
+import {
+  carryProps,
+  describe,
+  mountsForm,
+  visibleStrings,
+  STRUCTURAL_FIELDS,
+} from "./carry-props";
 
 /**
  * The swap gate. Run with `npx tsx lib/sections/verify-carry.ts [keyPrefix]`.
@@ -237,7 +243,8 @@ for (const [placement, group] of byPlacement) {
        * cards — without a magic number.
        */
       for (const [field, spec] of Object.entries(to.fields)) {
-        if (isOptionField(spec)) continue;
+        // Structural fields are deliberately never carried; see carry-props.
+        if (STRUCTURAL_FIELDS.has(field) || isOptionField(spec)) continue;
         if (describe(padded[field]).kind === "nil") {
           vacuousPadded += 1;
           fail("non-vacuity", `${label} leaves ${field} empty even after padding`);
