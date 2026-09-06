@@ -1,10 +1,10 @@
 "use server";
 
 import { plainText } from "@/lib/wp/richtext";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
-import { sites, sitePages, formDefinitions } from "@/lib/db/schema";
+import { sites, sitePages, formDefinitions, mediaAssets } from "@/lib/db/schema";
 import { canEditSite } from "@/app/actions/sites";
 import { savePageSchemaAction } from "@/app/actions/pages";
 import { getAiProviderSettings } from "@/lib/ai-provider-settings";
@@ -243,6 +243,68 @@ export async function applyCanvasPasteAction(opts: {
   });
 }
 
+/**
+ * Putting one of the site's own images into a section.
+ *
+ * The browser sends WHICH picture, by its id in this site's library, and
+ * never a URL. The action resolves it from the database, so a page can only
+ * ever point at a file we put in the bucket ourselves — and only at one
+ * belonging to the site being edited.
+ */
+export async function setSectionImageAction(opts: {
+  siteId: string;
+  slug: string;
+  /** How the section is named, as every other canvas op names it. */
+  section: string;
+  /** Dotted path from imagePaths, e.g. "items.2.image". */
+  path: string;
+  assetId: string;
+}): Promise<EditResult> {
+  const { siteId, slug, section, path, assetId } = opts;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated.");
+  if (!(await canEditSite(user.id, siteId))) {
+    throw new Error("You don't have access to this site.");
+  }
+
+  const asset = await db.query.mediaAssets.findFirst({
+    where: and(
+      eq(mediaAssets.id, assetId),
+      eq(mediaAssets.siteId, siteId),
+      isNull(mediaAssets.deletedAt),
+    ),
+  });
+  if (!asset) return { ok: false, message: "That picture isn't in your library any more." };
+
+  return applyCanvasOpAction({
+    siteId,
+    slug,
+    op: {
+      kind: "set_image",
+      section,
+      path,
+      image: {
+        url: asset.url,
+        /*
+         * The library's alt travels with the picture. An empty one is left
+         * empty rather than filled from the old image's: alt describes THIS
+         * photograph, and carrying the previous description over is worse
+         * than none at all.
+         */
+        alt: asset.alt ?? "",
+        width: asset.width ?? undefined,
+        height: asset.height ?? undefined,
+        photographer: asset.photographer ?? undefined,
+        photographerUrl: asset.photographerUrl ?? undefined,
+      },
+    } as CanvasOp,
+  });
+}
+
 export type CanvasOp =
   | Extract<EditOp, { kind: "swap_section" }>
   | Extract<EditOp, { kind: "move_section" }>
@@ -260,6 +322,7 @@ export type CanvasOp =
   /* Typed on the page. No model involved — a path and a string. */
   | Extract<EditOp, { kind: "set_text" }>
   /* Duplicating in place. Index-addressed; see the op's own note. */
+  | Extract<EditOp, { kind: "set_image" }>
   | Extract<EditOp, { kind: "duplicate_section" }>
   | Extract<EditOp, { kind: "paste_section" }>
   | Extract<EditOp, { kind: "paste_style" }>;
@@ -287,6 +350,7 @@ const CANVAS_OPS: CanvasOp["kind"][] = [
   "remove_section",
   "add_section",
   "swap_chrome",
+  "set_image",
   "duplicate_section",
   "paste_section",
   "paste_style",
@@ -316,6 +380,8 @@ function describeCanvasOp(op: CanvasOp): string {
      * the click carried. applyOp knows which section sits there and says so in
      * its own describe, which is what the client is shown.
      */
+    case "set_image":
+      return `Changed a picture in the ${op.section}`;
     case "duplicate_section":
       return `Duplicated the section at position ${op.index + 1}`;
     case "paste_section":

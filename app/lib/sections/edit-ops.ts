@@ -1,5 +1,6 @@
 import { getSectionByKey, getSectionByNodeType } from "./index";
 import { isOptionField } from "./types";
+import { readImage, writeImage, type ImageValue } from "@/lib/design/image-map";
 import { readPath, writePath } from "@/lib/design/text-map";
 
 /**
@@ -144,6 +145,16 @@ export type EditOp =
    * ownership check as any other write. A client that could post its own
    * props could post anything.
    */
+  /*
+   * One photograph, by the path that names it.
+   *
+   * PER PLACEMENT. The same file can be used in three sections, and a client
+   * who clicks a picture and says "change this" means that one. `image` is
+   * resolved by the ACTION from an asset id in the site's own library — the
+   * browser sends which picture, never a URL, so a page cannot be made to
+   * serve an image from anywhere we did not put it.
+   */
+  | { kind: "set_image"; section: string; path: string; image: ImageValue }
   | { kind: "duplicate_section"; index: number }
   | { kind: "paste_section"; node: SchemaNode; afterIndex: number | null }
   | { kind: "paste_style"; index: number; style: Record<string, string> }
@@ -356,6 +367,28 @@ export function applyOp(
      * would make every later op ambiguous — which is the very problem
      * index-addressing these ops was meant to avoid.
      */
+    case "set_image": {
+      const at = indexOfSection(nodes, op.section);
+      if (at < 0) return { ok: false, error: `There's no ${label(op.section)} on this page.` };
+      const props = (nodes[at].props ?? {}) as Record<string, unknown>;
+      /*
+       * The path has to name a photograph that is really there. The canvas
+       * finds paths by matching what it rendered, so a stale one means the
+       * section changed underneath — better refused than written as a prop
+       * no renderer reads.
+       */
+      if (!readImage(props, op.path)) {
+        return { ok: false, error: "That picture isn't part of this section any more." };
+      }
+      nodes[at] = { ...nodes[at], props: writeImage(props, op.path, op.image) };
+      const def = getSectionByNodeType(nodes[at].type);
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe: `Changed a picture in the ${def?.name ?? op.section}.`,
+      };
+    }
+
     case "duplicate_section": {
       const at = op.index;
       if (at < 0 || at >= nodes.length) return { ok: false, error: "That section isn't on this page." };

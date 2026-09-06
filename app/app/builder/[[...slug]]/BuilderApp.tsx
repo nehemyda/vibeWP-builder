@@ -25,8 +25,11 @@ import {
   applyCanvasPasteAction,
   type CanvasOp,
   type CanvasPasteOp,
+  type EditResult,
 } from "@/app/actions/edit";
 import { readClip, writeClip, type Clip } from "@/lib/design/clipboard";
+import { setSectionImageAction } from "@/app/actions/edit";
+import { MediaPanel } from "./MediaPanel";
 import {
   schemaToGutenberg,
   sectionToTemplatePart,
@@ -379,6 +382,16 @@ export function BuilderApp({
    * until it is on.
    */
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  /*
+   * Which photograph the library is filling. Null with the panel open means
+   * it was opened on its own, to upload and tidy up rather than to choose.
+   */
+  const [mediaTarget, setMediaTarget] = useState<{
+    index: number;
+    path: string;
+    label: string;
+  } | null>(null);
+  const [mediaOpen, setMediaOpen] = useState(false);
   const [styleOpen, setStyleOpen] = useState(false);
   /** Which section the style panel is showing, or null for the whole site. */
   const [styleFor, setStyleFor] = useState<CanvasSelection | null>(null);
@@ -1008,24 +1021,29 @@ export function BuilderApp({
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  async function runCanvasPaste(op: CanvasPasteOp, spoken: string) {
-    return runCanvasOp(op as never, spoken, true);
-  }
+  const runCanvasPaste = (op: CanvasPasteOp, spoken: string) =>
+    runCanvasEdit(spoken, () => applyCanvasPasteAction({ siteId, slug: activeSlug, op }));
 
-  async function runCanvasOp(op: CanvasOp, spoken: string, isPaste = false) {
+  const runCanvasOp = (op: CanvasOp, spoken: string) =>
+    runCanvasEdit(spoken, () => applyCanvasOpAction({ siteId, slug: activeSlug, op }));
+
+  /*
+   * Everything a click changes goes through here.
+   *
+   * The action varies — an op, a paste, a picture — but what happens around
+   * it must not: the busy cover, the line in the transcript, re-reading the
+   * pages and repainting, and the history refresh. Passing the action in
+   * rather than branching on its kind is what keeps a new kind of edit from
+   * quietly acquiring three of those four.
+   */
+  async function runCanvasEdit(spoken: string, run: () => Promise<EditResult>) {
     setCanvasBusy(spoken);
     const aiId = nextId();
     setMessages((prev) => [...prev, { id: aiId, role: "ai", text: `${spoken}…`, steps: [] }]);
 
     let result;
     try {
-      result = isPaste
-        ? await applyCanvasPasteAction({
-            siteId,
-            slug: activeSlug,
-            op: op as unknown as CanvasPasteOp,
-          })
-        : await applyCanvasOpAction({ siteId, slug: activeSlug, op });
+      result = await run();
     } catch {
       const failed = "I couldn't reach the builder. Nothing was changed.";
       setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: failed } : m)));
@@ -1367,6 +1385,23 @@ export function BuilderApp({
             aria-pressed={styleOpen}
           >
             Style
+          </button>
+          {/*
+            The library, openable on its own so images can be uploaded before
+            there is anywhere to put them — which is the usual order: a client
+            gathers their photographs first and places them afterwards.
+          */}
+          <button
+            type="button"
+            className={`${styles.detailsBtn} ${mediaOpen ? styles.detailsBtnOn : ""}`}
+            onClick={() => {
+              setMediaTarget(null);
+              setMediaOpen((v) => !v);
+            }}
+            title="Your uploaded images"
+            aria-pressed={mediaOpen}
+          >
+            Images
           </button>
         </div>
 
@@ -1725,6 +1760,15 @@ export function BuilderApp({
                       ? nodes[selection.index]?.props
                       : undefined
                   }
+                  onPickImage={(path) => {
+                    if (selection?.kind !== "node") return;
+                    setMediaTarget({
+                      index: selection.index,
+                      path,
+                      label: labelOfSelection(selection),
+                    });
+                    setMediaOpen(true);
+                  }}
                   onEditText={(path, value) => {
                     if (selection?.kind !== "node") return;
                     const ref = nodes[selection.index]?.type;
@@ -1870,6 +1914,34 @@ export function BuilderApp({
           <div className={styles.copyToast} role="status" aria-live="polite">
             {toast}
           </div>
+        )}
+
+        {mediaOpen && (
+          <MediaPanel
+            siteId={siteId}
+            busy={Boolean(canvasBusy)}
+            target={mediaTarget ? { label: mediaTarget.label, path: mediaTarget.path } : null}
+            onClose={() => {
+              setMediaOpen(false);
+              setMediaTarget(null);
+            }}
+            onChoose={(asset) => {
+              const t = mediaTarget;
+              const ref = t ? nodes[t.index]?.type : undefined;
+              if (!t || !ref) return;
+              setMediaOpen(false);
+              setMediaTarget(null);
+              void runCanvasEdit(`Changing a picture in the ${t.label}`, () =>
+                setSectionImageAction({
+                  siteId,
+                  slug: activeSlug,
+                  section: ref,
+                  path: t.path,
+                  assetId: asset.id,
+                }),
+              );
+            }}
+          />
         )}
 
         {styleOpen && (

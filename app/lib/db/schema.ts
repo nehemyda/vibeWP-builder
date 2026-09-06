@@ -264,6 +264,38 @@ export const installationStatusEnum = pgEnum("installation_status", [
  * `driver` records which backend produced it, so local installs and a future
  * hosted one can coexist without the rest of the app caring.
  */
+/**
+ * The site's own image library.
+ *
+ * Files live in Supabase Storage; this is everything about them that a
+ * filename cannot hold — alt text, dimensions, provenance — and the only
+ * thing that can be ordered, filtered or joined. See migrate-batch26.ts.
+ */
+export const mediaAssets = pgTable("media_assets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  siteId: uuid("site_id")
+    .notNull()
+    .references(() => sites.id, { onDelete: "cascade" }),
+  storagePath: text("storage_path").notNull(),
+  url: text("url").notNull(),
+  filename: text("filename").notNull(),
+  mimeType: text("mime_type").notNull(),
+  byteSize: integer("byte_size").notNull(),
+  width: integer("width"),
+  height: integer("height"),
+  alt: text("alt"),
+  /** "upload" | "stock" | "wordpress" — where the file came from. */
+  source: text("source").notNull().default("upload"),
+  photographer: text("photographer"),
+  photographerUrl: text("photographer_url"),
+  /** sha-256 of the bytes, so the same picture is not stored twice. */
+  checksum: text("checksum"),
+  createdBy: uuid("created_by").references(() => profiles.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /** Soft: a page may still reference the file, and a broken image is worse. */
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});
+
 export const siteInstallations = pgTable("site_installations", {
   id: uuid("id").primaryKey().defaultRandom(),
   siteId: uuid("site_id")

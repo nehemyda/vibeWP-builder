@@ -5,6 +5,7 @@ import { tokensToCss, type DesignTokens } from "@/lib/design/tokens";
 import { ELEMENT_ROLES } from "@/lib/design/element-style";
 import { textPaths } from "@/lib/design/text-map";
 import { plainText, readRichTextDom } from "@/lib/wp/richtext";
+import { imagePaths } from "@/lib/design/image-map";
 import {
   activeTextCommands,
   hideTextToolbar,
@@ -264,6 +265,15 @@ function paintSelection(doc: Document, selection: CanvasSelection | null): void 
     `  outline: 2px solid color-mix(in srgb, ${EDITOR_ACCENT} 70%, transparent) !important;`,
     `  outline-offset: 3px; border-radius: 3px;`,
     `}`,
+    /*
+     * A replaceable photograph. Outlined only on hover: every image in the
+     * section is replaceable, and outlining them all at once would look like
+     * the page was broken rather than editable.
+     */
+    `[data-vibewp-pick] { cursor: pointer; }`,
+    `[data-vibewp-pick]:hover {`,
+    `  outline: 3px solid ${EDITOR_ACCENT}; outline-offset: 2px;`,
+    `}`,
     /* The highlight over selected words, so it reads as ours too. */
     `[contenteditable="true"]::selection {`,
     `  background: color-mix(in srgb, ${EDITOR_ACCENT} 26%, transparent);`,
@@ -282,6 +292,7 @@ export function PreviewFrame({
   onGeometry,
   editableProps,
   onEditText,
+  onPickImage,
 }: {
   /** Gutenberg block markup from schemaToGutenberg() — the same string exported. */
   html: string;
@@ -348,6 +359,13 @@ export function PreviewFrame({
    * component serve the builder and the section library.
    */
   editableProps?: Record<string, unknown>;
+  /**
+   * A photograph in the section being edited was clicked, named by its path.
+   *
+   * Only in edit mode, like typing: outside it a click on a picture means
+   * "select this section", which is what makes a section pointable at all.
+   */
+  onPickImage?: (path: string) => void;
   /** Committed on blur, with the path the text came from. */
   onEditText?: (path: string, value: string) => void;
 }) {
@@ -364,7 +382,7 @@ export function PreviewFrame({
    * parent re-renders on every click, and re-attaching the whole apparatus on
    * each one is how a click starts costing a reflow.
    */
-  const handlers = useRef({ onNavigate, onSelect, onGeometry, selection, onEditText });
+  const handlers = useRef({ onNavigate, onSelect, onGeometry, selection, onEditText, onPickImage });
   /*
    * The editable props, by identity-free reference.
    *
@@ -387,7 +405,7 @@ export function PreviewFrame({
   // along so attach() cannot paint an outline for a section that is no longer
   // the one selected.
   useEffect(() => {
-    handlers.current = { onNavigate, onSelect, onGeometry, selection, onEditText };
+    handlers.current = { onNavigate, onSelect, onGeometry, selection, onEditText, onPickImage };
     // Declared before the editing effect, so it is assigned before that effect
     // reads it on the same commit.
     editableRef.current = editableProps;
@@ -707,6 +725,35 @@ export function PreviewFrame({
           sel?.removeAllRanges();
           sel?.addRange(caret);
         }
+      }
+
+      /*
+       * Photographs, matched by src the way text is matched by its words.
+       *
+       * Same reasoning as text-map's: nothing is stamped into the markup, so
+       * nothing can leak into the client's exported WordPress content. A
+       * mismatch means a picture that will not open the library, never an
+       * edit landing on the wrong one — and the operation re-checks the path
+       * against the stored props before writing anyway.
+       */
+      const seen = new Set<Element>();
+      for (const { path, image } of imagePaths(props)) {
+        const img = Array.from(section.querySelectorAll("img")).find(
+          (el) => !seen.has(el) && el.getAttribute("src") === image.url,
+        );
+        if (!img) continue;
+        seen.add(img);
+        img.setAttribute("data-vibewp-pick", "1");
+        const pick = (event: Event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          handlers.current.onPickImage?.(path);
+        };
+        img.addEventListener("click", pick);
+        cleanups.push(() => {
+          img.removeEventListener("click", pick);
+          img.removeAttribute("data-vibewp-pick");
+        });
       }
 
       /*
