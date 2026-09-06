@@ -3484,3 +3484,59 @@ body.yp-page {
 .yp-page .u-img--1x1 img { aspect-ratio: 1 / 1; object-fit: cover; width: 100%; height: auto; }
 .yp-page .u-img--16x9 img { aspect-ratio: 16 / 9; object-fit: cover; width: 100%; height: auto; }
 .yp-page .u-img--4x5 img { aspect-ratio: 4 / 5; object-fit: cover; width: 100%; height: auto; }
+
+/* ────────────────────────────────────────────────────────────────────
+   RESPONSIVE VISIBILITY AND COLUMN ORDER
+
+   Applied by the builder as classes, the way is-sticky and the u-* style
+   utilities already are, so they survive a WordPress round trip: a class
+   is what core's save() emits, and a prop no parser reads is destroyed on
+   every pull.
+
+   THE BREAKPOINTS ARE THE THEME'S OWN — 880 and 560 — not new ones. A
+   control that hid something at 768px while the design reflowed at 880px
+   would hide it in a layout the client never saw.
+
+   !important is deliberate and limited to these. Their entire job is to
+   beat the display and order the section sets on itself; a utility that
+   loses to the rule it exists to override is not a utility.
+   ──────────────────────────────────────────────────────────────────── */
+
+/* Hidden on wide screens only. */
+@media (min-width: 881px) {
+  .yp-page .u-hide--desktop { display: none !important; }
+}
+/* Hidden between the two reflow points. */
+@media (min-width: 561px) and (max-width: 880px) {
+  .yp-page .u-hide--tablet { display: none !important; }
+}
+/* Hidden on phones. */
+@media (max-width: 560px) {
+  .yp-page .u-hide--mobile { display: none !important; }
+}
+
+/*
+ * Swapping two columns.
+ *
+ * On the CONTAINER, not the columns, because "which side is the picture on"
+ * is one decision rather than two that have to agree. Works for flex and for
+ * grid alike: order applies to the children of both.
+ *
+ * This is the one place visual order is allowed to diverge from document
+ * order, and it is the case where that is safe — two peer columns, neither
+ * introducing the other. Reordering a heading against the copy it heads is
+ * done in the markup instead, so a screen reader hears what the eye sees.
+ *
+ * Nothing here sets `display`. An early version forced the mobile flip to be
+ * a flex column so it had something to order, which was both unnecessary —
+ * grid items honour `order` too — and harmful, since most of these grids
+ * already collapse to one column by then and would have had their gaps
+ * redefined out from under them.
+ */
+.yp-page .u-flip > *:first-child { order: 2; }
+@media (max-width: 880px) {
+  .yp-page .u-flip--tablet > *:first-child { order: 2; }
+}
+@media (max-width: 560px) {
+  .yp-page .u-flip--mobile > *:first-child { order: 2; }
+}
