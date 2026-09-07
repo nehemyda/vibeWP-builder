@@ -2101,6 +2101,7 @@ export function BuilderApp({
             )}
             {dashTab === "images" && (
               <MediaPanel
+                wide
                 siteId={siteId}
                 busy={Boolean(canvasBusy)}
                 /* No target: the library opened on its own, to upload and tidy. */

@@ -1,5 +1,6 @@
 "use client";
 
+import { MediaPanel } from "@/app/builder/[[...slug]]/MediaPanel";
 import { SeoPanel } from "@/app/builder/[[...slug]]/SeoPanel";
 import { AltPanel } from "@/app/builder/[[...slug]]/AltPanel";
 import {
@@ -289,10 +290,19 @@ export function CanvasHarness() {
               onClose={() => setDashTab(null)}
             />
           )}
+          {/*
+            No session, so the listing fails — but the layout is the point
+            here: one header, one close button, and a grid that uses the
+            dialog's width rather than a 340px column of it.
+          */}
           {dashTab === "images" && (
-            <p style={{ fontSize: 13 }}>
-              The image library needs a real site id, so it is not mounted here.
-            </p>
+            <MediaPanel
+              wide
+              siteId="00000000-0000-0000-0000-000000000000"
+              target={null}
+              onChoose={() => {}}
+              onClose={() => setDashTab(null)}
+            />
           )}
           {/*
             Mounted with no session, so this exercises the failure path: the

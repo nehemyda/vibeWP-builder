@@ -44,6 +44,7 @@ export function MediaPanel({
   onChoose,
   onClose,
   busy,
+  wide,
 }: {
   siteId: string;
   /** What is being replaced. Null when the library was opened on its own. */
@@ -51,6 +52,16 @@ export function MediaPanel({
   onChoose: (asset: MediaAsset) => void;
   onClose: () => void;
   busy?: boolean;
+  /**
+   * Rendered inside the site dashboard: no frame of its own, and given the
+   * room it is in.
+   *
+   * As a side panel it is a 340px column with its own header and close
+   * button. Dropped into the dashboard unchanged, that produced two headers
+   * saying "Images" and two ways to close, in a dialog four times as wide
+   * with one thumbnail in it.
+   */
+  wide?: boolean;
 }) {
   const [assets, setAssets] = useState<MediaAsset[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +102,12 @@ export function MediaPanel({
         const result = await uploadMediaAction(form);
         if (!result.ok) setError(result.error);
         else {
+          /*
+           * Cleared on success. Dropping five files where one is too large
+           * otherwise left "That upload didn't finish" standing over four
+           * thumbnails that had arrived perfectly well.
+           */
+          setError(null);
           setAssets((prev) => {
             const rest = (prev ?? []).filter((a) => a.id !== result.asset.id);
             return [result.asset, ...rest];
@@ -107,7 +124,7 @@ export function MediaPanel({
 
   return (
     <aside
-      className={styles.mediaPanel}
+      className={`${styles.mediaPanel} ${wide ? styles.mediaPanelWide : ""}`}
       aria-label="Images"
       onDragOver={(e) => {
         e.preventDefault();
@@ -124,15 +141,26 @@ export function MediaPanel({
         void upload(e.dataTransfer.files);
       }}
     >
-      <header className={styles.mediaHead}>
-        <div>
-          <strong>Images</strong>
-          {target && <span className={styles.mediaTargetName}>Replacing in {target.label}</span>}
-        </div>
-        <button type="button" className={styles.mediaClose} onClick={onClose} aria-label="Close">
-          ×
-        </button>
-      </header>
+      {/*
+        The dashboard supplies the title and the close button, so neither is
+        drawn again here. What survives in wide mode is the one thing the
+        dashboard cannot know: which placement is being filled.
+      */}
+      {wide ? (
+        target && (
+          <p className={styles.mediaTargetWide}>Choosing a picture for {target.label}</p>
+        )
+      ) : (
+        <header className={styles.mediaHead}>
+          <div>
+            <strong>Images</strong>
+            {target && <span className={styles.mediaTargetName}>Replacing in {target.label}</span>}
+          </div>
+          <button type="button" className={styles.mediaClose} onClick={onClose} aria-label="Close">
+            ×
+          </button>
+        </header>
+      )}
 
       <div className={styles.mediaActions}>
         <button
@@ -159,7 +187,11 @@ export function MediaPanel({
 
       {error && <p className={styles.mediaError}>{error}</p>}
 
-      {assets === null && <p className={styles.mediaHint}>Loading your images…</p>}
+      {/* Not while an error stands: "it failed" and "still loading" at once are
+          two contradictory answers to one question. */}
+      {assets === null && !error && (
+        <p className={styles.mediaHint}>Loading your images…</p>
+      )}
 
       {assets?.length === 0 && (
         <div className={styles.mediaEmpty}>
