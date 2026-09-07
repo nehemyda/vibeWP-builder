@@ -1933,11 +1933,22 @@
 }
 
 /* The style controls inside the dashboard: no frame, wider columns. */
-.styleBodyBare { max-width: 560px; display: grid; gap: 18px; }
+/*
+ * The sliders keep a comfortable reading width — a 1400px slider is harder to
+ * set precisely than a 600px one, and there is nothing beside it to fill the
+ * rest with. Full width is for lists, not for a single control per row.
+ */
+.styleBodyBare { max-width: 620px; display: grid; gap: 18px; }
 
 /* ── The SEO table ──────────────────────────────────────────────────── */
 
-.seoWrap { max-width: 760px; }
+/*
+ * Full width. These panels were written as a 340–760px column because they
+ * began life in a sidebar; inside a full-width dialog that left most of the
+ * screen empty and the rows cramped anyway. The dialog decides the width now,
+ * and the content fills it.
+ */
+.seoWrap { max-width: none; }
 .seoHead { margin-bottom: 14px; }
 .seoTitle { margin: 0 0 4px; font-size: 16px; }
 .seoLede { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-2, #4e5661); }
@@ -2127,4 +2138,21 @@
   margin: 0 0 10px;
   font-size: 12.5px;
   color: var(--ink-2, #4e5661);
+}
+
+
+/* ── The images tab ─────────────────────────────────────────────────── */
+
+.imagesTab { position: relative; display: grid; gap: 4px; }
+
+/*
+ * Two columns of rows once there is room for them. A single column of
+ * 116px-thumbnail rows across 1400px is one picture and an ocean of text
+ * field; two columns puts twice as many pictures on screen, which is what
+ * this list is for.
+ */
+@media (min-width: 1180px) {
+  .imagesTab .altList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

@@ -1,8 +1,7 @@
 "use client";
 
-import { MediaPanel } from "@/app/builder/[[...slug]]/MediaPanel";
+import { ImagesTab } from "@/app/builder/[[...slug]]/ImagesTab";
 import { SeoPanel } from "@/app/builder/[[...slug]]/SeoPanel";
-import { AltPanel } from "@/app/builder/[[...slug]]/AltPanel";
 import {
   SiteDashboard,
   type DashboardTab,
@@ -76,9 +75,7 @@ export function CanvasHarness() {
    */
   const [dashTab, setDashTab] = useState<DashboardTab | null>(() => {
     const wanted = params.get("panel");
-    return wanted === "style" || wanted === "images" || wanted === "seo" || wanted === "alt"
-      ? wanted
-      : null;
+    return wanted === "style" || wanted === "images" || wanted === "seo" ? wanted : null;
   });
   const [styleFor, setStyleFor] = useState<CanvasSelection | null>(null);
   /** Per-section settings, keyed by index — the harness's stand-in for props. */
@@ -295,15 +292,7 @@ export function CanvasHarness() {
             here: one header, one close button, and a grid that uses the
             dialog's width rather than a 340px column of it.
           */}
-          {dashTab === "images" && (
-            <MediaPanel
-              wide
-              siteId="00000000-0000-0000-0000-000000000000"
-              target={null}
-              onChoose={() => {}}
-              onClose={() => setDashTab(null)}
-            />
-          )}
+          {dashTab === "images" && <ImagesTab siteId="00000000-0000-0000-0000-000000000000" />}
           {/*
             Mounted with no session, so this exercises the failure path: the
             actions require canEditSite and there is no user here. Enough to
@@ -311,7 +300,6 @@ export function CanvasHarness() {
             table needs a real login.
           */}
           {dashTab === "seo" && <SeoPanel siteId="00000000-0000-0000-0000-000000000000" />}
-          {dashTab === "alt" && <AltPanel siteId="00000000-0000-0000-0000-000000000000" />}
         </SiteDashboard>
       )}
 

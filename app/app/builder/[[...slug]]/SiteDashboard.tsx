@@ -34,26 +34,22 @@ import styles from "./builder.module.css";
  * ─────────────────────────────────────────────────────────────────────
  */
 
-export type DashboardTab = "style" | "images" | "seo" | "alt";
+export type DashboardTab = "style" | "images" | "seo";
 
 export const DASHBOARD_TABS: Array<{ key: DashboardTab; label: string; hint: string }> = [
   { key: "style", label: "Style", hint: "Type, spacing, corners and colour for the whole site" },
-  { key: "images", label: "Images", hint: "Everything you have uploaded" },
-  { key: "seo", label: "SEO", hint: "Titles and descriptions for each page" },
   {
-    key: "alt",
     /*
-     * "Alt text", not "Image descriptions".
-     *
-     * The plainer name was chosen to explain itself to someone who had never
-     * met the term. It backfired: the person looking for it went hunting for
-     * "alt tag", found four tabs and none of them said that, and asked where
-     * the feature was. Use the word people search for; the hint can do the
-     * explaining.
+     * One tab, not two. There was an "Alt text" tab beside this one listing the
+     * same photographs from the other end — the library shows FILES, that
+     * showed PLACEMENTS. A real distinction, and as two screens it read as the
+     * same thumbnails twice, because it was.
      */
-    label: "Alt text",
-    hint: "What a screen reader says in place of each picture",
+    key: "images",
+    label: "Images",
+    hint: "Everything on your pages, and anything uploaded but unused",
   },
+  { key: "seo", label: "SEO", hint: "Titles and descriptions for each page" },
 ];
 
 export function SiteDashboard({

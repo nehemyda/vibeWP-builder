@@ -32,7 +32,7 @@ import { setSectionImageAction } from "@/app/actions/edit";
 import { MediaPanel } from "./MediaPanel";
 import { SiteDashboard, type DashboardTab } from "./SiteDashboard";
 import { SeoPanel } from "./SeoPanel";
-import { AltPanel } from "./AltPanel";
+import { ImagesTab } from "./ImagesTab";
 import { SCREENS, fieldFor as hideField } from "@/lib/design/part-visibility";
 import { widthFieldFor } from "@/lib/design/part-size";
 import { PART_ORDER_FIELD } from "@/lib/design/part-order";
@@ -417,10 +417,7 @@ export function BuilderApp({
    * on the top bar's classes.
    */
   const [dashTab, setDashTab] = useState<DashboardTab | null>(() =>
-    initialPanel === "style" ||
-    initialPanel === "images" ||
-    initialPanel === "seo" ||
-    initialPanel === "alt"
+    initialPanel === "style" || initialPanel === "images" || initialPanel === "seo"
       ? initialPanel
       : null,
   );
@@ -2099,19 +2096,8 @@ export function BuilderApp({
                 onClose={() => openDash(null)}
               />
             )}
-            {dashTab === "images" && (
-              <MediaPanel
-                wide
-                siteId={siteId}
-                busy={Boolean(canvasBusy)}
-                /* No target: the library opened on its own, to upload and tidy. */
-                target={null}
-                onChoose={() => {}}
-                onClose={() => openDash(null)}
-              />
-            )}
+            {dashTab === "images" && <ImagesTab siteId={siteId} busy={Boolean(canvasBusy)} />}
             {dashTab === "seo" && <SeoPanel siteId={siteId} />}
-            {dashTab === "alt" && <AltPanel siteId={siteId} />}
           </SiteDashboard>
         )}
 
