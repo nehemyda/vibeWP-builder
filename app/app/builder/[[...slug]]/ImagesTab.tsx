@@ -10,9 +10,11 @@ import {
 } from "@/app/actions/media";
 import {
   generateImageAltAction,
+  generateOneImageMetaAction,
   listImageAltAction,
   setImageMetaAction,
   type ImagePlacement,
+  type OneTarget,
 } from "@/app/actions/image-alt";
 import styles from "./builder.module.css";
 
@@ -268,6 +270,18 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
                 ? `${row.placement.sectionName} · ${row.placement.pageTitle}`
                 : "Not used on a page yet";
 
+            const target: OneTarget =
+              row.kind === "placed"
+                ? { kind: "placed", pageId: row.placement.pageId, path: row.placement.path }
+                : { kind: "unused", assetId: row.asset.id };
+
+            const generateOne = async (field: "alt" | "title") => {
+              setError(null);
+              const result = await generateOneImageMetaAction({ siteId, target, field });
+              if (!result.ok) setError(result.message);
+              await load();
+            };
+
             const commit = async (patch: { alt?: string; title?: string }) => {
               if (row.kind === "placed") {
                 const result = await setImageMetaAction({
@@ -304,6 +318,8 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
                   value={alt}
                   disabled={busy}
                   onCommit={(v) => void commit({ alt: v })}
+                  onGenerate={() => generateOne("alt")}
+                  generateHint="Write this from the picture"
                 />
                 <Field
                   key={`${row.key}:title:${title}`}
@@ -312,6 +328,8 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
                   value={title}
                   disabled={busy}
                   onCommit={(v) => void commit({ title: v })}
+                  onGenerate={() => generateOne("title")}
+                  generateHint="Name this from the picture"
                 />
 
                 {/*
@@ -368,39 +386,79 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
   );
 }
 
-/** One labelled field, committed on blur. */
+/**
+ * One labelled field, committed on blur, with its own generate button.
+ *
+ * The button sits INSIDE the input's right edge rather than beside it. Beside
+ * it would cost the field a fifth of its width in a 228px card, and the thing
+ * being generated is the field's own contents — so it belongs in the field,
+ * the way a password reveal or a search clear does.
+ */
 function Field({
   label,
   hint,
   value,
   disabled,
   onCommit,
+  onGenerate,
+  generateHint,
 }: {
   label: string;
   hint: string;
   value: string;
   disabled?: boolean;
   onCommit: (value: string) => void | Promise<void>;
+  onGenerate?: () => Promise<void>;
+  generateHint?: string;
 }) {
   /*
    * Seeded once; the parent changes the key when the stored value changes, so
    * there is no effect to run at the wrong moment.
    */
   const [draft, setDraft] = useState(value);
+  const [thinking, setThinking] = useState(false);
+
   return (
     <label className={styles.imageField}>
       <span className={styles.imageFieldLabel} title={hint}>
         {label}
       </span>
-      <input
-        type="text"
-        className={styles.seoInput}
-        value={draft}
-        disabled={disabled}
-        placeholder={hint}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => draft.trim() !== value.trim() && void onCommit(draft)}
-      />
+      <span className={styles.imageInputWrap}>
+        <input
+          type="text"
+          className={`${styles.seoInput} ${onGenerate ? styles.imageInputWithBtn : ""}`}
+          value={thinking ? "" : draft}
+          disabled={disabled || thinking}
+          placeholder={thinking ? "Looking at the picture…" : hint}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => draft.trim() !== value.trim() && void onCommit(draft)}
+        />
+        {onGenerate && (
+          <button
+            type="button"
+            className={styles.imageGenBtn}
+            disabled={disabled || thinking}
+            title={generateHint}
+            aria-label={generateHint}
+            /*
+             * mousedown, not click. The button sits inside a focused input, so
+             * a click would blur it first — and blur commits, which would save
+             * the old text over whatever the model is about to write.
+             */
+            onMouseDown={async (e) => {
+              e.preventDefault();
+              setThinking(true);
+              try {
+                await onGenerate();
+              } finally {
+                setThinking(false);
+              }
+            }}
+          >
+            {thinking ? <span className={styles.imageGenSpin} aria-hidden="true" /> : "✦"}
+          </button>
+        )}
+      </span>
     </label>
   );
 }

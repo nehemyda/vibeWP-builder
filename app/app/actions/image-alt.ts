@@ -7,8 +7,10 @@ import { createClient } from "@/lib/supabase/server";
 import { canEditSite } from "@/app/actions/sites";
 import { getAiProviderSettings } from "@/lib/ai-provider-settings";
 import { describeBusiness, loadBusinessContext } from "@/lib/ai/business-context";
-import { generateAltWithGemini, type AltSubject } from "@/lib/ai/generate-alt";
+import { generateAltWithGemini, type AltKind, type AltSubject } from "@/lib/ai/generate-alt";
 import { imagePaths, writeImage, type ImageValue } from "@/lib/design/image-map";
+import { mediaAssets } from "@/lib/db/schema";
+import { isNull } from "drizzle-orm";
 import { getSectionByNodeType } from "@/lib/sections";
 
 /**
@@ -340,4 +342,116 @@ async function fetchImage(url: string): Promise<{ bytes: Buffer; mimeType: strin
   } catch {
     return null;
   }
+}
+
+
+/** Which picture, and where its words are kept. */
+export type OneTarget =
+  | { kind: "placed"; pageId: string; path: string }
+  | { kind: "unused"; assetId: string };
+
+export type OneResult = { ok: true; value: string } | { ok: false; message: string };
+
+/**
+ * Writes one field on one picture.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THIS EXISTS BESIDE THE BATCH
+ *
+ * The batch is for a site that has just been built and has nothing described.
+ * This is for the picture in front of you — you have looked at what the model
+ * wrote, you disagree, and you want it to try again on that one. Sending the
+ * whole site back through the model to redo a single description would cost
+ * every other description its wording as well.
+ *
+ * It is also the honest place for a title. Generating titles for a whole site
+ * at once is a lot of model calls for a tooltip; asked for one at a time, it
+ * is a button next to the field.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export async function generateOneImageMetaAction(opts: {
+  siteId: string;
+  target: OneTarget;
+  field: AltKind;
+}): Promise<OneResult> {
+  await assertAccess(opts.siteId);
+
+  const settings = await getAiProviderSettings();
+  if (settings.activeProvider !== "gemini" || !settings.geminiApiKey) {
+    return { ok: false, message: "No AI provider is configured yet." };
+  }
+  const business = await loadBusinessContext(opts.siteId);
+  if (!business) return { ok: false, message: "This site has no business details yet." };
+
+  /*
+   * The URL and the context come from wherever the picture actually lives,
+   * looked up server-side. The browser says WHICH picture, never where to
+   * fetch bytes from — otherwise this action would download and describe any
+   * URL on the internet on request.
+   */
+  let url: string | null = null;
+  let context = "a picture on the site";
+
+  if (opts.target.kind === "placed") {
+    const placements = await listImageAltAction(opts.siteId);
+    const found = placements.find(
+      (p) => p.pageId === (opts.target as { pageId: string }).pageId &&
+        p.path === (opts.target as { path: string }).path,
+    );
+    if (!found) return { ok: false, message: "That picture isn't there any more." };
+    url = found.url;
+    context = `${found.sectionName} on the ${found.pageTitle} page`;
+  } else {
+    const asset = await db.query.mediaAssets.findFirst({
+      where: and(
+        eq(mediaAssets.id, opts.target.assetId),
+        eq(mediaAssets.siteId, opts.siteId),
+        isNull(mediaAssets.deletedAt),
+      ),
+    });
+    if (!asset) return { ok: false, message: "That picture isn't in your library any more." };
+    url = asset.url;
+    context = "in the library, not yet placed on a page";
+  }
+
+  const fetched = await fetchImage(url);
+  if (!fetched) {
+    return { ok: false, message: "I couldn't load that picture to look at it." };
+  }
+
+  let value: string;
+  try {
+    const answers = await generateAltWithGemini(
+      describeBusiness(business),
+      [{ key: url, bytes: fetched.bytes, mimeType: fetched.mimeType, context }],
+      settings.geminiApiKey,
+      opts.field,
+    );
+    const written = answers.get(url);
+    if (!written) return { ok: false, message: "The model didn't return anything usable." };
+    value = written;
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? `That didn't work: ${err.message}` : "That didn't work.",
+    };
+  }
+
+  if (opts.target.kind === "placed") {
+    const written = await writeAlts(opts.siteId, [
+      {
+        pageId: opts.target.pageId,
+        path: opts.target.path,
+        ...(opts.field === "alt" ? { alt: value } : { title: value }),
+      },
+    ]);
+    if (written === 0) return { ok: false, message: "That picture isn't there any more." };
+  } else {
+    await db
+      .update(mediaAssets)
+      .set(opts.field === "alt" ? { alt: value } : { title: value })
+      .where(and(eq(mediaAssets.id, opts.target.assetId), eq(mediaAssets.siteId, opts.siteId)));
+  }
+
+  return { ok: true, value };
 }

@@ -2257,3 +2257,53 @@
   cursor: pointer;
 }
 .lightboxClose:hover { background: rgb(255 255 255 / 0.26); }
+
+/* The generate button, inside the field it fills. */
+.imageInputWrap { position: relative; display: block; min-width: 0; }
+.imageInputWithBtn { padding-right: 30px; }
+
+.imageGenBtn {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: var(--bg, #f2f3f5);
+  /*
+   * ink-2, not muted. The section menu's ⋯ shipped at #d7dae0 and the report
+   * was that it could not be seen; a 14px glyph at #9aa0aa on white is the
+   * same mistake one shade later. It also carries a faint ground, so it reads
+   * as a button before the pointer is anywhere near it.
+   */
+  color: var(--ink-2, #4e5661);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.imageGenBtn:hover:not(:disabled) {
+  background: var(--ink, #131922);
+  color: #fff;
+}
+.imageGenBtn:disabled { opacity: 0.5; cursor: default; }
+
+.imageGenSpin {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--border, #d7dae0);
+  border-top-color: var(--ink, #131922);
+  border-radius: 50%;
+  animation: imageGenSpin 620ms linear infinite;
+}
+@keyframes imageGenSpin {
+  to { transform: rotate(360deg); }
+}
+/* Still legible to anyone who has asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .imageGenSpin { animation-duration: 2s; }
+}

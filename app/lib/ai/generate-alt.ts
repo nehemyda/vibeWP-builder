@@ -46,10 +46,21 @@ export type AltSubject = {
   context: string;
 };
 
+/**
+ * What is being written.
+ *
+ * The two are not the same job. Alt REPLACES the picture for someone who
+ * cannot see it, so it is a sentence about what is visible. A title is a short
+ * label shown on hover — a few words, closer to a caption in a filing system —
+ * and if it repeats the alt then some screen readers read one sentence twice.
+ */
+export type AltKind = "alt" | "title";
+
 export async function generateAltWithGemini(
   business: string,
   subjects: AltSubject[],
   apiKey: string,
+  kind: AltKind = "alt",
 ): Promise<Map<string, string>> {
   if (subjects.length === 0) return new Map();
   const ai = new GoogleGenAI({ apiKey });
@@ -61,7 +72,9 @@ export async function generateAltWithGemini(
         role: "user",
         parts: [
           {
-            text: `You are writing alt text for photographs on a small business website.
+            text:
+              kind === "alt"
+                ? `You are writing alt text for photographs on a small business website.
 
 ${business}
 
@@ -81,6 +94,25 @@ Rules:
 - British English.
 
 Return ONLY JSON: {"alt":["…first image…","…second image…"]} with exactly
+${subjects.length} entries, in the same order as the images.`
+                : `You are naming photographs on a small business website.
+
+${business}
+
+${subjects.length} image${subjects.length === 1 ? "" : "s"} follow${subjects.length === 1 ? "s" : ""}, in order. Give each a short title — the kind of label that identifies it in a list of files.
+
+Where each appears:
+${subjects.map((s, i) => `${i + 1}. ${s.context}`).join("\n")}
+
+Rules:
+- Two to five words. Capitalise it like a caption, not like a headline.
+- Name the subject, not the scene: "Sourdough loaves cooling", not "A tray of
+  freshly baked sourdough loaves cooling on a wire rack in a bakery".
+- No full stop, no quotes, no file extensions, no "Image" or "Photo".
+- Every title must be different from the others.
+- British English.
+
+Return ONLY JSON: {"alt":["…first…","…second…"]} with exactly
 ${subjects.length} entries, in the same order as the images.`,
           },
           ...subjects.map((s) => ({
