@@ -21,7 +21,7 @@ import styles from "./builder.module.css";
  * screen-reader users that a photograph of a swimming pool is a sourdough
  * loaf, which is a real thing found on a real site while building this.
  *
- * WHY "NEEDS A DESCRIPTION" INCLUDES SOME THAT HAVE ONE
+ * WHY "NEEDS ALT TEXT" INCLUDES SOME THAT HAVE SOME
  *
  * requireAlt() writes "Photograph of this business" rather than let an image
  * export with an empty alt attribute. That is right for the markup and it
@@ -37,7 +37,15 @@ export function AltPanel({ siteId }: { siteId: string }) {
   const [rows, setRows] = useState<ImagePlacement[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>("missing");
+  /*
+   * Starts on "missing" only when something IS missing.
+   *
+   * Defaulting to it always meant a site with every picture described opened
+   * on an empty screen beside a disabled button — which reads as a broken
+   * feature rather than a finished job. Decided when the rows arrive, not
+   * before.
+   */
+  const [filter, setFilter] = useState<Filter | null>(null);
   const [working, setWorking] = useState<string | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
 
@@ -46,7 +54,11 @@ export function AltPanel({ siteId }: { siteId: string }) {
   useEffect(() => {
     let live = true;
     listImageAltAction(siteId)
-      .then((r) => live && setRows(r))
+      .then((r) => {
+        if (!live) return;
+        setRows(r);
+        setFilter(r.some((x) => x.needsAlt) ? "missing" : "all");
+      })
       .catch(() => live && setError("Couldn't load your images."));
     return () => {
       live = false;
@@ -72,13 +84,13 @@ export function AltPanel({ siteId }: { siteId: string }) {
   };
 
   const missingCount = (rows ?? []).filter((r) => r.needsAlt).length;
-  const shown = (rows ?? []).filter((r) => (filter === "all" ? true : r.needsAlt));
+  const shown = (rows ?? []).filter((r) => (filter === "missing" ? r.needsAlt : true));
 
   return (
     <div className={styles.seoWrap}>
       <header className={styles.seoHead}>
         <div>
-          <h2 className={styles.seoTitle}>Image descriptions</h2>
+          <h2 className={styles.seoTitle}>Image alt text</h2>
           <p className={styles.seoLede}>
             What someone using a screen reader hears in place of each picture, and what search
             engines read. <strong>Publish to apply them.</strong>
@@ -91,7 +103,10 @@ export function AltPanel({ siteId }: { siteId: string }) {
             disabled={!!working || missingCount === 0}
             onClick={() => void generate("missing")}
           >
-            {working ?? `Describe the missing ${missingCount === 1 ? "one" : missingCount || ""}`.trim()}
+            {working ??
+              (missingCount === 0
+                ? "Nothing is missing alt text"
+                : `Generate the missing ${missingCount}`)}
           </button>
           {confirmAll ? (
             <span className={styles.seoConfirm}>
@@ -113,9 +128,9 @@ export function AltPanel({ siteId }: { siteId: string }) {
               className={styles.seoGenerateGhost}
               disabled={!!working}
               onClick={() => setConfirmAll(true)}
-              title="Re-describes every picture, including ones you have written yourself"
+              title="Rewrites the alt text on every picture, including any you wrote yourself"
             >
-              Re-describe all…
+              Generate for all images…
             </button>
           )}
         </div>
@@ -134,7 +149,7 @@ export function AltPanel({ siteId }: { siteId: string }) {
               aria-pressed={filter === "missing"}
               onClick={() => setFilter("missing")}
             >
-              Needs a description ({missingCount})
+              Needs alt text ({missingCount})
             </button>
             <button
               type="button"
@@ -149,8 +164,8 @@ export function AltPanel({ siteId }: { siteId: string }) {
           {shown.length === 0 && (
             <p className={styles.mediaHint}>
               {filter === "missing"
-                ? "Every picture on your site has a description."
-                : "No pictures on your pages yet."}
+                ? "Every picture on your site has alt text."
+                : "No pictures on your pages yet. Place one and it will appear here."}
             </p>
           )}
 

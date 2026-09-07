@@ -42,7 +42,16 @@ export const DASHBOARD_TABS: Array<{ key: DashboardTab; label: string; hint: str
   { key: "seo", label: "SEO", hint: "Titles and descriptions for each page" },
   {
     key: "alt",
-    label: "Image descriptions",
+    /*
+     * "Alt text", not "Image descriptions".
+     *
+     * The plainer name was chosen to explain itself to someone who had never
+     * met the term. It backfired: the person looking for it went hunting for
+     * "alt tag", found four tabs and none of them said that, and asked where
+     * the feature was. Use the word people search for; the hint can do the
+     * explaining.
+     */
+    label: "Alt text",
     hint: "What a screen reader says in place of each picture",
   },
 ];
