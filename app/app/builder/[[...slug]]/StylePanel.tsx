@@ -32,6 +32,7 @@ export function StylePanel({
   onCommit,
   onClose,
   busy,
+  bare,
   scope,
   section,
 }: {
@@ -52,6 +53,13 @@ export function StylePanel({
    * both say "heading size" on one screen is a question about which one wins,
    * and the answer would have to be explained rather than seen.
    */
+  /**
+   * Rendered without its own frame, for use inside the site dashboard.
+   *
+   * The controls are identical; only the container differs. Duplicating them
+   * would mean two places to change a slider's range.
+   */
+  bare?: boolean;
   section?: {
     name: string;
     values: Record<string, string>;
@@ -64,6 +72,114 @@ export function StylePanel({
 }) {
   const set = (name: string, value: number) => ({ ...tokens, [name]: value });
   const dirty = DESIGN_TOKENS.some((t) => tokens[t.name] !== undefined && tokens[t.name] !== t.unset);
+
+  /* Declared once; the dashboard renders it bare and the panel frames it. */
+  const body = (
+  <div className={styles.styleBody}>
+    {section?.role ? (
+      <section className={styles.styleGroup}>
+        <h3 className={styles.styleGroupName}>
+          {ELEMENT_ROLES.find((r) => r.key === section.role)?.label}
+        </h3>
+        {(ELEMENT_ROLES.find((r) => r.key === section.role)?.options ?? []).map((option) => {
+          const value = section.values[option.field] ?? String(option.spec.default ?? "default");
+          return (
+            <div key={option.field} className={styles.styleRow}>
+              <label className={styles.styleLabel} htmlFor={`el-${option.field}`}>
+                <span>{option.spec.label}</span>
+              </label>
+              <select
+                id={`el-${option.field}`}
+                className={styles.styleSelect}
+                value={value}
+                disabled={busy}
+                onChange={(e) => section.onChange(option.field, e.target.value)}
+              >
+                {(option.spec.choices ?? []).map((choice) => (
+                  <option key={choice} value={choice}>
+                    {choice}
+                  </option>
+                ))}
+              </select>
+            </div>
+          );
+        })}
+      </section>
+    ) : section ? (
+      <section className={styles.styleGroup}>
+        <h3 className={styles.styleGroupName}>This section</h3>
+        {SECTION_STYLE_OPTIONS.map((option) => {
+          const value = section.values[option.field] ?? String(option.spec.default ?? "default");
+          return (
+            <div key={option.field} className={styles.styleRow}>
+              <label className={styles.styleLabel} htmlFor={`sec-${option.field}`}>
+                <span>{option.spec.label}</span>
+              </label>
+              <select
+                id={`sec-${option.field}`}
+                className={styles.styleSelect}
+                value={value}
+                disabled={busy}
+                onChange={(e) => section.onChange(option.field, e.target.value)}
+              >
+                {(option.spec.choices ?? []).map((choice) => (
+                  <option key={choice} value={choice}>
+                    {choice}
+                  </option>
+                ))}
+              </select>
+              {option.spec.hint && <p className={styles.styleHint}>{option.spec.hint}</p>}
+            </div>
+          );
+        })}
+      </section>
+    ) : (
+      TOKEN_GROUPS.map((group) => (
+      <section key={group} className={styles.styleGroup}>
+        <h3 className={styles.styleGroupName}>{group}</h3>
+        {DESIGN_TOKENS.filter((t) => t.group === group).map((spec) => {
+          const value = tokens[spec.name] ?? spec.unset;
+          const atDefault = value === spec.unset;
+          return (
+            <div key={spec.name} className={styles.styleRow}>
+              <label className={styles.styleLabel} htmlFor={`tok-${spec.name}`}>
+                <span>{spec.label}</span>
+                <output className={atDefault ? styles.styleValueMuted : styles.styleValue}>
+                  {spec.kind === "px" ? `${value}px` : `${Math.round(value * 100)}%`}
+                </output>
+              </label>
+              <input
+                id={`tok-${spec.name}`}
+                type="range"
+                className={styles.styleRange}
+                min={spec.min}
+                max={spec.max}
+                step={spec.step}
+                value={value}
+                disabled={busy}
+                // Continuously while dragging, so the canvas tracks the thumb.
+                onChange={(e) => onPreview(set(spec.name, Number(e.target.value)))}
+                // On release — pointer, keyboard and touch all end here.
+                onPointerUp={(e) => onCommit(set(spec.name, Number((e.target as HTMLInputElement).value)))}
+                onKeyUp={(e) => onCommit(set(spec.name, Number((e.target as HTMLInputElement).value)))}
+              />
+              {spec.hint && <p className={styles.styleHint}>{spec.hint}</p>}
+            </div>
+          );
+        })}
+        </section>
+      ))
+    )}
+  </div>
+  );
+
+  /*
+   * Inside the dashboard the frame and the header are the dashboard's, so
+   * only the body is rendered. Everything below is shared verbatim.
+   */
+  if (bare) {
+    return <div className={styles.styleBodyBare}>{body}</div>;
+  }
 
   return (
     <aside className={styles.stylePanel} aria-label="Style">
@@ -92,102 +208,7 @@ export function StylePanel({
         </button>
       </header>
 
-      <div className={styles.styleBody}>
-        {section?.role ? (
-          <section className={styles.styleGroup}>
-            <h3 className={styles.styleGroupName}>
-              {ELEMENT_ROLES.find((r) => r.key === section.role)?.label}
-            </h3>
-            {(ELEMENT_ROLES.find((r) => r.key === section.role)?.options ?? []).map((option) => {
-              const value = section.values[option.field] ?? String(option.spec.default ?? "default");
-              return (
-                <div key={option.field} className={styles.styleRow}>
-                  <label className={styles.styleLabel} htmlFor={`el-${option.field}`}>
-                    <span>{option.spec.label}</span>
-                  </label>
-                  <select
-                    id={`el-${option.field}`}
-                    className={styles.styleSelect}
-                    value={value}
-                    disabled={busy}
-                    onChange={(e) => section.onChange(option.field, e.target.value)}
-                  >
-                    {(option.spec.choices ?? []).map((choice) => (
-                      <option key={choice} value={choice}>
-                        {choice}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              );
-            })}
-          </section>
-        ) : section ? (
-          <section className={styles.styleGroup}>
-            <h3 className={styles.styleGroupName}>This section</h3>
-            {SECTION_STYLE_OPTIONS.map((option) => {
-              const value = section.values[option.field] ?? String(option.spec.default ?? "default");
-              return (
-                <div key={option.field} className={styles.styleRow}>
-                  <label className={styles.styleLabel} htmlFor={`sec-${option.field}`}>
-                    <span>{option.spec.label}</span>
-                  </label>
-                  <select
-                    id={`sec-${option.field}`}
-                    className={styles.styleSelect}
-                    value={value}
-                    disabled={busy}
-                    onChange={(e) => section.onChange(option.field, e.target.value)}
-                  >
-                    {(option.spec.choices ?? []).map((choice) => (
-                      <option key={choice} value={choice}>
-                        {choice}
-                      </option>
-                    ))}
-                  </select>
-                  {option.spec.hint && <p className={styles.styleHint}>{option.spec.hint}</p>}
-                </div>
-              );
-            })}
-          </section>
-        ) : (
-          TOKEN_GROUPS.map((group) => (
-          <section key={group} className={styles.styleGroup}>
-            <h3 className={styles.styleGroupName}>{group}</h3>
-            {DESIGN_TOKENS.filter((t) => t.group === group).map((spec) => {
-              const value = tokens[spec.name] ?? spec.unset;
-              const atDefault = value === spec.unset;
-              return (
-                <div key={spec.name} className={styles.styleRow}>
-                  <label className={styles.styleLabel} htmlFor={`tok-${spec.name}`}>
-                    <span>{spec.label}</span>
-                    <output className={atDefault ? styles.styleValueMuted : styles.styleValue}>
-                      {spec.kind === "px" ? `${value}px` : `${Math.round(value * 100)}%`}
-                    </output>
-                  </label>
-                  <input
-                    id={`tok-${spec.name}`}
-                    type="range"
-                    className={styles.styleRange}
-                    min={spec.min}
-                    max={spec.max}
-                    step={spec.step}
-                    value={value}
-                    disabled={busy}
-                    // Continuously while dragging, so the canvas tracks the thumb.
-                    onChange={(e) => onPreview(set(spec.name, Number(e.target.value)))}
-                    // On release — pointer, keyboard and touch all end here.
-                    onPointerUp={(e) => onCommit(set(spec.name, Number((e.target as HTMLInputElement).value)))}
-                    onKeyUp={(e) => onCommit(set(spec.name, Number((e.target as HTMLInputElement).value)))}
-                  />
-                  {spec.hint && <p className={styles.styleHint}>{spec.hint}</p>}
-                </div>
-              );
-            })}
-            </section>
-          ))
-        )}
-      </div>
+      {body}
 
       <footer className={styles.styleFooter}>
         {section ? (

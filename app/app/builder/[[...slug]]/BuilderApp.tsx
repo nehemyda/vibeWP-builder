@@ -30,6 +30,7 @@ import {
 import { readClip, writeClip, type Clip } from "@/lib/design/clipboard";
 import { setSectionImageAction } from "@/app/actions/edit";
 import { MediaPanel } from "./MediaPanel";
+import { SiteDashboard, type DashboardTab } from "./SiteDashboard";
 import { SCREENS, fieldFor as hideField } from "@/lib/design/part-visibility";
 import { widthFieldFor } from "@/lib/design/part-size";
 import { PART_ORDER_FIELD } from "@/lib/design/part-order";
@@ -402,6 +403,48 @@ export function BuilderApp({
    * second description of it would drift the first time a design changed.
    */
   const [renderedParts, setRenderedParts] = useState<string[]>([]);
+  /*
+   * The dashboard tab, or null when it is closed.
+   *
+   * Read from the URL on first render so it survives a reload and can be
+   * opened by link — which is also how it gets verified without clicking
+   * through a login.
+   */
+  const [dashTab, setDashTab] = useState<DashboardTab | null>(() => {
+    if (typeof window === "undefined") return null;
+    const wanted = new URLSearchParams(window.location.search).get("panel");
+    return wanted === "style" || wanted === "images" || wanted === "seo" ? wanted : null;
+  });
+
+  /*
+   * Kept in the URL without a navigation. replaceState rather than the router,
+   * because a route change would re-render the tree and rebuild the canvas —
+   * the dashboard's whole promise is that the page underneath is untouched.
+   */
+  /*
+   * Committing the site's design tokens.
+   *
+   * Shared, because the same sliders now appear in two places — the dashboard
+   * and the section panel's site-wide view — and two copies of "save then
+   * trust what came back" is one copy too many.
+   */
+  const commitTokens = (next: DesignTokens) => {
+    setDesignTokens(next);
+    void saveDesignTokensAction({ siteId, tokens: next }).then((result) => {
+      // The server sanitises, so what it returns is the truth about what was
+      // stored — including a value it refused.
+      if (result.ok) setDesignTokens(result.tokens);
+    });
+  };
+
+  const openDash = (tab: DashboardTab | null) => {
+    setDashTab(tab);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (tab) url.searchParams.set("panel", tab);
+    else url.searchParams.delete("panel");
+    window.history.replaceState(null, "", url);
+  };
   const [styleOpen, setStyleOpen] = useState(false);
   /** Which section the style panel is showing, or null for the whole site. */
   const [styleFor, setStyleFor] = useState<CanvasSelection | null>(null);
@@ -1385,14 +1428,10 @@ export function BuilderApp({
           */}
           <button
             type="button"
-            className={`${styles.detailsBtn} ${styleOpen ? styles.detailsBtnOn : ""}`}
-            onClick={() => {
-              setStyleFor(null);
-              if (styleOpen) closeStylePanel();
-              else openStylePanel();
-            }}
+            className={`${styles.detailsBtn} ${dashTab === "style" ? styles.detailsBtnOn : ""}`}
+            onClick={() => openDash(dashTab === "style" ? null : "style")}
             title="Heading size, spacing, corners and page width"
-            aria-pressed={styleOpen}
+            aria-pressed={dashTab === "style"}
           >
             Style
           </button>
@@ -1403,15 +1442,21 @@ export function BuilderApp({
           */}
           <button
             type="button"
-            className={`${styles.detailsBtn} ${mediaOpen ? styles.detailsBtnOn : ""}`}
-            onClick={() => {
-              setMediaTarget(null);
-              setMediaOpen((v) => !v);
-            }}
+            className={`${styles.detailsBtn} ${dashTab === "images" ? styles.detailsBtnOn : ""}`}
+            onClick={() => openDash(dashTab === "images" ? null : "images")}
             title="Your uploaded images"
-            aria-pressed={mediaOpen}
+            aria-pressed={dashTab === "images"}
           >
             Images
+          </button>
+          <button
+            type="button"
+            className={`${styles.detailsBtn} ${dashTab === "seo" ? styles.detailsBtnOn : ""}`}
+            onClick={() => openDash(dashTab === "seo" ? null : "seo")}
+            title="Page titles and descriptions for search engines"
+            aria-pressed={dashTab === "seo"}
+          >
+            SEO
           </button>
         </div>
 
@@ -2023,6 +2068,43 @@ export function BuilderApp({
           </div>
         )}
 
+        {dashTab && (
+          <SiteDashboard
+            tab={dashTab}
+            onTab={openDash}
+            onClose={() => openDash(null)}
+            siteName={siteName}
+          >
+            {dashTab === "style" && (
+              <StylePanel
+                bare
+                tokens={designTokens}
+                scope={siteName}
+                busy={Boolean(canvasBusy)}
+                onPreview={setDesignTokens}
+                onCommit={commitTokens}
+                onClose={() => openDash(null)}
+              />
+            )}
+            {dashTab === "images" && (
+              <MediaPanel
+                siteId={siteId}
+                busy={Boolean(canvasBusy)}
+                /* No target: the library opened on its own, to upload and tidy. */
+                target={null}
+                onChoose={() => {}}
+                onClose={() => openDash(null)}
+              />
+            )}
+            {dashTab === "seo" && (
+              <p className={styles.mediaHint}>
+                Page titles and descriptions are next — the fields are no use until the theme
+                renders them, so the export path is being built first.
+              </p>
+            )}
+          </SiteDashboard>
+        )}
+
         {mediaOpen && (
           <MediaPanel
             siteId={siteId}
@@ -2093,14 +2175,7 @@ export function BuilderApp({
              * without a round trip per pixel; commit persists on release.
              */
             onPreview={setDesignTokens}
-            onCommit={(next) => {
-              setDesignTokens(next);
-              void saveDesignTokensAction({ siteId, tokens: next }).then((result) => {
-                // The server sanitises, so what it returns is the truth about
-                // what was stored — including a value it refused.
-                if (result.ok) setDesignTokens(result.tokens);
-              });
-            }}
+            onCommit={commitTokens}
             onClose={closeStylePanel}
           />
         )}

@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  SiteDashboard,
+  type DashboardTab,
+} from "@/app/builder/[[...slug]]/SiteDashboard";
 import { readClip, writeClip } from "@/lib/design/clipboard";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -63,6 +67,14 @@ export function CanvasHarness() {
   const [cover, setCover] = useState<string | null>(params.get("busy"));
   const [tokens, setTokens] = useState<DesignTokens>({});
   const [styleOpen, setStyleOpen] = useState(params.get("style") !== "0");
+  /*
+   * The site dashboard, so the shell and its tabs can be looked at without a
+   * site behind them. Opened by ?panel=, the same way the builder does it.
+   */
+  const [dashTab, setDashTab] = useState<DashboardTab | null>(() => {
+    const wanted = params.get("panel");
+    return wanted === "style" || wanted === "images" || wanted === "seo" ? wanted : null;
+  });
   const [styleFor, setStyleFor] = useState<CanvasSelection | null>(null);
   /** Per-section settings, keyed by index — the harness's stand-in for props. */
   const [secStyle, setSecStyle] = useState<Record<number, Record<string, string>>>({});
@@ -255,6 +267,32 @@ export function CanvasHarness() {
         </div>
       </div>
       </div>
+
+      {dashTab && (
+        <SiteDashboard
+          tab={dashTab}
+          onTab={setDashTab}
+          onClose={() => setDashTab(null)}
+          siteName="Canvas harness"
+        >
+          {dashTab === "style" && (
+            <StylePanel
+              bare
+              tokens={tokens}
+              scope="Whole site"
+              onPreview={setTokens}
+              onCommit={setTokens}
+              onClose={() => setDashTab(null)}
+            />
+          )}
+          {dashTab === "images" && (
+            <p style={{ fontSize: 13 }}>
+              The image library needs a real site id, so it is not mounted here.
+            </p>
+          )}
+          {dashTab === "seo" && <p style={{ fontSize: 13 }}>SEO table lands next.</p>}
+        </SiteDashboard>
+      )}
 
       {styleOpen && (
         <StylePanel
