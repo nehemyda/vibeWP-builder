@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listPageSeoAction, savePageSeoAction, type PageSeo } from "@/app/actions/seo";
+import {
+  generatePageMetaAction,
+  listPageSeoAction,
+  savePageSeoAction,
+  type PageSeo,
+} from "@/app/actions/seo";
 import { DESC_LIMIT, TITLE_LIMIT } from "@/lib/seo/limits";
 import styles from "./builder.module.css";
 
@@ -39,6 +44,30 @@ export function SeoPanel({ siteId }: { siteId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("missing");
   const [saving, setSaving] = useState<Set<string>>(new Set());
+  const [working, setWorking] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  /* Overwriting what the client typed asks first. Filling blanks does not. */
+  const [confirmAll, setConfirmAll] = useState(false);
+
+  const generate = async (scope: "missing" | "all") => {
+    setConfirmAll(false);
+    setNote(null);
+    setError(null);
+    setWorking(scope === "all" ? "Rewriting every page…" : "Writing the missing ones…");
+    try {
+      const result = await generatePageMetaAction({ siteId, scope });
+      if (result.ok) {
+        setNote(result.message);
+        setPages(await listPageSeoAction(siteId));
+      } else {
+        setError(result.message);
+      }
+    } catch {
+      setError("I couldn't reach the model. Nothing was changed.");
+    } finally {
+      setWorking(null);
+    }
+  };
 
   useEffect(() => {
     let live = true;
@@ -101,9 +130,50 @@ export function SeoPanel({ siteId }: { siteId: string }) {
             published.
           </p>
         </div>
+
+        {/*
+          Two commands, and the difference is on the buttons rather than in a
+          tooltip: one fills blanks, the other replaces what you wrote.
+        */}
+        <div className={styles.seoActions}>
+          <button
+            type="button"
+            className={styles.seoGenerate}
+            disabled={!!working}
+            onClick={() => void generate("missing")}
+          >
+            {working ?? "Write the missing ones"}
+          </button>
+          {confirmAll ? (
+            <span className={styles.seoConfirm}>
+              <button
+                type="button"
+                className={styles.seoConfirmYes}
+                disabled={!!working}
+                onClick={() => void generate("all")}
+              >
+                Replace all
+              </button>
+              <button type="button" onClick={() => setConfirmAll(false)}>
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              className={styles.seoGenerateGhost}
+              disabled={!!working}
+              onClick={() => setConfirmAll(true)}
+              title="Rewrites every page, including anything you have typed"
+            >
+              Rewrite all pages…
+            </button>
+          )}
+        </div>
       </header>
 
       {error && <p className={styles.mediaError}>{error}</p>}
+      {note && <p className={styles.seoNote}>{note}</p>}
       {/* Not while an error is showing: "it failed" and "still loading" at once
           is two contradictory answers to the same question. */}
       {pages === null && !error && <p className={styles.mediaHint}>Loading your pages…</p>}

@@ -2026,3 +2026,48 @@
   font-size: 11.5px;
   color: var(--warn, #b42318);
 }
+
+.seoHead { display: flex; align-items: flex-start; gap: 16px; }
+.seoActions { flex: none; display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.seoGenerate {
+  flex: none;
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--ink, #131922);
+  color: #fff;
+  font: 600 12.5px/1 inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seoGenerate:disabled { opacity: 0.55; cursor: default; }
+.seoGenerateGhost {
+  flex: none;
+  appearance: none;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--card, #fff);
+  color: var(--ink-2, #4e5661);
+  font: 600 12.5px/1 inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seoGenerateGhost:hover:not(:disabled) { border-color: var(--ink, #131922); }
+.seoConfirm { flex: none; display: flex; gap: 5px; }
+.seoConfirm button {
+  appearance: none;
+  border: 1px solid var(--border, #e3e5e9);
+  background: var(--card, #fff);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: 600 12px/1 inherit;
+  cursor: pointer;
+}
+.seoConfirmYes {
+  border-color: var(--warn, #b42318) !important;
+  background: var(--warn, #b42318) !important;
+  color: #fff;
+}
+.seoNote { margin: 0 0 10px; font-size: 12.5px; color: var(--good, #1a7f4b); }

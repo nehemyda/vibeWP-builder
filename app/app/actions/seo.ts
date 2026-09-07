@@ -6,6 +6,12 @@ import { sitePages } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import { canEditSite } from "@/app/actions/sites";
 import { DESC_LIMIT, DESC_SHORT, TITLE_LIMIT, TITLE_SHORT } from "@/lib/seo/limits";
+import { loadBusinessContext } from "@/lib/ai/business-context";
+import { generateMetaWithGemini, type MetaSubject } from "@/lib/ai/generate-meta";
+import { getAiProviderSettings } from "@/lib/ai-provider-settings";
+import { textPaths } from "@/lib/design/text-map";
+import { getSectionByNodeType } from "@/lib/sections";
+import { isOptionField } from "@/lib/sections/types";
 
 /**
  * What search engines are told about each page.
@@ -155,3 +161,168 @@ export async function savePageSeoAction(opts: {
 
   return { ok: true };
 }
+
+
+/**
+ * The words on a page, in the order they appear, for the model to read.
+ *
+ * PER NODE, then joined. An earlier version merged every section's props into
+ * one object first, which meant later sections overwrote earlier ones by key —
+ * so the home page's excerpt began with a line from its contact section and
+ * most of the page was simply absent.
+ *
+ * Option fields are dropped. They are strings too, so "default" and "large"
+ * were being handed to the model as if they were copy.
+ */
+function pageExcerpt(schema: unknown): string {
+  const nodes = (schema as { nodes?: Array<{ type?: string; props?: Record<string, unknown> }> })
+    ?.nodes;
+  if (!Array.isArray(nodes)) return "";
+
+  const words: string[] = [];
+  for (const node of nodes) {
+    const def = getSectionByNodeType(node.type);
+    const copy: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(node.props ?? {})) {
+      const spec = def?.fields?.[key];
+      if (spec && isOptionField(spec)) continue;
+      copy[key] = value;
+    }
+    for (const found of textPaths(copy)) words.push(found.value);
+    if (words.join(" · ").length > 700) break;
+  }
+  return words.join(" · ").slice(0, 700);
+}
+
+export type GenerateScope = "missing" | "all";
+
+export type GenerateResult =
+  | { ok: true; written: number; skipped: number; message: string }
+  | { ok: false; message: string };
+
+/**
+ * Writes meta tags for the site's pages.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * "MISSING" AND "ALL" ARE GENUINELY DIFFERENT, AND THE DIFFERENCE IS THE POINT
+ *
+ * "missing" fills only what nobody has written. A field the client CLEARED is
+ * left alone — they cleared it deliberately, and that is why null and empty
+ * are stored differently.
+ *
+ * "all" overwrites, including what the client typed. Destructive, so the
+ * button says so; there is no undo on a meta description beyond retyping it.
+ *
+ * ONE CALL FOR THE WHOLE SET
+ *
+ * So the model can tell the pages apart. See generate-meta.ts — a title that
+ * differentiates is a property of the set, not of one page, and nine separate
+ * calls is how a site gets nine titles that all begin with the business name.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export async function generatePageMetaAction(opts: {
+  siteId: string;
+  scope: GenerateScope;
+}): Promise<GenerateResult> {
+  await assertAccess(opts.siteId);
+
+  const settings = await getAiProviderSettings();
+  if (settings.activeProvider !== "gemini" || !settings.geminiApiKey) {
+    return { ok: false, message: "No AI provider is configured, so I can't write these yet." };
+  }
+
+  const business = await loadBusinessContext(opts.siteId);
+  if (!business) {
+    return {
+      ok: false,
+      message: "This site has no business details yet — they are what the descriptions are written from.",
+    };
+  }
+
+  const rows = await db
+    .select({
+      id: sitePages.id,
+      slug: sitePages.slug,
+      title: sitePages.title,
+      schemaJson: sitePages.schemaJson,
+      metaTitle: sitePages.metaTitle,
+      metaDescription: sitePages.metaDescription,
+    })
+    .from(sitePages)
+    .where(eq(sitePages.siteId, opts.siteId));
+
+  /*
+   * Null means nobody wrote one; empty means someone cleared it. Only the
+   * first is "missing" — overwriting the second would undo a decision.
+   */
+  const needs = (r: (typeof rows)[number]) =>
+    r.metaTitle === null || r.metaDescription === null;
+
+  const subjects = (opts.scope === "all" ? rows : rows.filter(needs)).map(
+    (r): MetaSubject => ({
+      slug: r.slug,
+      name: r.title ?? r.slug,
+      /*
+       * The words actually on the page, so a description is written from the
+       * content rather than from the slug. "services" tells the model nothing;
+       * the headings under it say what the business does there.
+       */
+      excerpt: pageExcerpt(r.schemaJson),
+    }),
+  );
+
+  if (subjects.length === 0) {
+    return { ok: true, written: 0, skipped: rows.length, message: "Every page already has both." };
+  }
+
+  let written: MetaResultRow[];
+  try {
+    written = await generateMetaWithGemini(business, subjects, settings.geminiApiKey);
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? `That didn't work: ${err.message}` : "That didn't work.",
+    };
+  }
+
+  const bySlug = new Map(written.map((w) => [w.slug, w]));
+  let count = 0;
+  const now = new Date();
+
+  for (const row of rows) {
+    const result = bySlug.get(row.slug);
+    if (!result) continue;
+
+    /*
+     * Even under "all", a field is only written if this run produced something
+     * for it. A model that returned an empty description must not blank a good
+     * one the client already had.
+     */
+    const patch: Record<string, unknown> = { metaGeneratedAt: now };
+    if (result.title) {
+      if (opts.scope === "all" || row.metaTitle === null) patch.metaTitle = result.title;
+    }
+    if (result.description) {
+      if (opts.scope === "all" || row.metaDescription === null) patch.metaDescription = result.description;
+    }
+    if (Object.keys(patch).length === 1) continue;
+
+    await db
+      .update(sitePages)
+      .set(patch)
+      .where(and(eq(sitePages.id, row.id), eq(sitePages.siteId, opts.siteId)));
+    count += 1;
+  }
+
+  return {
+    ok: true,
+    written: count,
+    skipped: rows.length - count,
+    message:
+      count === 0
+        ? "Nothing was written — the model returned no usable copy."
+        : `Wrote meta tags for ${count} page${count === 1 ? "" : "s"}. Publish to apply them.`,
+  };
+}
+
+type MetaResultRow = { slug: string; title: string; description: string };
