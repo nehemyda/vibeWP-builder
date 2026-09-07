@@ -172,6 +172,16 @@ export const sitePages = pgTable("site_pages", {
   metaTitle: text("meta_title"),
   metaDescription: text("meta_description"),
   noIndex: boolean("no_index").notNull().default(false),
+  /**
+   * The phrase this page is meant to be found by.
+   *
+   * An intention rather than a fact, which is why it is stored: two people can
+   * reasonably target different phrases for one page, and the choice has to
+   * survive the next regeneration. See migrate-batch29.ts.
+   */
+  focusKeyword: text("focus_keyword"),
+  /** An override for WordPress's own canonical. Null means "core decides". */
+  canonicalUrl: text("canonical_url"),
   /** When the model last wrote these, so a client's own words can be spared. */
   metaGeneratedAt: timestamp("meta_generated_at", { withTimezone: true }),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),

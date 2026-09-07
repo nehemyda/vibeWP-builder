@@ -33,6 +33,7 @@ defined( 'ABSPATH' ) || exit;
 const VIBEWP_META_TITLE = '_vibewp_meta_title';
 const VIBEWP_META_DESC  = '_vibewp_meta_description';
 const VIBEWP_META_NOINDEX = '_vibewp_no_index';
+const VIBEWP_META_CANONICAL = '_vibewp_canonical';
 
 /**
  * The whole document title, when the page carries one.
@@ -65,6 +66,27 @@ function vibewp_meta_description() {
 	);
 }
 add_action( 'wp_head', 'vibewp_meta_description', 1 );
+
+/**
+ * A canonical URL the client has chosen.
+ *
+ * Through get_canonical_url rather than by printing a second link tag, so
+ * there is one canonical on the page instead of two that disagree — core
+ * already emits its own, and two conflicting canonicals is worse than a wrong
+ * one because a search engine picks for you.
+ *
+ * Absent means core decides, which is right almost always. This is the
+ * override for what core cannot know: the same content published elsewhere,
+ * or a campaign URL that should not compete with the page it copies.
+ */
+function vibewp_canonical( $url, $post ) {
+	$own = get_post_meta( $post->ID, VIBEWP_META_CANONICAL, true );
+	// Validated on the way in as well, but a stored value is still checked
+	// here: a malformed canonical is worse than none, and this is the last
+	// point before it reaches the page.
+	return ( $own && filter_var( $own, FILTER_VALIDATE_URL ) ) ? $own : $url;
+}
+add_filter( 'get_canonical_url', 'vibewp_canonical', 10, 2 );
 
 /**
  * Keeping a page out of search results.

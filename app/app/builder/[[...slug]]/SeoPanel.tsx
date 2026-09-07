@@ -88,13 +88,18 @@ export function SeoPanel({ siteId }: { siteId: string }) {
     setPages((prev) => prev?.map((p) => (p.id === page.id ? { ...p, ...patch } : p)) ?? prev);
     setSaving((prev) => new Set(prev).add(page.id));
     try {
-      await savePageSeoAction({
+      const result = await savePageSeoAction({
         siteId,
         pageId: page.id,
         metaTitle: patch.metaTitle ?? undefined,
         metaDescription: patch.metaDescription ?? undefined,
+        focusKeyword: patch.focusKeyword ?? undefined,
+        canonicalUrl: patch.canonicalUrl ?? undefined,
         noIndex: patch.noIndex,
       });
+      // A refusal is shown rather than swallowed: a canonical the server
+      // would not store must not look saved.
+      if (!result.ok && result.message) setError(result.message);
       /*
        * Re-read afterwards, because the warnings are computed across the whole
        * site: fixing a duplicate title on this page also clears the warning on
@@ -220,6 +225,19 @@ export function SeoPanel({ siteId }: { siteId: string }) {
                   {saving.has(page.id) && <span className={styles.seoBadge}>Saving…</span>}
                 </div>
 
+                {/*
+                  The keyword comes FIRST, because it is what the two fields
+                  below are written for. Read the other way round it looks like
+                  a tag you add afterwards.
+                */}
+                <Field
+                  key={`kw:${page.focusKeyword ?? ""}`}
+                  label="Focus keyword"
+                  limit={60}
+                  value={page.focusKeyword ?? ""}
+                  placeholder="e.g. celebration cakes bath"
+                  onCommit={(v) => void save(page, { focusKeyword: v })}
+                />
                 <Field
                   key={`title:${page.metaTitle ?? ""}`}
                   label="Title"
@@ -236,6 +254,15 @@ export function SeoPanel({ siteId }: { siteId: string }) {
                   value={page.metaDescription ?? ""}
                   placeholder="One sentence a person would click on."
                   onCommit={(v) => void save(page, { metaDescription: v })}
+                />
+
+                <Field
+                  key={`canon:${page.canonicalUrl ?? ""}`}
+                  label="Canonical URL"
+                  limit={500}
+                  value={page.canonicalUrl ?? ""}
+                  placeholder="Leave empty unless this page copies another URL"
+                  onCommit={(v) => void save(page, { canonicalUrl: v })}
                 />
 
                 <label className={styles.seoNoIndex}>

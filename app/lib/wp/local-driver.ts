@@ -346,6 +346,7 @@ function metaScript(path: string | null): string {
       "_vibewp_meta_title"       => $meta["title"] ?? null,
       "_vibewp_meta_description" => $meta["description"] ?? null,
       "_vibewp_no_index"         => !empty($meta["noIndex"]) ? "1" : null,
+      "_vibewp_canonical"        => $meta["canonical"] ?? null,
     ] as $key => $value) {
       if ($value === null || $value === "") { delete_post_meta($id, $key); }
       else { update_post_meta($id, $key, $value); }
@@ -376,6 +377,7 @@ export async function upsertPage(opts: {
     title?: string | null;
     description?: string | null;
     noIndex?: boolean;
+    canonical?: string | null;
   };
 }): Promise<{ postId: number; url: string }> {
   const { installPath, slug, title, blockMarkup, asFrontPage, meta } = opts;

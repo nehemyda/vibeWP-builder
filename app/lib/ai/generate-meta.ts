@@ -41,9 +41,31 @@ export type MetaSubject = {
   name: string;
   /** The visible words on the page, already flattened and truncated. */
   excerpt: string;
+  /**
+   * The keyword the client has already chosen, if any.
+   *
+   * Present means it is a constraint, not a suggestion — the model is told to
+   * write to it rather than pick its own. That is the difference between a
+   * field the client owns and a field the model overwrites.
+   */
+  focusKeyword?: string;
 };
 
-export type MetaResult = { slug: string; title: string; description: string };
+export type MetaResult = {
+  slug: string;
+  /**
+   * The phrase the page is being written to be found by.
+   *
+   * Chosen by the model from the page's own content unless the client has
+   * already set one, in which case theirs is passed in and the title and
+   * description are written around it. The keyword is not decoration: asking
+   * for a title without one produces a title about the page in general, and
+   * "in general" is not a thing anybody searches for.
+   */
+  focusKeyword: string;
+  title: string;
+  description: string;
+};
 
 export async function generateMetaWithGemini(
   business: BusinessContext,
@@ -65,11 +87,24 @@ given together on purpose: they must not repeat each other.
 ${pages
   .map(
     (p, i) =>
-      `${i + 1}. slug: "${p.slug}"\n   page name: ${p.name}\n   what is on it: ${p.excerpt || "(no copy yet)"}`,
+      `${i + 1}. slug: "${p.slug}"\n   page name: ${p.name}\n   what is on it: ${p.excerpt || "(no copy yet)"}` +
+      (p.focusKeyword
+        ? `\n   FOCUS KEYWORD (chosen by the owner — use this, do not replace it): ${p.focusKeyword}`
+        : ""),
   )
   .join("\n\n")}
 
+For each page, first decide its FOCUS KEYWORD: the one phrase a customer would
+type into Google to find that page. Read it off what is actually on the page —
+the service it describes, the town it serves — not off the slug. Two to five
+words, lower case, no punctuation. Where a focus keyword is already given
+above, keep it exactly and write to it.
+
+Then write the title and description AROUND that keyword.
+
 Rules:
+- The focus keyword must appear in the title, and in the description, reading
+  naturally. If it cannot be made to read naturally, choose a better keyword.
 - Each title at most ${TITLE_LIMIT} characters. Each description at most ${DESC_LIMIT}.
 - Every title must be DIFFERENT from every other, and so must every description.
 - Do not begin every title with the business name. Use it where it helps a
@@ -81,7 +116,7 @@ Rules:
 - Use British English if the business is in the UK.
 
 Return ONLY a JSON object of the form:
-{"pages":[{"slug":"home","title":"…","description":"…"}]}
+{"pages":[{"slug":"home","focusKeyword":"…","title":"…","description":"…"}]}
 with one entry per page, using exactly the slugs given.`,
     config: { responseMimeType: "application/json" },
   });
@@ -101,6 +136,7 @@ with one entry per page, using exactly the slugs given.`,
       const r = row as Partial<MetaResult>;
       return (
         typeof r.slug === "string" &&
+        typeof r.focusKeyword === "string" &&
         typeof r.title === "string" &&
         typeof r.description === "string" &&
         // A slug nobody asked about would write meta onto the wrong page, or
@@ -110,6 +146,7 @@ with one entry per page, using exactly the slugs given.`,
     })
     .map((row) => ({
       slug: row.slug,
+      focusKeyword: row.focusKeyword.trim().toLowerCase(),
       title: row.title.trim(),
       description: row.description.trim(),
     }));

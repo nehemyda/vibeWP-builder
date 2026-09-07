@@ -37,12 +37,44 @@ import { isOptionField } from "@/lib/sections/types";
  * ─────────────────────────────────────────────────────────────────────
  */
 
+/**
+ * Whether a field covers a focus keyword.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY EVERY WORD, AND NOT THE EXACT PHRASE
+ *
+ * Checked as an exact substring first, and the measurement is what changed
+ * it. Across four generated pages the keyword landed in 4 of 4 titles and 1
+ * of 4 descriptions — and the one that passed did so because its keyword was
+ * itself clumsy ("contact sunrise bakery bath"). The three that "failed" said
+ * things like "bespoke wedding cakes … in Bath", which is better English than
+ * "offers wedding cakes bath" would ever be.
+ *
+ * So an exact-phrase rule does not measure relevance; it measures how willing
+ * someone is to write badly. A warning that nags a client into stilted copy is
+ * worse than no warning, because they will obey it.
+ *
+ * Every word present, in any order, catches the thing actually worth catching:
+ * a description that is not about the keyword at all.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+function covers(text: string, keyword: string): boolean {
+  const haystack = text.toLowerCase();
+  return keyword
+    .split(/\s+/)
+    // Two letters or fewer is "in", "of", "a" — noise either way.
+    .filter((word) => word.length > 2)
+    .every((word) => haystack.includes(word));
+}
+
 export type PageSeo = {
   id: string;
   slug: string;
   title: string;
   metaTitle: string | null;
   metaDescription: string | null;
+  focusKeyword: string | null;
+  canonicalUrl: string | null;
   noIndex: boolean;
   generated: boolean;
   /** Why this page wants attention, if it does. Empty when it is fine. */
@@ -71,6 +103,8 @@ export async function listPageSeoAction(siteId: string): Promise<PageSeo[]> {
       title: sitePages.title,
       metaTitle: sitePages.metaTitle,
       metaDescription: sitePages.metaDescription,
+      focusKeyword: sitePages.focusKeyword,
+      canonicalUrl: sitePages.canonicalUrl,
       noIndex: sitePages.noIndex,
       metaGeneratedAt: sitePages.metaGeneratedAt,
     })
@@ -84,11 +118,18 @@ export async function listPageSeoAction(siteId: string): Promise<PageSeo[]> {
    */
   const titleCounts = new Map<string, number>();
   const descCounts = new Map<string, number>();
+  /*
+   * Two pages targeting one phrase is the fault worth catching most: they
+   * compete with each other and the site loses to itself.
+   */
+  const keywordCounts = new Map<string, number>();
   for (const row of rows) {
     const t = row.metaTitle?.trim();
     const d = row.metaDescription?.trim();
+    const k = row.focusKeyword?.trim().toLowerCase();
     if (t) titleCounts.set(t, (titleCounts.get(t) ?? 0) + 1);
     if (d) descCounts.set(d, (descCounts.get(d) ?? 0) + 1);
+    if (k) keywordCounts.set(k, (keywordCounts.get(k) ?? 0) + 1);
   }
 
   return rows
@@ -104,12 +145,37 @@ export async function listPageSeoAction(siteId: string): Promise<PageSeo[]> {
       if (t && (titleCounts.get(t) ?? 0) > 1) warnings.push("Another page has the same title");
       if (d && (descCounts.get(d) ?? 0) > 1) warnings.push("Another page has the same description");
 
+      /*
+       * The focus keyword is only useful if the words it names are actually
+       * in what a search engine reads. A keyword nobody wrote to is a note to
+       * self, and this is the check that turns it into a control.
+       */
+      const k = row.focusKeyword?.trim().toLowerCase();
+      if (k) {
+        if (t && !covers(t, k)) warnings.push(`"${k}" isn't in the title`);
+        if (d && !covers(d, k)) warnings.push(`"${k}" isn't in the description`);
+        if ((keywordCounts.get(k) ?? 0) > 1) {
+          warnings.push(`Another page targets "${k}" — they will compete`);
+        }
+      }
+
+      /*
+       * A canonical pointing somewhere else tells search engines not to index
+       * this page at all. Legitimate, and much too quiet to leave unsaid.
+       */
+      const canon = row.canonicalUrl?.trim();
+      if (canon && !/^https?:\/\//i.test(canon)) {
+        warnings.push("The canonical URL needs to start with http:// or https://");
+      }
+
       return {
         id: row.id,
         slug: row.slug,
         title: row.title ?? row.slug,
         metaTitle: row.metaTitle,
         metaDescription: row.metaDescription,
+        focusKeyword: row.focusKeyword,
+        canonicalUrl: row.canonicalUrl,
         noIndex: row.noIndex,
         generated: !!row.metaGeneratedAt,
         warnings,
@@ -136,8 +202,10 @@ export async function savePageSeoAction(opts: {
   pageId: string;
   metaTitle?: string;
   metaDescription?: string;
+  focusKeyword?: string;
+  canonicalUrl?: string;
   noIndex?: boolean;
-}): Promise<{ ok: boolean }> {
+}): Promise<{ ok: boolean; message?: string }> {
   await assertAccess(opts.siteId);
 
   const patch: Record<string, unknown> = {};
@@ -148,6 +216,18 @@ export async function savePageSeoAction(opts: {
   if (opts.metaDescription !== undefined) {
     patch.metaDescription = opts.metaDescription.trim().slice(0, 600);
     patch.metaGeneratedAt = null;
+  }
+  if (opts.focusKeyword !== undefined) {
+    // Lower-cased, because the checks compare against it and "Boiler Repair"
+    // matching "boiler repair" is not something to make the client think about.
+    patch.focusKeyword = opts.focusKeyword.trim().toLowerCase().slice(0, 120) || null;
+  }
+  if (opts.canonicalUrl !== undefined) {
+    const url = opts.canonicalUrl.trim();
+    if (url && !/^https?:\/\//i.test(url)) {
+      return { ok: false, message: "A canonical URL has to start with http:// or https://" };
+    }
+    patch.canonicalUrl = url.slice(0, 500) || null;
   }
   if (opts.noIndex !== undefined) patch.noIndex = opts.noIndex;
   if (Object.keys(patch).length === 0) return { ok: true };
@@ -247,6 +327,7 @@ export async function generatePageMetaAction(opts: {
       schemaJson: sitePages.schemaJson,
       metaTitle: sitePages.metaTitle,
       metaDescription: sitePages.metaDescription,
+      focusKeyword: sitePages.focusKeyword,
     })
     .from(sitePages)
     .where(eq(sitePages.siteId, opts.siteId));
@@ -268,6 +349,12 @@ export async function generatePageMetaAction(opts: {
        * the headings under it say what the business does there.
        */
       excerpt: pageExcerpt(r.schemaJson),
+      /*
+       * A keyword the client set is a constraint. Passed in so the model
+       * writes to it rather than picking its own — and never overwritten
+       * below, whichever scope was chosen.
+       */
+      focusKeyword: r.focusKeyword ?? undefined,
     }),
   );
 
@@ -299,6 +386,12 @@ export async function generatePageMetaAction(opts: {
      * one the client already had.
      */
     const patch: Record<string, unknown> = { metaGeneratedAt: now };
+    /*
+     * The keyword is filled in when absent and left alone when present, under
+     * BOTH scopes. "Rewrite all" replaces the copy, not the target it was
+     * written for — that is the client's decision about the page.
+     */
+    if (result.focusKeyword && !row.focusKeyword) patch.focusKeyword = result.focusKeyword;
     if (result.title) {
       if (opts.scope === "all" || row.metaTitle === null) patch.metaTitle = result.title;
     }
@@ -325,4 +418,9 @@ export async function generatePageMetaAction(opts: {
   };
 }
 
-type MetaResultRow = { slug: string; title: string; description: string };
+type MetaResultRow = {
+  slug: string;
+  focusKeyword: string;
+  title: string;
+  description: string;
+};

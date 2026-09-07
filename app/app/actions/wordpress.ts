@@ -440,6 +440,7 @@ export async function exportToWordPressAction(
           title: page.metaTitle,
           description: page.metaDescription,
           noIndex: page.noIndex,
+          canonical: page.canonicalUrl,
         },
       });
       if (isHome || !frontPageUrl) frontPageUrl = pushed.url;
