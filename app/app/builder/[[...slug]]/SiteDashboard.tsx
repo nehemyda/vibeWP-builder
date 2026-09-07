@@ -34,12 +34,17 @@ import styles from "./builder.module.css";
  * ─────────────────────────────────────────────────────────────────────
  */
 
-export type DashboardTab = "style" | "images" | "seo";
+export type DashboardTab = "style" | "images" | "seo" | "alt";
 
 export const DASHBOARD_TABS: Array<{ key: DashboardTab; label: string; hint: string }> = [
   { key: "style", label: "Style", hint: "Type, spacing, corners and colour for the whole site" },
   { key: "images", label: "Images", hint: "Everything you have uploaded" },
   { key: "seo", label: "SEO", hint: "Titles and descriptions for each page" },
+  {
+    key: "alt",
+    label: "Image descriptions",
+    hint: "What a screen reader says in place of each picture",
+  },
 ];
 
 export function SiteDashboard({

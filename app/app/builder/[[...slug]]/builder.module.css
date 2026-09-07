@@ -2071,3 +2071,34 @@
   color: #fff;
 }
 .seoNote { margin: 0 0 10px; font-size: 12.5px; color: var(--good, #1a7f4b); }
+
+/* ── Image descriptions ─────────────────────────────────────────────── */
+
+.altList { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+
+.altRow {
+  flex: none;
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 10px;
+  background: var(--card, #fff);
+}
+
+/*
+ * The picture, at a size you can actually judge. A 40px thumbnail is a colour
+ * swatch — you cannot describe what you cannot make out, and the whole point
+ * of this screen is writing from the photograph rather than the filename.
+ */
+.altThumb {
+  flex: none;
+  width: 116px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 7px;
+  background: var(--bg, #f2f3f5);
+}
+
+.altFields { flex: 1 1 auto; min-width: 0; display: grid; gap: 5px; align-content: center; }
+.altWhere { font-size: 11.5px; color: var(--muted, #757b83); }

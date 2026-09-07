@@ -1,6 +1,7 @@
 "use client";
 
 import { SeoPanel } from "@/app/builder/[[...slug]]/SeoPanel";
+import { AltPanel } from "@/app/builder/[[...slug]]/AltPanel";
 import {
   SiteDashboard,
   type DashboardTab,
@@ -74,7 +75,9 @@ export function CanvasHarness() {
    */
   const [dashTab, setDashTab] = useState<DashboardTab | null>(() => {
     const wanted = params.get("panel");
-    return wanted === "style" || wanted === "images" || wanted === "seo" ? wanted : null;
+    return wanted === "style" || wanted === "images" || wanted === "seo" || wanted === "alt"
+      ? wanted
+      : null;
   });
   const [styleFor, setStyleFor] = useState<CanvasSelection | null>(null);
   /** Per-section settings, keyed by index — the harness's stand-in for props. */
@@ -298,6 +301,7 @@ export function CanvasHarness() {
             table needs a real login.
           */}
           {dashTab === "seo" && <SeoPanel siteId="00000000-0000-0000-0000-000000000000" />}
+          {dashTab === "alt" && <AltPanel siteId="00000000-0000-0000-0000-000000000000" />}
         </SiteDashboard>
       )}
 

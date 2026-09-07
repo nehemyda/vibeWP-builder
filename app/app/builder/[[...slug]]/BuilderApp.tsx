@@ -32,6 +32,7 @@ import { setSectionImageAction } from "@/app/actions/edit";
 import { MediaPanel } from "./MediaPanel";
 import { SiteDashboard, type DashboardTab } from "./SiteDashboard";
 import { SeoPanel } from "./SeoPanel";
+import { AltPanel } from "./AltPanel";
 import { SCREENS, fieldFor as hideField } from "@/lib/design/part-visibility";
 import { widthFieldFor } from "@/lib/design/part-size";
 import { PART_ORDER_FIELD } from "@/lib/design/part-order";
@@ -414,7 +415,9 @@ export function BuilderApp({
   const [dashTab, setDashTab] = useState<DashboardTab | null>(() => {
     if (typeof window === "undefined") return null;
     const wanted = new URLSearchParams(window.location.search).get("panel");
-    return wanted === "style" || wanted === "images" || wanted === "seo" ? wanted : null;
+    return wanted === "style" || wanted === "images" || wanted === "seo" || wanted === "alt"
+      ? wanted
+      : null;
   });
 
   /*
@@ -2098,6 +2101,7 @@ export function BuilderApp({
               />
             )}
             {dashTab === "seo" && <SeoPanel siteId={siteId} />}
+            {dashTab === "alt" && <AltPanel siteId={siteId} />}
           </SiteDashboard>
         )}
 
