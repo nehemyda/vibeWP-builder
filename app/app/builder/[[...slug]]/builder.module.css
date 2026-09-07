@@ -2207,17 +2207,68 @@
   color: var(--muted, #757b83);
 }
 
-.imageRemove {
-  justify-self: start;
+/*
+ * Delete, on the picture's top-right corner.
+ *
+ * It was a "Remove from library" text link at the foot of the card, under two
+ * text fields — so on a four-across grid the most destructive control on the
+ * screen sat in the position of a caption, and it only appeared on some cards.
+ * The corner of the thumbnail is where a media manager puts this, and it puts
+ * it on every card.
+ */
+/*
+ * grid, not block.
+ *
+ * The thumbnail button used to be a direct child of .imageCard, which is a
+ * grid, so it stretched to the card's width. Wrapping it in a block span made
+ * it shrink to its content while the wrapper stayed full width — so the chip,
+ * which anchors to the wrapper, sat in the white gutter to the RIGHT of the
+ * picture instead of on it. Only visible by looking at it.
+ */
+.imageThumbWrap { position: relative; display: grid; min-width: 0; }
+
+.imageDelete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
   appearance: none;
-  border: 0;
-  background: none;
-  padding: 2px 0;
-  font: 600 11px/1 inherit;
-  color: var(--muted, #9aa0aa);
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 7px;
+  /*
+   * A dark scrim AND a light edge, because it sits on an unknown photograph.
+   *
+   * The scrim alone was not enough, which I found by rendering it over a
+   * near-white gradient and a near-black one rather than over one convenient
+   * photo: the white bin read fine on the pale card and the whole chip sank
+   * into the dark one — visible, but no longer reading as a button. The
+   * translucent white border gives it an edge on a dark picture; the dark fill
+   * gives the icon contrast on a light one. Neither works alone.
+   *
+   * The same lesson as the section menu's ⋯, which shipped at #d7dae0 and
+   * could not be seen. A control over arbitrary content needs contrast in both
+   * directions.
+   */
+  border: 1px solid rgb(255 255 255 / 0.55);
+  background: rgb(12 14 17 / 0.62);
+  color: #fff;
   cursor: pointer;
+  /* Above the thumbnail's own hover outline. */
+  z-index: 1;
 }
-.imageRemove:hover { color: var(--bad, #b42318); }
+.imageDelete svg { width: 15px; height: 15px; display: block; }
+.imageDelete:hover:not(:disabled) {
+  background: var(--bad, #b42318);
+  border-color: var(--bad, #b42318);
+}
+.imageDelete:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -4px;
+}
+.imageDelete:disabled { opacity: 0.45; cursor: default; }
 
 /*
  * The lightbox. Inside the dashboard rather than a second dialog, because it

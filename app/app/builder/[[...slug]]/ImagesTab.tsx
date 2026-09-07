@@ -9,6 +9,7 @@ import {
   type MediaAsset,
 } from "@/app/actions/media";
 import {
+  clearImagePlacementAction,
   generateImageAltAction,
   generateOneImageMetaAction,
   listImageAltAction,
@@ -16,7 +17,7 @@ import {
   type ImagePlacement,
   type OneTarget,
 } from "@/app/actions/image-alt";
-import { DeleteImageDialog } from "./DeleteImageDialog";
+import { DeleteImageDialog, type DeleteTarget } from "./DeleteImageDialog";
 import styles from "./builder.module.css";
 
 /**
@@ -94,16 +95,17 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
    */
   const [filter, setFilter] = useState<"missing" | "all" | null>(null);
   /*
-   * The picture awaiting a delete confirmation, with the places that use it.
+   * The picture awaiting a delete confirmation, and what deleting it means.
    *
-   * The usage list is computed when the dialog opens rather than asked for
-   * then: the placements are already loaded, and a dialog that has to fetch
-   * before it can tell you what you are about to do is a dialog people click
-   * through.
+   * Everything the dialog needs is computed when it opens rather than fetched
+   * then: the placements and the library are both already loaded, and a
+   * dialog that has to go to the server before it can say what you are about
+   * to do is a dialog people click through.
    */
-  const [deleting, setDeleting] = useState<{ asset: MediaAsset; used: ImagePlacement[] } | null>(
-    null,
-  );
+  const [deleting, setDeleting] = useState<
+    | { target: DeleteTarget; run: () => Promise<{ ok: boolean; message?: string }>; label: string }
+    | null
+  >(null);
   const [removing, setRemoving] = useState(false);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const menuRef = useRef<HTMLSpanElement | null>(null);
@@ -223,6 +225,9 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
   /*
    * Confirmed removal.
    *
+   * The dialog carries its own action, so this does not have to know which of
+   * the two kinds it is running — and cannot get them the wrong way round.
+   *
    * Awaited, unlike the fire-and-forget it replaces: that removed the card
    * from the screen and then dropped any failure on the floor, so a delete
    * the server refused looked exactly like one it accepted until the next
@@ -230,25 +235,55 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
    */
   const confirmDelete = async () => {
     if (!deleting) return;
-    const { asset } = deleting;
+    const { run, label } = deleting;
     setRemoving(true);
     setError(null);
     try {
-      await deleteMediaAction({ siteId, assetId: asset.id });
+      const result = await run();
       setDeleting(null);
-      setNote(
-        `Removed “${asset.filename}” from your library.` +
-          (deleting.used.length
-            ? ` It is still on ${deleting.used.length === 1 ? "the page" : `${deleting.used.length} pages`} that use it.`
-            : ""),
-      );
+      if (result.ok) setNote(label);
+      else setError(result.message ?? "That didn't work. Nothing was changed.");
       await load();
     } catch {
-      setError(`I couldn't remove “${asset.filename}”. It is still in your library.`);
+      setError("That didn't work. Nothing was changed.");
       setDeleting(null);
     } finally {
       setRemoving(false);
     }
+  };
+
+  /*
+   * What the delete icon on this card does.
+   *
+   * ONE rule: it removes the picture from where the card's own subtitle says
+   * it is. A placement card is a photograph on a page, so it comes off that
+   * page; a library card is a file, so it leaves the library. Deciding it here
+   * rather than at the button keeps the choice, the confirmation copy and the
+   * action that runs in one place — three things that must agree.
+   */
+  const deleteFor = (row: Row, libraryFile: MediaAsset | undefined) => {
+    if (row.kind === "placed") {
+      const p = row.placement;
+      return {
+        target: {
+          kind: "placement" as const,
+          url: p.url,
+          where: `${p.sectionName} · ${p.pageTitle}`,
+          alsoInLibrary: Boolean(libraryFile),
+        },
+        run: () => clearImagePlacementAction({ siteId, pageId: p.pageId, path: p.path }),
+        label: `Took the picture off the ${p.sectionName} on ${p.pageTitle}. Publish to apply it.`,
+      };
+    }
+    return {
+      target: {
+        kind: "library" as const,
+        asset: row.asset,
+        used: (placements ?? []).filter((x) => x.url === row.asset.url),
+      },
+      run: () => deleteMediaAction({ siteId, assetId: row.asset.id }),
+      label: `Removed “${row.asset.filename}” from your library.`,
+    };
   };
 
   /* Placed first — those are the ones that ship — then the rest of the library. */
@@ -511,15 +546,59 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
 
             return (
               <li key={row.key} className={styles.imageCard}>
-                <button
-                  type="button"
-                  className={styles.imageThumbBtn}
-                  title="View the full picture"
-                  onClick={() => setViewing({ url, label: where })}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" loading="lazy" />
-                </button>
+                {/*
+                  The thumbnail and the delete icon share a wrapper so the icon
+                  anchors to the PICTURE rather than to the card's padding box.
+                  Positioning it against the card meant guessing an offset that
+                  a change to the padding would silently break.
+                */}
+                <span className={styles.imageThumbWrap}>
+                  <button
+                    type="button"
+                    className={styles.imageThumbBtn}
+                    title="View the full picture"
+                    onClick={() => setViewing({ url, label: where })}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt="" loading="lazy" />
+                  </button>
+
+                  {/*
+                    On EVERY card, because the grid is one list and a control
+                    that appears on some of them reads as broken. What it
+                    removes depends on what the card is, and the dialog says
+                    which — see DeleteImageDialog.
+
+                    Always visible, never hover-only: the section menu's ⋯
+                    shipped faint and the report was that it could not be
+                    seen. A control behind a hover is the same fault with an
+                    extra step, and on a touch screen there is no hover at all.
+                  */}
+                  <button
+                    type="button"
+                    className={styles.imageDelete}
+                    disabled={busy || removing}
+                    aria-label={
+                      row.kind === "placed"
+                        ? `Take this picture off ${where}`
+                        : "Remove this picture from your library"
+                    }
+                    title={row.kind === "placed" ? "Take off the page" : "Remove from library"}
+                    onClick={() => setDeleting(deleteFor(row, libraryFile))}
+                  >
+                    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                      {/* A bin: lid, body, two staves. Drawn rather than a
+                          glyph, so it cannot land on a font that lacks it. */}
+                      <path
+                        d="M6.5 2.5h3M3 4.5h10M4.5 4.5l.6 8.2a1 1 0 0 0 1 .8h3.8a1 1 0 0 0 1-.8l.6-8.2M7 7v4M9 7v4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </button>
+                </span>
 
                 <span className={styles.imageWhere}>{where}</span>
 
@@ -544,27 +623,6 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
                   generateHint="Name this from the picture"
                 />
 
-                {/*
-                  Shown for any card backed by a library file, placed or not.
-                  A placed card with no library file behind it is a stock
-                  photograph that was never uploaded — there is nothing to
-                  remove, so no button.
-                */}
-                {libraryFile && (
-                  <button
-                    type="button"
-                    className={styles.imageRemove}
-                    disabled={busy || removing}
-                    onClick={() =>
-                      setDeleting({
-                        asset: libraryFile,
-                        used: (placements ?? []).filter((p) => p.url === libraryFile.url),
-                      })
-                    }
-                  >
-                    Remove from library
-                  </button>
-                )}
               </li>
             );
           })}
@@ -573,8 +631,7 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
 
       {deleting && (
         <DeleteImageDialog
-          asset={deleting.asset}
-          used={deleting.used}
+          target={deleting.target}
           removing={removing}
           onKeep={() => setDeleting(null)}
           onRemove={() => void confirmDelete()}

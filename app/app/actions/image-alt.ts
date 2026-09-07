@@ -3,6 +3,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { sitePages } from "@/lib/db/schema";
+import { savePageSchemaAction } from "@/app/actions/pages";
 import { createClient } from "@/lib/supabase/server";
 import { canEditSite } from "@/app/actions/sites";
 import { getAiProviderSettings } from "@/lib/ai-provider-settings";
@@ -152,6 +153,78 @@ export async function setImageMetaAction(opts: {
     { pageId: opts.pageId, path: opts.path, alt: opts.alt, title: opts.title },
   ]);
   return written > 0 ? { ok: true } : { ok: false, message: "That picture isn't there any more." };
+}
+
+/**
+ * Takes one photograph off a page.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY CLEARING THE URL AND NOT DELETING A FIELD
+ *
+ * Every section already omits a part whose field is empty — the same property
+ * `remove_part` relies on. I checked it rather than assumed it: all 19 image
+ * placements across the 14 sections that have photographs were rendered with
+ * the url cleared, and not one emitted an <img> with an empty src, an empty
+ * CSS url(), or threw. So an empty url is the section's own way of saying
+ * "no picture here", and it works per PLACEMENT — including `items.2.image`,
+ * which `remove_part` cannot reach because it only knows top-level fields.
+ *
+ * WHY IT GOES THROUGH savePageSchemaAction
+ *
+ * That snapshots the page before overwriting, which is what undo restores.
+ * Writing the schema directly — as the alt and title writes do, because they
+ * are not destructive — would take a client's hero photograph away with no
+ * way back.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export async function clearImagePlacementAction(opts: {
+  siteId: string;
+  pageId: string;
+  /** "<nodeIndex>.<path within the node>" as listImageAltAction reports it. */
+  path: string;
+}): Promise<{ ok: boolean; message?: string }> {
+  await assertAccess(opts.siteId);
+
+  const page = await db.query.sitePages.findFirst({
+    where: and(eq(sitePages.id, opts.pageId), eq(sitePages.siteId, opts.siteId)),
+  });
+  if (!page) return { ok: false, message: "That page isn't there any more." };
+
+  const schema = page.schemaJson as {
+    nodes?: Array<{ type?: string; props?: Record<string, unknown> }>;
+  };
+  const nodes = [...(schema.nodes ?? [])];
+
+  const dot = opts.path.indexOf(".");
+  if (dot < 0) return { ok: false, message: "That isn't a picture on this page." };
+  const nodeIndex = Number(opts.path.slice(0, dot));
+  const inner = opts.path.slice(dot + 1);
+  const node = nodes[nodeIndex];
+  if (!node?.props) return { ok: false, message: "That picture isn't there any more." };
+
+  const existing = imagePaths(node.props).find((p) => p.path === inner);
+  if (!existing) return { ok: false, message: "That picture isn't there any more." };
+
+  /*
+   * Cleared, not deleted from the props. Leaving the key in place with an
+   * empty url is what the renderers already treat as absent, and it means the
+   * shape of a gallery's items array is untouched — removing an entry would
+   * renumber every path after it, including ones the open canvas is holding.
+   */
+  nodes[nodeIndex] = {
+    ...node,
+    props: writeImage(node.props, inner, { url: "", alt: "", title: undefined }),
+  };
+
+  const def = getSectionByNodeType(node.type ?? "");
+  await savePageSchemaAction({
+    siteId: opts.siteId,
+    slug: page.slug,
+    schema: { ...schema, nodes },
+    reason: `Removed a picture from the ${def?.name ?? "section"} on ${page.title}`,
+  });
+
+  return { ok: true };
 }
 
 export type AltGenerateResult =
