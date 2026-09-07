@@ -85,42 +85,67 @@ export function mountPartChip(doc: Document): HTMLElement {
 #${CHIP_ID}[data-open="1"] { display: block; }
 #${CHIP_ID} .vpc-bar {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 4px 3px 8px;
-  border-radius: 6px;
+  align-items: stretch;
+  border-radius: 7px;
   background: #17181c;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.22);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.28);
   white-space: nowrap;
+  overflow: hidden;
 }
+/*
+ * The grip is the drag target and it says so: the cursor changes on it and
+ * nowhere else, so "this can be moved" is discoverable without a tooltip.
+ */
+#${CHIP_ID} .vpc-grip {
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  color: #9aa0aa;
+  font-size: 12px;
+  line-height: 1;
+  cursor: grab;
+}
+#${CHIP_ID} .vpc-grip:hover { color: #fff; background: rgb(255 255 255 / 0.1); }
+#${CHIP_ID}[data-dragging="1"] .vpc-grip { cursor: grabbing; }
 #${CHIP_ID} .vpc-name {
+  display: grid;
+  place-items: center;
+  padding: 5px 8px 5px 3px;
   color: #fff;
-  font: 700 10px/1.5 inherit;
+  font: 700 10px/1.4 inherit;
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
+/*
+ * The dots were #d7dae0 at 13px with no edge, and the report was that they
+ * could not be seen. Now white, larger, and behind a rule so they read as a
+ * button rather than as punctuation after the label.
+ */
 #${CHIP_ID} .vpc-more {
   all: unset;
   box-sizing: border-box;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 18px;
-  border-radius: 4px;
-  color: #d7dae0;
-  font-size: 13px;
+  min-width: 26px;
+  padding: 0 3px 4px;
+  border-left: 1px solid rgb(255 255 255 / 0.22);
+  background: rgb(255 255 255 / 0.08);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
   line-height: 1;
   cursor: pointer;
 }
-#${CHIP_ID} .vpc-more:hover { background: rgb(255 255 255 / 0.16); color: #fff; }`;
+#${CHIP_ID} .vpc-more:hover { background: rgb(255 255 255 / 0.24); }`;
   doc.head.appendChild(style);
 
   const host = doc.createElement("div");
   host.id = CHIP_ID;
   host.innerHTML =
     `<div class="vpc-bar">` +
+    `<span class="vpc-grip" data-chip-grip title="Drag to move this part">⠿</span>` +
     `<span class="vpc-name"></span>` +
-    `<button type="button" class="vpc-more" data-chip-more aria-label="Part actions" title="Move, hide or delete this part">⋯</button>` +
+    `<button type="button" class="vpc-more" data-chip-more aria-label="Part actions" title="Hide, delete or replace this part">⋯</button>` +
     `</div>`;
   doc.body.appendChild(host);
   return host;
@@ -148,6 +173,62 @@ export function hidePartChip(doc: Document): void {
 }
 
 export const PART_CHIP_ID = CHIP_ID;
+
+const LINE_ID = "vibewp-part-dropline";
+export const PART_LINE_ID = LINE_ID;
+
+/**
+ * The line showing where a dragged part will land.
+ *
+ * Drawn BETWEEN parts rather than around one: "it will go here" is a
+ * position, and outlining a neighbour would say "it will replace this".
+ */
+export function mountDropLine(doc: Document): HTMLElement {
+  const existing = doc.getElementById(LINE_ID);
+  if (existing) return existing as HTMLElement;
+
+  const style = doc.createElement("style");
+  style.id = LINE_ID + "-style";
+  style.textContent = [
+    "#" + LINE_ID + " {",
+    "  all: initial;",
+    "  position: absolute;",
+    "  z-index: 2147483080;",
+    "  display: none;",
+    "  height: 3px;",
+    "  border-radius: 2px;",
+    "  background: #5b6bff;",
+    "  box-shadow: 0 0 0 3px rgb(91 107 255 / 0.22);",
+    /* Never a drop target itself, or it would block the part underneath. */
+    "  pointer-events: none;",
+    "}",
+    "#" + LINE_ID + '[data-open="1"] { display: block; }',
+  ].join("\n");
+  doc.head.appendChild(style);
+
+  const host = doc.createElement("div");
+  host.id = LINE_ID;
+  doc.body.appendChild(host);
+  return host;
+}
+
+export function showDropLine(
+  host: HTMLElement,
+  rect: DOMRect,
+  atTop: boolean,
+  doc: Document,
+): void {
+  const scrollX = doc.defaultView?.scrollX ?? 0;
+  const scrollY = doc.defaultView?.scrollY ?? 0;
+  host.setAttribute("data-open", "1");
+  host.style.left = Math.round(rect.left + scrollX) + "px";
+  host.style.width = Math.round(rect.width) + "px";
+  host.style.top = Math.round((atTop ? rect.top - 2 : rect.bottom - 1) + scrollY) + "px";
+}
+
+export function hideDropLine(doc: Document): void {
+  doc.getElementById(LINE_ID)?.setAttribute("data-open", "0");
+}
 
 export function mountPartMenu(doc: Document): HTMLElement {
   const existing = doc.getElementById(HOST_ID);

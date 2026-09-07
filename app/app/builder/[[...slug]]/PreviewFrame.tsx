@@ -9,12 +9,16 @@ import { imagePaths } from "@/lib/design/image-map";
 import { SCREENS, SECTION_PARTS, fieldFor as hideField } from "@/lib/design/part-visibility";
 import {
   closePartMenu,
+  hideDropLine,
   hidePartChip,
+  mountDropLine,
   mountPartChip,
   mountPartMenu,
   openPartMenu,
+  showDropLine,
   showPartChip,
   PART_CHIP_ID,
+  PART_LINE_ID,
   PART_MENU_ID,
 } from "@/lib/design/part-menu";
 import {
@@ -108,10 +112,14 @@ const SELECTABLE = "[data-vibewp-node],[data-vibewp-chrome]";
  *
  * A click landing on any of them must not be read as a click on the page.
  */
+/** No legal drop under the pointer. Distinct from "at the end", which is null. */
+const NO_DROP = Symbol("no-drop");
+
 const CHROME_SELECTOR = [
   "#vibewp-text-toolbar",
   `#${PART_CHIP_ID}`,
   `#${PART_MENU_ID}`,
+  `#${PART_LINE_ID}`,
 ].join(",");
 
 /**
@@ -822,6 +830,7 @@ export function PreviewFrame({
        */
       const menu = mountPartMenu(contentDoc);
       const chip = mountPartChip(contentDoc);
+      const dropLine = mountDropLine(contentDoc);
       const partEl = new Map<string, Element>();
       for (const el of Array.from(section.querySelectorAll("[class*='__']"))) {
         for (const part of SECTION_PARTS) {
@@ -858,6 +867,13 @@ export function PreviewFrame({
 
       /** Which part the chip is currently sitting on. */
       let chipPart: string | null = null;
+      /** True between pointerdown on the grip and pointerup. */
+      let dragging = false;
+
+      const swallowOnce = (event: Event) => {
+        event.stopPropagation();
+        contentDoc.removeEventListener("click", swallowOnce, true);
+      };
 
       for (const [key, el] of partEl) {
         el.setAttribute("data-vibewp-part", key);
@@ -871,7 +887,7 @@ export function PreviewFrame({
          * open a menu; the chip is a separate target sitting above the words.
          */
         const onEnter = () => {
-          if (menu.getAttribute("data-open") === "1") return;
+          if (dragging || menu.getAttribute("data-open") === "1") return;
           chipPart = key;
           showPartChip(chip, el.getBoundingClientRect(), label, contentDoc);
         };
@@ -897,6 +913,8 @@ export function PreviewFrame({
        * chip impossible to click.
        */
       const onMove = (event: Event) => {
+        // The chip belongs to the drag while one is in progress.
+        if (dragging) return;
         const target = event.target as Element | null;
         if (target?.closest?.(`#${PART_CHIP_ID}`)) return;
         if (target?.closest?.("[data-vibewp-part]")) return;
@@ -905,6 +923,130 @@ export function PreviewFrame({
         chipPart = null;
       };
       contentDoc.addEventListener("mouseover", onMove);
+
+      /*
+       * DRAGGING A PART.
+       *
+       * Pointer events rather than HTML5 drag-and-drop. The native API wants
+       * a draggable source and a drop target and gives you a ghost image you
+       * cannot style; here the thing being dragged is a chip floating over a
+       * page whose own elements are the targets, and the whole gesture happens
+       * inside an iframe. Pointer events are fewer moving parts and behave the
+       * same on a touchpad.
+       *
+       * WHY ONLY AMONG SIBLINGS
+       *
+       * applyPartOrder reorders parts that share a parent — the copy stack —
+       * and cannot move a photo out of its own grid column into that stack.
+       * Offering a drop that the engine will silently decline is worse than
+       * not offering it, so the drag is bounded by what can actually happen.
+       * Moving a photo from one side to the other is the column flip, which
+       * is a different control.
+       */
+      const onGripDown = (event: PointerEvent) => {
+        if (!(event.target as Element | null)?.closest?.("[data-chip-grip]")) return;
+        if (!chipPart) return;
+        event.preventDefault();
+        event.stopPropagation();
+
+        /*
+         * Captured now, not read at the end. The hover handler was still
+         * running during the drag and cleared chipPart the moment the pointer
+         * crossed a gap between two parts, so the drop reported "on null" and
+         * moved nothing.
+         */
+        const moving = chipPart;
+        const source = partEl.get(chipPart);
+        const parent = source?.parentElement;
+        if (!source || !parent) return;
+
+        // Siblings only, in document order.
+        const siblings = found
+          .map((key) => ({ key, el: partEl.get(key) }))
+          .filter((x): x is { key: string; el: Element } => !!x.el && x.el.parentElement === parent);
+        if (siblings.length < 2) return;
+
+        chip.setAttribute("data-dragging", "1");
+        dragging = true;
+        /*
+         * Where it will land: a sibling's key to go before, null for the end,
+         * or NO_DROP when the pointer is not over a legal boundary. Three
+         * states, so "before the first part" is not confused with "nowhere".
+         */
+        let dropBefore: string | null | typeof NO_DROP = NO_DROP;
+
+        const onMovePointer = (move: PointerEvent) => {
+          /*
+           * The nearest BOUNDARY to the pointer, not "which element am I
+           * over": between two parts is a gap belonging to neither, and a
+           * drag that stops responding in the gaps feels broken.
+           *
+           * Gathered then reduced rather than tracked in a variable — an
+           * assignment inside a callback is invisible to the type checker,
+           * which narrowed the running best to `never`.
+           */
+          type Edge = { before: string | null; dist: number; rect: DOMRect; top: boolean };
+          const from = siblings.findIndex((x) => x.key === chipPart);
+          const edges: Edge[] = [];
+
+          siblings.forEach(({ key, el }, i) => {
+            const rect = el.getBoundingClientRect();
+            const candidates: Array<[number, boolean, number, string | null]> = [
+              [rect.top, true, i, key],
+              [rect.bottom, false, i + 1, siblings[i + 1]?.key ?? null],
+            ];
+            for (const [edgeY, top, index, before] of candidates) {
+              // A boundary that puts it back where it started is not a move.
+              if (index === from || index === from + 1) continue;
+              edges.push({ before, dist: Math.abs(move.clientY - edgeY), rect, top });
+            }
+          });
+
+          const best = edges.reduce<Edge | null>(
+            (winner, edge) => (!winner || edge.dist < winner.dist ? edge : winner),
+            null,
+          );
+
+          if (!best) {
+            hideDropLine(contentDoc);
+            dropBefore = NO_DROP;
+            return;
+          }
+          dropBefore = best.before;
+          showDropLine(dropLine, best.rect, best.top, contentDoc);
+        };
+
+        const onUp = () => {
+          contentDoc.removeEventListener("pointermove", onMovePointer);
+          contentDoc.removeEventListener("pointerup", onUp);
+          chip.removeAttribute("data-dragging");
+          dragging = false;
+          /*
+           * A drag that starts on the chip and ends on the page makes the
+           * browser fire a click on their common ancestor — <body> — which
+           * the canvas reads as "clicked nothing" and deselects the section
+           * the drag was for. One click is swallowed to prevent that.
+           */
+          contentDoc.addEventListener("click", swallowOnce, true);
+          hideDropLine(contentDoc);
+          hidePartChip(contentDoc);
+          if (dropBefore === NO_DROP) return;
+
+          const next = found.filter((k) => k !== moving);
+          const at = dropBefore === null ? next.length : next.indexOf(dropBefore);
+          next.splice(at < 0 ? next.length : at, 0, moving);
+          if (next.join(",") === found.join(",")) return;
+          handlers.current.onPartAction?.(`order:${next.join(",")}`, moving, found);
+        };
+
+        contentDoc.addEventListener("pointermove", onMovePointer);
+        contentDoc.addEventListener("pointerup", onUp);
+      };
+      chip.addEventListener("pointerdown", onGripDown as EventListener);
+      cleanups.push(() => {
+        chip.removeEventListener("pointerdown", onGripDown as EventListener);
+        hideDropLine(contentDoc);
+      });
 
       const onChipDown = (event: Event) => {
         if (!(event.target as Element | null)?.closest?.("[data-chip-more]")) return;
@@ -929,6 +1071,7 @@ export function PreviewFrame({
 
       cleanups.push(() => {
         contentDoc.removeEventListener("mouseover", onMove);
+        contentDoc.removeEventListener("click", swallowOnce, true);
         chip.removeEventListener("mousedown", onChipDown);
         hidePartChip(contentDoc);
       });

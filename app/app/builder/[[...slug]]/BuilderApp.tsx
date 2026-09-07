@@ -1783,6 +1783,20 @@ export function BuilderApp({
                       return;
                     }
 
+                    /*
+                     * A drag brings the whole new order with it — the canvas
+                     * worked it out from where the pointer let go, and the
+                     * server should not have to reconstruct that from a
+                     * direction.
+                     */
+                    if (action.startsWith("order:")) {
+                      void runCanvasOp(
+                        { kind: "move_part", section: ref, order: action.slice("order:".length) },
+                        `Rearranging the ${label}`,
+                      );
+                      return;
+                    }
+
                     if (action === "up" || action === "down") {
                       const from = parts.indexOf(part);
                       const to = from + (action === "up" ? -1 : 1);
