@@ -32,10 +32,10 @@ export default async function BuilderPage({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ prompt?: string; autostart?: string }>;
+  searchParams: Promise<{ prompt?: string; autostart?: string; panel?: string }>;
 }) {
   const { slug } = await params;
-  const { prompt, autostart } = await searchParams;
+  const { prompt, autostart, panel } = await searchParams;
 
   if (!slug || slug.length < 1 || slug.length > 2) notFound();
 
@@ -187,6 +187,18 @@ export default async function BuilderPage({
   return (
     <BuilderApp
       catalogue={catalogue}
+      /*
+       * Which dashboard tab to open, read HERE rather than from
+       * window.location in the client.
+       *
+       * Reading it client-side meant the server rendered the top bar with no
+       * tab active and the client rendered it with one, so hydration failed on
+       * the Images button's class — the "server/client branch" case the error
+       * names first. The page already has searchParams; passing it down means
+       * both renders start from the same value and there is no branch to
+       * disagree about.
+       */
+      initialPanel={panel}
       // Sanitised on the way out as well as in: a value that was valid when it
       // was stored can fall outside a range we later narrow, and the canvas
       // should show what the exported site will show.

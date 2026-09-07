@@ -212,6 +212,7 @@ export function BuilderApp({
   siteId,
   smbId,
   initialPages,
+  initialPanel,
   initialMessages,
   initialWpUrl,
   initialHistory,
@@ -241,6 +242,8 @@ export function BuilderApp({
   siteId: string;
   smbId: string;
   initialPages: PageSummary[];
+  /** ?panel=, read by the server so hydration cannot disagree about it. */
+  initialPanel?: string;
   initialMessages: StoredMessage[];
   initialWpUrl: string | null;
   /** Undo/redo depth for the page shown on load, so the buttons are correct immediately. */
@@ -408,17 +411,19 @@ export function BuilderApp({
   /*
    * The dashboard tab, or null when it is closed.
    *
-   * Read from the URL on first render so it survives a reload and can be
-   * opened by link — which is also how it gets verified without clicking
-   * through a login.
+   * Seeded from the SERVER's reading of ?panel=, so it survives a reload and
+   * can be opened by link. Read from window.location instead and the server
+   * renders no active tab while the client renders one, which fails hydration
+   * on the top bar's classes.
    */
-  const [dashTab, setDashTab] = useState<DashboardTab | null>(() => {
-    if (typeof window === "undefined") return null;
-    const wanted = new URLSearchParams(window.location.search).get("panel");
-    return wanted === "style" || wanted === "images" || wanted === "seo" || wanted === "alt"
-      ? wanted
-      : null;
-  });
+  const [dashTab, setDashTab] = useState<DashboardTab | null>(() =>
+    initialPanel === "style" ||
+    initialPanel === "images" ||
+    initialPanel === "seo" ||
+    initialPanel === "alt"
+      ? initialPanel
+      : null,
+  );
 
   /*
    * Kept in the URL without a navigation. replaceState rather than the router,
@@ -443,7 +448,11 @@ export function BuilderApp({
 
   const openDash = (tab: DashboardTab | null) => {
     setDashTab(tab);
-    if (typeof window === "undefined") return;
+    /*
+     * No typeof window guard: this only ever runs from a click, and a needless
+     * one here would suggest the render-time version of the same branch is
+     * acceptable. It is not — that is what broke hydration.
+     */
     const url = new URL(window.location.href);
     if (tab) url.searchParams.set("panel", tab);
     else url.searchParams.delete("panel");
