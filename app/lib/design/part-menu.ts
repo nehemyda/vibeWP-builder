@@ -136,7 +136,10 @@ export function mountPartChip(doc: Document): HTMLElement {
   line-height: 1;
   cursor: pointer;
 }
-#${CHIP_ID} .vpc-more:hover { background: rgb(255 255 255 / 0.24); }`;
+#${CHIP_ID} .vpc-more:hover { background: rgb(255 255 255 / 0.24); }
+/* A value that comes from the business record, not from this page. */
+#${CHIP_ID}[data-locked="1"] .vpc-bar { background: #4a3f14; }
+#${CHIP_ID}[data-locked="1"] .vpc-grip { display: none; }`;
   doc.head.appendChild(style);
 
   const host = doc.createElement("div");
@@ -152,9 +155,26 @@ export function mountPartChip(doc: Document): HTMLElement {
 }
 
 /** Puts the chip on a part. Returns nothing; the caller owns when to hide it. */
-export function showPartChip(host: HTMLElement, rect: DOMRect, label: string, doc: Document): void {
+export function showPartChip(
+  host: HTMLElement,
+  rect: DOMRect,
+  label: string,
+  doc: Document,
+  /**
+   * Where the words come from, when they are not the client's to type.
+   *
+   * A phone number is usually stored as {{phone}} and resolved from the
+   * business record at render. Inline editing skips it on purpose — typing
+   * over it would freeze a copy of a value that is meant to follow the
+   * record — but until now nothing said so, and a part that will not edit
+   * with no explanation reads as broken. It said "can't edit. why?" and the
+   * answer was nowhere on the screen.
+   */
+  source?: string,
+): void {
   const name = host.querySelector(".vpc-name");
-  if (name) name.textContent = label;
+  if (name) name.textContent = source ? `${label} · from ${source}` : label;
+  host.setAttribute("data-locked", source ? "1" : "0");
   host.setAttribute("data-open", "1");
 
   const bar = host.firstElementChild as HTMLElement;
@@ -162,8 +182,15 @@ export function showPartChip(host: HTMLElement, rect: DOMRect, label: string, do
   const scrollX = doc.defaultView?.scrollX ?? 0;
   const scrollY = doc.defaultView?.scrollY ?? 0;
 
-  // Above the part, unless it is at the very top of the page — then just inside.
-  const above = rect.top - height - 4;
+  /*
+   * FLUSH with the part's top edge, not floating above it.
+   *
+   * There used to be 4px of clear space between the chip and the part, and
+   * moving the pointer up to the ⋯ crossed it — the pointer was over neither,
+   * the hover handler concluded the part had been left, and the chip vanished
+   * mid-reach. A hover target you cannot travel to is not a target.
+   */
+  const above = rect.top - height;
   host.style.left = `${Math.round(Math.max(4, rect.left) + scrollX)}px`;
   host.style.top = `${Math.round((above < 4 ? rect.top + 2 : above) + scrollY)}px`;
 }

@@ -115,6 +115,22 @@ const SELECTABLE = "[data-vibewp-node],[data-vibewp-chrome]";
 /** No legal drop under the pointer. Distinct from "at the end", which is null. */
 const NO_DROP = Symbol("no-drop");
 
+/**
+ * The props each part renders from, for spotting a business token behind one.
+ *
+ * Deliberately the same list edit-ops uses to clear a part, so "what this
+ * part is made of" is answered once.
+ */
+const PART_FIELD_NAMES: Record<string, string[]> = {
+  eyebrow: ["eyebrow", "kicker", "label"],
+  heading: ["heading", "title"],
+  intro: ["intro", "lede", "standfirst"],
+  body: ["body", "text", "description"],
+  actions: ["actions", "buttons", "cta"],
+  media: ["image", "photo"],
+  phone: ["phone"],
+};
+
 const CHROME_SELECTOR = [
   "#vibewp-text-toolbar",
   `#${PART_CHIP_ID}`,
@@ -865,10 +881,51 @@ export function PreviewFrame({
         );
       };
 
+      /**
+       * Parts whose words come from the business record rather than the page.
+       *
+       * Found by looking for a {{token}} among the props the part renders
+       * from — the same field names remove_part clears, so the two agree by
+       * construction rather than by a second table.
+       */
+      const tokenParts = new Map<string, string>();
+      for (const key of found) {
+        for (const field of PART_FIELD_NAMES[key] ?? []) {
+          const value = props[field];
+          if (typeof value === "string" && /\{\{[a-z_]+\}\}/.test(value)) {
+            tokenParts.set(key, "Business details");
+          }
+        }
+      }
+
       /** Which part the chip is currently sitting on. */
       let chipPart: string | null = null;
       /** True between pointerdown on the grip and pointerup. */
       let dragging = false;
+
+      /*
+       * Hiding is DELAYED.
+       *
+       * Flush positioning removed the gap, but a pointer travelling between
+       * two hover targets still produces a frame or two over neither, and any
+       * one of them was enough to close the chip. A short grace period, and
+       * any re-entry cancels it.
+       */
+      let hideTimer = 0;
+      const cancelHide = () => {
+        if (hideTimer) {
+          contentDoc.defaultView?.clearTimeout(hideTimer);
+          hideTimer = 0;
+        }
+      };
+      const hideSoon = () => {
+        cancelHide();
+        hideTimer = contentDoc.defaultView?.setTimeout(() => {
+          hideTimer = 0;
+          hidePartChip(contentDoc);
+          chipPart = null;
+        }, 260) as unknown as number;
+      };
 
       const swallowOnce = (event: Event) => {
         event.stopPropagation();
@@ -888,8 +945,20 @@ export function PreviewFrame({
          */
         const onEnter = () => {
           if (dragging || menu.getAttribute("data-open") === "1") return;
+          cancelHide();
           chipPart = key;
-          showPartChip(chip, el.getBoundingClientRect(), label, contentDoc);
+          /*
+           * A part whose words are a {{token}} is not the client's to type
+           * over, and the chip says where the value does come from instead of
+           * leaving them to guess why nothing happens.
+           */
+          showPartChip(
+            chip,
+            el.getBoundingClientRect(),
+            label,
+            contentDoc,
+            tokenParts.get(key),
+          );
         };
         const onContext = (event: Event) => {
           event.preventDefault();
@@ -916,11 +985,13 @@ export function PreviewFrame({
         // The chip belongs to the drag while one is in progress.
         if (dragging) return;
         const target = event.target as Element | null;
-        if (target?.closest?.(`#${PART_CHIP_ID}`)) return;
+        if (target?.closest?.(`#${PART_CHIP_ID}`)) {
+          cancelHide();
+          return;
+        }
         if (target?.closest?.("[data-vibewp-part]")) return;
         if (menu.getAttribute("data-open") === "1") return;
-        hidePartChip(contentDoc);
-        chipPart = null;
+        hideSoon();
       };
       contentDoc.addEventListener("mouseover", onMove);
 
@@ -1070,6 +1141,7 @@ export function PreviewFrame({
       chip.addEventListener("mousedown", onChipDown);
 
       cleanups.push(() => {
+        cancelHide();
         contentDoc.removeEventListener("mouseover", onMove);
         contentDoc.removeEventListener("click", swallowOnce, true);
         chip.removeEventListener("mousedown", onChipDown);

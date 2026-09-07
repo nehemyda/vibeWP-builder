@@ -66,6 +66,15 @@ export const SECTION_PARTS: Array<{
   { key: "intro", label: "Intro line", match: /yp-[a-z0-9-]+__intro\b/g, except: [] },
   { key: "body", label: "Body copy", match: /yp-[a-z0-9-]+__body\b/g, except: [] },
   { key: "actions", label: "Buttons", match: /yp-[a-z0-9-]+__actions\b/g, except: [] },
+  /*
+   * The big telephone number a callout is built around.
+   *
+   * Added because it had no chip, so a client clicking it got nothing and no
+   * explanation — its words are usually {{phone}}, resolved from the business
+   * record, and inline editing skips tokens on purpose. Being a part means the
+   * chip can at least say where the number comes from.
+   */
+  { key: "phone", label: "Phone", match: /yp-[a-z0-9-]+__phone\b/g, except: [] },
   {
     key: "media",
     label: "Photo",
