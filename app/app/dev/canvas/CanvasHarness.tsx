@@ -1,7 +1,5 @@
 "use client";
 
-import { PartsPanel } from "@/app/builder/[[...slug]]/PartsPanel";
-import { fieldFor as visibilityField } from "@/lib/design/part-visibility";
 import { readClip, writeClip } from "@/lib/design/clipboard";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -76,9 +74,6 @@ export function CanvasHarness() {
   /** Which section is in edit mode. Nothing is typeable without one. */
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [parts, setParts] = useState<string[]>([]);
-  /** Local part order + visibility, so the panel can be driven here. */
-  const [partOrder, setPartOrder] = useState<string[] | null>(null);
-  const [partVis, setPartVis] = useState<Record<string, string>>({});
   const [panelFor, setPanelFor] = useState<CanvasSelection | null>(fromUrl);
   const [origin, setOrigin] = useState<string | undefined>(undefined);
 
@@ -148,6 +143,9 @@ export function CanvasHarness() {
             html={html}
             selection={selection}
             onParts={setParts}
+            onPartAction={(action, part, list) =>
+              note(`part menu: ${action} on ${part} (of ${list.join(",")})`)
+            }
             onSelect={(sel) => {
               setSelection(sel);
               // Leaving a section leaves its edit mode — see BuilderApp.
@@ -267,30 +265,6 @@ export function CanvasHarness() {
               ? {
                   name: labelFor(styleFor),
                   role: styleFor.role,
-                  /*
-                   * Driven from local state here rather than through an
-                   * action, so the list itself can be exercised without a
-                   * site behind it — the point of this route.
-                   */
-                  parts: (
-                    <PartsPanel
-                      parts={parts}
-                      order={partOrder ?? parts}
-                      visibility={partVis}
-                      onReorder={(next) => {
-                        setPartOrder(next);
-                        note(`reorder → ${next.join(",")}`);
-                      }}
-                      onSetVisibility={(part, value) => {
-                        setPartVis((prev) => ({ ...prev, [visibilityField(part)]: value }));
-                        note(`show ${part} = ${value}`);
-                      }}
-                      onDelete={(part) => {
-                        setPartOrder((prev) => (prev ?? parts).filter((k) => k !== part));
-                        note(`delete ${part}`);
-                      }}
-                    />
-                  ),
                   onClearRole: () => setStyleFor({ kind: "node", index: styleFor.index }),
                   values: secStyle[styleFor.index] ?? {},
                   onChange: (field, value) => {

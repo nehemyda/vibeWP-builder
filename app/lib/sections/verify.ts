@@ -1,4 +1,4 @@
-import { VISIBILITY, fieldFor } from "@/lib/design/part-visibility";
+import { SCREENS, fieldFor } from "@/lib/design/part-visibility";
 import { schemaToGutenberg, gutenbergToSchema } from "@/lib/wp/serialize";
 import { imagePaths } from "@/lib/design/image-map";
 import { parse, type HTMLElement } from "node-html-parser";
@@ -231,39 +231,38 @@ for (const role of ELEMENT_ROLES) {
 console.log("\n== part visibility round-trips ==");
 {
   const def = SECTIONS.find((x) => x.key === "hero-duotone")!;
-  for (const v of VISIBILITY) {
-    const schema = {
-      nodes: [
-        {
-          id: "n1",
-          type: def.nodeType,
-          props: { ...(def.sample as object), [fieldFor("heading")]: v.value },
-        },
-      ],
-    };
-    const html = schemaToGutenberg(schema as never);
-    if (v.classes.some((c) => !html.includes(c))) fail(`"${v.value}" did not emit its classes`);
-    const back = gutenbergToSchema(html);
-    if (!back) {
-      fail(`"${v.value}" did not parse back at all`);
-      continue;
-    }
-    const got =
-      ((back.nodes?.[0]?.props as Record<string, unknown>)?.[fieldFor("heading")] as string) ?? "all";
-    if (got !== v.value) fail(`"${v.value}" read back as "${got}"`);
-    if (schemaToGutenberg(back as never) !== html) fail(`"${v.value}" did not round-trip`);
-    // Comment and element must carry the same classes.
-    if (v.classes.length) {
+  // Every subset of the three screens, so a combination cannot be the one
+  // that fails to read back.
+  for (let mask = 0; mask < 8; mask += 1) {
+    const on = SCREENS.filter((_, i) => mask & (1 << i));
+    const props: Record<string, unknown> = { ...(def.sample as object) };
+    for (const screen of on) props[fieldFor("heading", screen.key)] = true;
+
+    const html = schemaToGutenberg({ nodes: [{ id: "n1", type: def.nodeType, props }] } as never);
+    for (const screen of on) {
+      if (!html.includes(screen.cls)) fail(`hiding from ${screen.key} emitted no class`);
+      // Both the comment and the element, or core calls the block invalid.
       const comment = /"className":"([^"]*yp-hero-duotone__heading[^"]*)"/.exec(html)?.[1] ?? "";
       const element = /<h1 class="([^"]*yp-hero-duotone__heading[^"]*)"/.exec(html)?.[1] ?? "";
-      for (const c of v.classes) {
-        if (!comment.includes(c) || !element.includes(c)) {
-          fail(`"${v.value}": ${c} is not on both the comment and the element`);
-        }
+      if (!comment.includes(screen.cls) || !element.includes(screen.cls)) {
+        fail(`${screen.cls} is not on both the comment and the element`);
       }
     }
+
+    const back = gutenbergToSchema(html);
+    if (!back) {
+      fail("the section did not parse back at all");
+      continue;
+    }
+    const got = back.nodes?.[0]?.props as Record<string, unknown>;
+    for (const screen of SCREENS) {
+      const expected = on.includes(screen);
+      const actual = got?.[fieldFor("heading", screen.key)] === true;
+      if (expected !== actual) fail(`hidden-from-${screen.key} read back as ${actual}`);
+    }
+    if (schemaToGutenberg(back as never) !== html) fail(`subset ${mask} did not round-trip`);
   }
-  console.log(`  ${VISIBILITY.length} settings, emitted and read back`);
+  console.log("  all 8 combinations of the three screens, emitted and read back");
 }
 
 console.log("\n== photographs reachable by path ==");

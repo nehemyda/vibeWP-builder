@@ -6,7 +6,13 @@ import { ELEMENT_ROLES } from "@/lib/design/element-style";
 import { textPaths } from "@/lib/design/text-map";
 import { plainText, readRichTextDom } from "@/lib/wp/richtext";
 import { imagePaths } from "@/lib/design/image-map";
-import { SECTION_PARTS } from "@/lib/design/part-visibility";
+import { SCREENS, SECTION_PARTS, fieldFor as hideField } from "@/lib/design/part-visibility";
+import {
+  closePartMenu,
+  mountPartMenu,
+  openPartMenu,
+  PART_MENU_ID,
+} from "@/lib/design/part-menu";
 import {
   activeTextCommands,
   hideTextToolbar,
@@ -271,6 +277,11 @@ function paintSelection(doc: Document, selection: CanvasSelection | null): void 
      * section is replaceable, and outlining them all at once would look like
      * the page was broken rather than editable.
      */
+    /* A part, while the cursor is over it. Right-click opens its menu. */
+    `[data-vibewp-part]:hover {`,
+    `  outline: 1px dashed color-mix(in srgb, ${EDITOR_ACCENT} 60%, transparent);`,
+    `  outline-offset: 2px;`,
+    `}`,
     `[data-vibewp-pick] { cursor: pointer; }`,
     `[data-vibewp-pick]:hover {`,
     `  outline: 3px solid ${EDITOR_ACCENT}; outline-offset: 2px;`,
@@ -295,6 +306,7 @@ export function PreviewFrame({
   onEditText,
   onPickImage,
   onParts,
+  onPartAction,
 }: {
   /** Gutenberg block markup from schemaToGutenberg() — the same string exported. */
   html: string;
@@ -370,6 +382,8 @@ export function PreviewFrame({
    * wrong.
    */
   onParts?: (parts: string[]) => void;
+  /** An action was chosen from a part's menu. */
+  onPartAction?: (action: string, part: string, parts: string[]) => void;
   /**
    * A photograph in the section being edited was clicked, named by its path.
    *
@@ -401,6 +415,7 @@ export function PreviewFrame({
     onEditText,
     onPickImage,
     onParts,
+    onPartAction,
   });
   /*
    * The editable props, by identity-free reference.
@@ -432,6 +447,7 @@ export function PreviewFrame({
       onEditText,
       onPickImage,
       onParts,
+      onPartAction,
     };
     // Declared before the editing effect, so it is assigned before that effect
     // reads it on the same commit.
@@ -780,6 +796,102 @@ export function PreviewFrame({
         }
       }
       handlers.current.onParts?.(found);
+
+      /*
+       * A menu on each part, opened from the part.
+       *
+       * The element that carries a part's class is not always the one worth
+       * outlining — a photo's class sits on its <figure>, its heading's on the
+       * <h2> itself — so the class-bearing element is exactly the right target
+       * in both cases, and no mapping table is needed.
+       */
+      const menu = mountPartMenu(contentDoc);
+      const partEl = new Map<string, Element>();
+      for (const el of Array.from(section.querySelectorAll("[class*='__']"))) {
+        for (const part of SECTION_PARTS) {
+          const token = Array.from(el.classList).find((c) =>
+            new RegExp(`^${part.match.source.replace(/\\b$/, "")}$`).test(c),
+          );
+          if (token && !part.except.includes(token) && !partEl.has(part.key)) {
+            partEl.set(part.key, el);
+          }
+        }
+      }
+
+      let openPart: string | null = null;
+      const showMenu = (key: string) => {
+        const el = partEl.get(key);
+        if (!el) return;
+        openPart = key;
+        const props2 = editableRef.current ?? {};
+        openPartMenu(
+          menu,
+          el.getBoundingClientRect(),
+          {
+            part: key,
+            canMoveUp: found.indexOf(key) > 0,
+            canMoveDown: found.indexOf(key) < found.length - 1,
+            hiddenFrom: SCREENS.filter((sc) => props2[hideField(key, sc.key)] === true).map(
+              (sc) => sc.key,
+            ),
+            isMedia: key === "media",
+          },
+          contentDoc,
+        );
+      };
+
+      for (const [key, el] of partEl) {
+        el.setAttribute("data-vibewp-part", key);
+        /*
+         * Opened with the RIGHT button, and with a plain click only on the
+         * gutter chip below. A left click on a part still has to place a
+         * caret in it — that is the whole of inline editing — so it cannot
+         * also mean "open a menu".
+         */
+        const onContext = (event: Event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          showMenu(key);
+        };
+        el.addEventListener("contextmenu", onContext);
+        cleanups.push(() => {
+          el.removeEventListener("contextmenu", onContext);
+          el.removeAttribute("data-vibewp-part");
+        });
+      }
+
+      const onMenuDown = (event: Event) => {
+        const button = (event.target as Element | null)?.closest?.("[data-action]");
+        if (!button) return;
+        event.preventDefault();
+        const action = (button as HTMLElement).dataset.action ?? "";
+        if (action === "hide-open") {
+          // A submenu, not an action: toggled here rather than on hover so it
+          // works by touch and by keyboard as well as by pointer.
+          const owner = button.closest(".vpm-hasSub");
+          owner?.setAttribute("data-open", owner.getAttribute("data-open") === "1" ? "0" : "1");
+          return;
+        }
+        if (!openPart) return;
+        const part = openPart;
+        closePartMenu(contentDoc);
+        openPart = null;
+        handlers.current.onPartAction?.(action, part, found);
+      };
+      menu.addEventListener("mousedown", onMenuDown);
+
+      const awayFromMenu = (event: Event) => {
+        if (!(event.target as Element | null)?.closest?.(`#${PART_MENU_ID}`)) {
+          closePartMenu(contentDoc);
+          openPart = null;
+        }
+      };
+      contentDoc.addEventListener("mousedown", awayFromMenu);
+      cleanups.push(() => {
+        menu.removeEventListener("mousedown", onMenuDown);
+        contentDoc.removeEventListener("mousedown", awayFromMenu);
+        closePartMenu(contentDoc);
+      });
 
       const seen = new Set<Element>();
       for (const { path, image } of imagePaths(props)) {

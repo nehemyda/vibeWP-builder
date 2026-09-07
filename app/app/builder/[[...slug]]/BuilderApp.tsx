@@ -30,8 +30,7 @@ import {
 import { readClip, writeClip, type Clip } from "@/lib/design/clipboard";
 import { setSectionImageAction } from "@/app/actions/edit";
 import { MediaPanel } from "./MediaPanel";
-import { PartsPanel } from "./PartsPanel";
-import { SECTION_PARTS, fieldFor as visibilityField } from "@/lib/design/part-visibility";
+import { SCREENS, fieldFor as hideField } from "@/lib/design/part-visibility";
 import { PART_ORDER_FIELD } from "@/lib/design/part-order";
 import {
   schemaToGutenberg,
@@ -1771,6 +1770,69 @@ export function BuilderApp({
                       : undefined
                   }
                   onParts={setRenderedParts}
+                  onPartAction={(action, part, parts) => {
+                    if (selection?.kind !== "node") return;
+                    const ref = nodes[selection.index]?.type;
+                    if (!ref) return;
+                    const label = labelOfSelection(selection);
+
+                    if (action === "replace") {
+                      // The photo's own path, found the way the picker finds it.
+                      setMediaTarget({ index: selection.index, path: "image", label });
+                      setMediaOpen(true);
+                      return;
+                    }
+
+                    if (action === "up" || action === "down") {
+                      const from = parts.indexOf(part);
+                      const to = from + (action === "up" ? -1 : 1);
+                      if (from < 0 || to < 0 || to >= parts.length) return;
+                      const next = [...parts];
+                      next.splice(to, 0, next.splice(from, 1)[0]);
+                      void runCanvasOp(
+                        { kind: "move_part", section: ref, order: next.join(",") },
+                        `Rearranging the ${label}`,
+                      );
+                      return;
+                    }
+
+                    if (action === "delete") {
+                      void runCanvasOp(
+                        { kind: "remove_part", section: ref, part },
+                        `Removing part of the ${label}`,
+                      );
+                      return;
+                    }
+
+                    if (action.startsWith("hide-")) {
+                      const which = action.slice("hide-".length);
+                      const props = nodes[selection.index]?.props as
+                        | Record<string, unknown>
+                        | undefined;
+                      const screens = which === "all" ? SCREENS : SCREENS.filter((s) => s.key === which);
+                      /*
+                       * "All screen sizes" is a toggle, not a set: if every
+                       * one is already ticked it unhides, which is the only
+                       * way back from a part hidden everywhere.
+                       */
+                      const allOn = SCREENS.every((s) => props?.[hideField(part, s.key)] === true);
+                      const value =
+                        which === "all"
+                          ? !allOn
+                          : props?.[hideField(part, which)] !== true;
+                      for (const screen of screens) {
+                        void runCanvasOp(
+                          {
+                            kind: "set_option",
+                            section: ref,
+                            option: hideField(part, screen.key),
+                            value: String(value),
+                          },
+                          `${value ? "Hiding" : "Showing"} part of the ${label}`,
+                        );
+                      }
+                    }
+                  }}
                   onPickImage={(path) => {
                     if (selection?.kind !== "node") return;
                     setMediaTarget({
@@ -1964,67 +2026,6 @@ export function BuilderApp({
                 ? {
                     name: labelOfSelection(styleFor),
                     role: styleFor.role,
-                    parts: (
-                      <PartsPanel
-                        parts={renderedParts}
-                        /*
-                         * The stored order if there is one, otherwise the
-                         * order the section rendered in — which is the same
-                         * thing "unset" means to the serializer.
-                         */
-                        order={
-                          String(nodes[styleFor.index]?.props?.[PART_ORDER_FIELD] ?? "")
-                            .split(",")
-                            .map((x) => x.trim())
-                            .filter(Boolean).length >= 2
-                            ? String(nodes[styleFor.index]?.props?.[PART_ORDER_FIELD])
-                                .split(",")
-                                .map((x) => x.trim())
-                                .filter(Boolean)
-                            : renderedParts
-                        }
-                        visibility={Object.fromEntries(
-                          SECTION_PARTS.map((p) => [
-                            visibilityField(p.key),
-                            String(
-                              nodes[styleFor.index]?.props?.[visibilityField(p.key)] ?? "all",
-                            ),
-                          ]),
-                        )}
-                        busy={Boolean(canvasBusy)}
-                        onReorder={(next) => {
-                          const ref = nodes[styleFor.index]?.type;
-                          if (!ref) return;
-                          void runCanvasOp(
-                            { kind: "move_part", section: ref, order: next.join(",") },
-                            `Rearranging the ${labelOfSelection(styleFor)}`,
-                          );
-                        }}
-                        onSetVisibility={(part, value) => {
-                          const ref = nodes[styleFor.index]?.type;
-                          if (!ref) return;
-                          // set_option, so it is validated against the field's
-                          // choices and logged like every other change.
-                          void runCanvasOp(
-                            {
-                              kind: "set_option",
-                              section: ref,
-                              option: visibilityField(part),
-                              value,
-                            },
-                            `Changing what shows in the ${labelOfSelection(styleFor)}`,
-                          );
-                        }}
-                        onDelete={(part) => {
-                          const ref = nodes[styleFor.index]?.type;
-                          if (!ref) return;
-                          void runCanvasOp(
-                            { kind: "remove_part", section: ref, part },
-                            `Removing part of the ${labelOfSelection(styleFor)}`,
-                          );
-                        }}
-                      />
-                    ),
                     onClearRole: () => setStyleFor({ kind: "node", index: styleFor.index }),
                     values: Object.fromEntries(
                       [

@@ -21,12 +21,27 @@ import type { FieldSpec } from "@/lib/sections/types";
  * survive in and the block goes invalid in wp-admin. And a prop no parser
  * reads is destroyed on every pull from WordPress.
  *
- * WHY FIVE CHOICES AND NOT THREE CHECKBOXES
+ * HIDE FROM, NOT SHOW ON
  *
- * Three independent toggles is nine states, of which several are nonsense
- * (hidden everywhere but tablet) and one is a trap (hidden everywhere, which
- * reads as deleted and is not). These five are the ones people actually
- * want, named as intentions rather than as combinations of breakpoints.
+ * This began as one five-way choice per part — everywhere, desktop only, not
+ * on phones, phones only, hidden — on the reasoning that three toggles is
+ * nine states and several of them are nonsense.
+ *
+ * That was wrong, and looking at how Duda does it is what showed why. Nobody
+ * thinks "I want this shown on desktop only". They think "hide this on
+ * mobile", and then they have to translate that into whichever of five labels
+ * means it — "Not on phones", which is a double negative wearing a positive
+ * name. The screen sizes are independent facts and the control should be
+ * three of them, ticked.
+ *
+ * So each part carries one boolean per screen size. The nonsense states are
+ * still reachable and still nonsense; the cost of that is a client hiding
+ * something from all three, which is a thing they can see and undo, rather
+ * than every client having to decode a matrix on the way to the obvious.
+ *
+ * It also made the read-back simpler. Matching a SET of classes exactly, so
+ * that "desktop only" was not read as "not on phones", was the fiddliest code
+ * in this file; a boolean per class is just "is it there".
  * ─────────────────────────────────────────────────────────────────────
  */
 
@@ -59,29 +74,20 @@ export const SECTION_PARTS: Array<{
   },
 ];
 
-/** What "showing" can mean, as an intention rather than a set of breakpoints. */
-export const VISIBILITY: Array<{ value: string; label: string; classes: string[] }> = [
-  { value: "all", label: "Everywhere", classes: [] },
-  { value: "desktop", label: "Desktop only", classes: ["u-hide--tablet", "u-hide--mobile"] },
-  { value: "not-mobile", label: "Not on phones", classes: ["u-hide--mobile"] },
-  { value: "mobile", label: "Phones only", classes: ["u-hide--desktop", "u-hide--tablet"] },
-  {
-    value: "none",
-    label: "Hidden",
-    classes: ["u-hide--desktop", "u-hide--tablet", "u-hide--mobile"],
-  },
+/** The screen sizes a part can be hidden from, and the class for each. */
+export const SCREENS: Array<{ key: string; label: string; cls: string }> = [
+  { key: "desktop", label: "Desktop", cls: "u-hide--desktop" },
+  { key: "tablet", label: "Tablet", cls: "u-hide--tablet" },
+  { key: "mobile", label: "Mobile", cls: "u-hide--mobile" },
 ];
 
-/** The prop that carries a part's visibility, e.g. "showHeading". */
-export const fieldFor = (partKey: string): string =>
-  `show${partKey[0].toUpperCase()}${partKey.slice(1)}`;
+const cap = (s: string) => `${s[0].toUpperCase()}${s.slice(1)}`;
 
-const SPEC: FieldSpec = {
-  type: "choice",
-  label: "Show",
-  choices: VISIBILITY.map((v) => v.value),
-  default: "all",
-};
+/** The prop hiding one part from one screen, e.g. "hideHeadingMobile". */
+export const fieldFor = (partKey: string, screen: string): string =>
+  `hide${cap(partKey)}${cap(screen)}`;
+
+const SPEC: FieldSpec = { type: "boolean", label: "Hidden", default: false };
 
 /**
  * Declared on every page section, whether or not it has the part.
@@ -95,7 +101,12 @@ const SPEC: FieldSpec = {
  */
 export const PART_VISIBILITY_OPTIONS: Record<string, FieldSpec> = {
   ...Object.fromEntries(
-    SECTION_PARTS.map((p) => [fieldFor(p.key), { ...SPEC, label: `Show ${p.label.toLowerCase()}` }]),
+    SECTION_PARTS.flatMap((p) =>
+      SCREENS.map((screen) => [
+        fieldFor(p.key, screen.key),
+        { ...SPEC, label: `Hide ${p.label.toLowerCase()} on ${screen.label.toLowerCase()}` },
+      ]),
+    ),
   ),
   /*
    * Declared so it is a known field rather than stray content.
@@ -125,10 +136,8 @@ export function applyPartVisibility(
   let out = html;
 
   for (const part of SECTION_PARTS) {
-    const value = props[fieldFor(part.key)];
-    if (typeof value !== "string" || value === "all") continue;
-    const choice = VISIBILITY.find((v) => v.value === value);
-    if (!choice || choice.classes.length === 0) continue;
+    const hidden = SCREENS.filter((s) => props[fieldFor(part.key, s.key)] === true);
+    if (hidden.length === 0) continue;
 
     /*
      * Appended to the class token wherever it occurs, which is both the
@@ -136,7 +145,7 @@ export function applyPartVisibility(
      * regenerates one from the other, so they have to agree or the block is
      * invalid in wp-admin.
      */
-    const suffix = ` ${choice.classes.join(" ")}`;
+    const suffix = ` ${hidden.map((s) => s.cls).join(" ")}`;
     out = out.replace(new RegExp(part.match.source, "g"), (token) =>
       part.except.includes(token) ? token : token + suffix,
     );
@@ -145,18 +154,15 @@ export function applyPartVisibility(
 }
 
 /**
- * Reads the visibility back off the markup.
+ * Reads the hiding back off the markup.
  *
  * gutenbergToSchema rebuilds every prop from scratch, so this is what stops a
- * pull from WordPress un-hiding everything the client hid.
- *
- * Matched on the SET of hide classes present next to the part's own class,
- * not on a substring of them in order. Appending a second utility between
- * them — which the element style pass is entitled to do — would defeat a
- * substring test silently.
+ * pull from WordPress un-hiding everything the client hid. One class, one
+ * boolean — no set to match exactly, which is what the five-way version had
+ * to do and got wrong twice.
  */
-export function partVisibilityFromHtml(html: string): Record<string, string> {
-  const out: Record<string, string> = {};
+export function partVisibilityFromHtml(html: string): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
 
   for (const part of SECTION_PARTS) {
     // The whole class attribute containing this part's token, so the hide
@@ -165,15 +171,9 @@ export function partVisibilityFromHtml(html: string): Record<string, string> {
     const found = attr.exec(html);
     if (!found) continue;
     const classes = new Set(found[1].split(/\s+/));
-
-    const match = VISIBILITY.find(
-      (v) =>
-        v.classes.length > 0 &&
-        v.classes.every((c) => classes.has(c)) &&
-        // Exactly this set, so "desktop only" is not read as "not on phones".
-        v.classes.length === [...classes].filter((c) => c.startsWith("u-hide--")).length,
-    );
-    if (match) out[fieldFor(part.key)] = match.value;
+    for (const screen of SCREENS) {
+      if (classes.has(screen.cls)) out[fieldFor(part.key, screen.key)] = true;
+    }
   }
   return out;
 }
