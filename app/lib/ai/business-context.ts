@@ -46,13 +46,31 @@ export type BusinessContext = {
   logoUrl: string | null;
 };
 
-export async function loadBusinessContext(siteId: string): Promise<BusinessContext | null> {
-  const site = await db.query.sites.findFirst({ where: eq(sites.id, siteId) });
+export async function loadBusinessContext(
+  siteId: string,
+  /*
+   * The site row, when the caller already holds it.
+   *
+   * This fetched it unconditionally, which is right for a caller that has only
+   * an id and wasteful for one that has just loaded the row — the builder page
+   * had, so this single call cost two round trips where every other call on
+   * that page cost one. Optional rather than required: most callers genuinely
+   * only know the id, and making them fetch it first would move the same waste
+   * somewhere less visible.
+   */
+  opts?: { site?: { name: string } | null },
+): Promise<BusinessContext | null> {
+  /*
+   * The two queries go together, because they never depended on each other —
+   * only on the id. Passing `site` in drops the first entirely.
+   */
+  const [site, profile] = await Promise.all([
+    opts?.site !== undefined
+      ? Promise.resolve(opts.site)
+      : db.query.sites.findFirst({ where: eq(sites.id, siteId) }),
+    db.query.businessProfiles.findFirst({ where: eq(businessProfiles.ownerId, siteId) }),
+  ]);
   if (!site) return null;
-
-  const profile = await db.query.businessProfiles.findFirst({
-    where: eq(businessProfiles.ownerId, siteId),
-  });
 
   const clean = (v: string | null | undefined) => {
     const t = v?.trim();

@@ -13,10 +13,9 @@ import { requireSiteAccess } from "@/lib/auth/require-site-access";
 import { resolveSitePaths } from "@/lib/site-paths";
 import type { ChromeNode } from "@/app/actions/ai-generate";
 import type { FormPreviewField } from "@/lib/wp/serialize";
-import { loadIntakeAction } from "@/app/actions/intake";
+import { loadIntakeState } from "@/lib/intake-state";
 import { getPlatformSettings } from "@/lib/platform-settings";
 import { formDefinitions } from "@/lib/db/schema";
-import { loadBusinessContext, contactFactsFor } from "@/lib/ai/business-context";
 import { sectionsForPlan } from "@/lib/sections/resolve";
 import { sanitiseTokens } from "@/lib/design/tokens";
 import { BuilderApp } from "./BuilderApp";
@@ -45,60 +44,98 @@ export default async function BuilderPage({
   const { user, site } = await requireSiteAccess(smbId);
 
   const query = prompt ? `?prompt=${encodeURIComponent(prompt)}&autostart=${autostart ?? ""}` : "";
-  const { builderPath, dashboardPath } = await resolveSitePaths(site);
 
-  // Agency-managed sites must be reached through the nested URL; directly-owned
-  // sites must be reached through the flat one. Redirect-correct otherwise.
+  /*
+   * ONE ROUND OF WAITING, NOT NINE.
+   *
+   * These nine were nine separate `await`s down the body of this function.
+   * Every one is a round trip to a database in ap-south-1 at roughly 60ms,
+   * none of them needs anything from the one before, and the page rendered
+   * nothing until the last returned: 558ms of the builder's load was this
+   * function queuing behind itself. Together they take 121ms — the cost of
+   * the slowest, which is all it was ever meant to be.
+   *
+   * The measurement is worth keeping because the shape is inviting: each of
+   * those awaits was correct on the line it was written, and the next feature
+   * that needs one more thing from the database will want to add a tenth
+   * await under the ninth. It goes in here instead.
+   *
+   * What may NOT go in here is anything that reads a value produced above:
+   * `revisionKinds` needs the page this resolves, so it stays below.
+   */
+  const [
+    { builderPath, dashboardPath },
+    installation,
+    [allPages, storedMessages],
+    initialIntake,
+    platform,
+    siteForms,
+    callerProfile,
+    planSections,
+  ] = await Promise.all([
+    resolveSitePaths(site),
+    // Whether a WordPress install already exists decides if "View site" and
+    // "WP Admin" are shown on load. Without this they only appeared after an
+    // export in the same session, so returning to an exported site showed
+    // nothing.
+    db.query.siteInstallations.findFirst({ where: eq(siteInstallations.siteId, site.id) }),
+    Promise.all([
+      db.select().from(sitePages).where(eq(sitePages.siteId, site.id)).orderBy(sitePages.createdAt),
+      db
+        .select()
+        .from(builderMessages)
+        .where(eq(builderMessages.siteId, site.id))
+        .orderBy(builderMessages.createdAt),
+    ]),
+    /*
+     * Prefilled from whatever Settings already holds, so a client who filled
+     * in their business details once is never asked for them again.
+     *
+     * The loader, not the action. The action re-authenticates — a getUser()
+     * over the network plus canEditSite's four queries — and requireSiteAccess
+     * above has just proven the same thing about the same user and the same
+     * site. This page had been paying for that answer twice, and the second
+     * time cost more than the data did.
+     */
+    loadIntakeState(site.id),
+    // Hosting targets for the site-details drawer. Null until an admin sets them.
+    getPlatformSettings(),
+    /*
+     * EVERY form on the site, keyed by its embed token.
+     *
+     * This took the first active form and handed it to the canvas whatever
+     * page was open, so the quote page drew the contact form's questions and a
+     * field added to the quote form never appeared. Which form a page shows is
+     * decided by the token in its own FormEmbed node, and the canvas switches
+     * pages without asking the server, so it needs them all.
+     */
+    db
+      .select()
+      .from(formDefinitions)
+      .where(and(eq(formDefinitions.siteId, site.id), eq(formDefinitions.isActive, true))),
+    // "Back" goes somewhere useful for whoever is actually looking at the
+    // builder right now.
+    db.query.profiles.findFirst({ where: eq(profiles.id, user.id) }),
+    sectionsForPlan(site.plan ?? "starter"),
+  ]);
+
+  /*
+   * Agency-managed sites must be reached through the nested URL; directly-owned
+   * sites must be reached through the flat one. Redirect-correct otherwise.
+   *
+   * After the fetch rather than before it now. A mismatched URL therefore does
+   * one round of queries it will not use — 121ms, on the rare visit that
+   * arrives at the wrong shape — and in exchange every correct visit, which is
+   * all of them in practice, stops waiting on this lookup alone before it can
+   * start the other eight.
+   */
   const requestedPath = urlPartnerId ? `/builder/${urlPartnerId}/${smbId}` : `/builder/${smbId}`;
   if (requestedPath !== builderPath) {
     redirect(`${builderPath}${query}`);
   }
 
-  // Whether a WordPress install already exists decides if "View site" and
-  // "WP Admin" are shown on load. Without this they only appeared after an
-  // export in the same session, so returning to an exported site showed
-  // nothing.
-  const installation = await db.query.siteInstallations.findFirst({
-    where: eq(siteInstallations.siteId, site.id),
-  });
-
-  const [allPages, storedMessages] = await Promise.all([
-    db.select().from(sitePages).where(eq(sitePages.siteId, site.id)).orderBy(sitePages.createdAt),
-    db
-      .select()
-      .from(builderMessages)
-      .where(eq(builderMessages.siteId, site.id))
-      .orderBy(builderMessages.createdAt),
-  ]);
-
   // The home page is what the canvas shows on load; the switcher moves off it.
   const page = allPages.find((p) => p.slug === "home") ?? allPages[0];
-
-  // Prefilled from whatever Settings already holds, so a client who filled in
-  // their business details once is never asked for them again.
-  const initialIntake = await loadIntakeAction(site.id);
-
-  // Hosting targets for the site-details drawer. Null until an admin sets them.
-  const platform = await getPlatformSettings();
-
-  /*
-   * The site's form, so the canvas can draw the client's real questions rather
-   * than grey bars. Only the active one: a paused form is not what the live
-   * page would show.
-   */
-  /*
-   * EVERY form on the site, keyed by its embed token.
-   *
-   * This took the first active form and handed it to the canvas whatever page
-   * was open, so the quote page drew the contact form's questions and a field
-   * added to the quote form never appeared. Which form a page shows is decided
-   * by the token in its own FormEmbed node, and the canvas switches pages
-   * without asking the server, so it needs them all.
-   */
-  const siteForms = await db
-    .select()
-    .from(formDefinitions)
-    .where(and(eq(formDefinitions.siteId, site.id), eq(formDefinitions.isActive, true)));
 
   const formsByToken = Object.fromEntries(
     siteForms
@@ -112,10 +149,17 @@ export default async function BuilderPage({
       ]),
   );
 
-  // Real contact details, so the canvas resolves the {{phone}}-style tokens
-  // the generated content carries and shows what the live site will show.
-  const businessCtx = await loadBusinessContext(site.id);
-  const previewFacts = businessCtx ? contactFactsFor(businessCtx) : {};
+  /*
+   * Real contact details, so the canvas resolves the {{phone}}-style tokens
+   * the generated content carries and shows what the live site will show.
+   *
+   * Taken from the intake prefill rather than fetched again. This page loaded
+   * the business context a second time and derived the same facts from it —
+   * `contactFactsFor` of a context with no profile row returns {}, which is
+   * exactly what the old fallback produced — so it was a query and a second
+   * derivation of one value, either of which could drift from the other.
+   */
+  const previewFacts = initialIntake.facts;
 
   // The whole schema, so the canvas paints every section on first load and
   // not just the hero the extractor pulls out.
@@ -134,10 +178,10 @@ export default async function BuilderPage({
     canRedo: revisionKinds.some((r) => r.kind === "redo"),
   };
 
-  // "Back" goes somewhere useful for whoever is actually looking at the
-  // builder right now — the site's own SMB dashboard if that's genuinely
-  // them, otherwise wherever an agency/admin caller would expect to land.
-  const callerProfile = await db.query.profiles.findFirst({ where: eq(profiles.id, user.id) });
+  /*
+   * The site's own SMB dashboard if that is genuinely who is looking,
+   * otherwise wherever an agency or admin caller would expect to land.
+   */
   let backPath = "/";
   let backLabel = "Back";
   if (user.id === site.ownerUserId && callerProfile?.role === "smb_owner") {
@@ -176,7 +220,7 @@ export default async function BuilderPage({
    * sections an admin has switched off, renamed or restricted by plan. That is
    * what travels.
    */
-  const catalogue = (await sectionsForPlan(site.plan ?? "starter")).map((s) => ({
+  const catalogue = planSections.map((s) => ({
     key: s.key,
     nodeType: s.nodeType,
     name: s.name,
