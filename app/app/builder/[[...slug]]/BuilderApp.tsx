@@ -31,6 +31,7 @@ import { readClip, writeClip, type Clip } from "@/lib/design/clipboard";
 import { setSectionImageAction } from "@/app/actions/edit";
 import { MediaPanel } from "./MediaPanel";
 import { SiteDashboard, type DashboardTab } from "./SiteDashboard";
+import { SeoPanel } from "./SeoPanel";
 import { SCREENS, fieldFor as hideField } from "@/lib/design/part-visibility";
 import { widthFieldFor } from "@/lib/design/part-size";
 import { PART_ORDER_FIELD } from "@/lib/design/part-order";
@@ -2096,12 +2097,7 @@ export function BuilderApp({
                 onClose={() => openDash(null)}
               />
             )}
-            {dashTab === "seo" && (
-              <p className={styles.mediaHint}>
-                Page titles and descriptions are next — the fields are no use until the theme
-                renders them, so the export path is being built first.
-              </p>
-            )}
+            {dashTab === "seo" && <SeoPanel siteId={siteId} />}
           </SiteDashboard>
         )}
 

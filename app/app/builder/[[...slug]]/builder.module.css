@@ -1934,3 +1934,95 @@
 
 /* The style controls inside the dashboard: no frame, wider columns. */
 .styleBodyBare { max-width: 560px; display: grid; gap: 18px; }
+
+/* ── The SEO table ──────────────────────────────────────────────────── */
+
+.seoWrap { max-width: 760px; }
+.seoHead { margin-bottom: 14px; }
+.seoTitle { margin: 0 0 4px; font-size: 16px; }
+.seoLede { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-2, #4e5661); }
+
+.seoFilters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.seoFilter {
+  flex: none;
+  appearance: none;
+  border: 1px solid var(--border, #e3e5e9);
+  background: var(--card, #fff);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font: 600 12px/1 inherit;
+  color: var(--ink-2, #4e5661);
+  cursor: pointer;
+}
+.seoFilter:hover { border-color: var(--ink, #131922); }
+.seoFilterOn {
+  background: var(--ink, #131922);
+  border-color: var(--ink, #131922);
+  color: #fff;
+}
+
+.seoList { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+
+.seoRow {
+  /* flex: none — a shrunk row clips its own counters. */
+  flex: none;
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 10px;
+  background: var(--card, #fff);
+}
+
+.seoPage { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.seoSlug { color: var(--muted, #757b83); font-size: 12px; }
+.seoBadge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg, #f2f3f5);
+  color: var(--ink-2, #4e5661);
+  font: 600 10.5px/1.5 inherit;
+}
+
+.seoField { display: grid; gap: 4px; }
+.seoFieldHead {
+  display: flex;
+  justify-content: space-between;
+  font: 600 11px/1 inherit;
+  color: var(--ink-2, #4e5661);
+}
+.seoCount { color: var(--muted, #9aa0aa); font-weight: 500; }
+/* Over the length Google shows. Flagged, never refused — see SeoPanel. */
+.seoCountOver { color: var(--warn, #b42318); font-weight: 700; }
+
+.seoInput {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 7px 9px;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 7px;
+  background: var(--surface, #fff);
+  color: var(--ink, #131922);
+  resize: vertical;
+}
+.seoInput:focus { outline: 2px solid var(--ink, #131922); outline-offset: -1px; }
+
+.seoNoIndex {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--ink-2, #4e5661);
+}
+
+.seoWarnings {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 2px;
+  font-size: 11.5px;
+  color: var(--warn, #b42318);
+}

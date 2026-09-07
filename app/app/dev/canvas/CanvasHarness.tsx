@@ -1,5 +1,6 @@
 "use client";
 
+import { SeoPanel } from "@/app/builder/[[...slug]]/SeoPanel";
 import {
   SiteDashboard,
   type DashboardTab,
@@ -290,7 +291,13 @@ export function CanvasHarness() {
               The image library needs a real site id, so it is not mounted here.
             </p>
           )}
-          {dashTab === "seo" && <p style={{ fontSize: 13 }}>SEO table lands next.</p>}
+          {/*
+            Mounted with no session, so this exercises the failure path: the
+            actions require canEditSite and there is no user here. Enough to
+            prove it mounts and reports rather than crashing; the populated
+            table needs a real login.
+          */}
+          {dashTab === "seo" && <SeoPanel siteId="00000000-0000-0000-0000-000000000000" />}
         </SiteDashboard>
       )}
 
