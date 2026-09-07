@@ -16,6 +16,7 @@ import {
   type ImagePlacement,
   type OneTarget,
 } from "@/app/actions/image-alt";
+import { DeleteImageDialog } from "./DeleteImageDialog";
 import styles from "./builder.module.css";
 
 /**
@@ -49,11 +50,17 @@ import styles from "./builder.module.css";
  * and a click opens the full photograph, because a 4-across thumbnail is for
  * recognising, not for judging.
  *
- * WHY GENERATION ONLY COVERS PLACEMENTS
+ * WHY DELETING IS A LIBRARY OPERATION AND NOT A PAGE ONE
  *
- * Describing a file nobody has placed spends a model call on a picture that
- * reaches no reader. It gets a description when it is placed, or when it is
- * typed here.
+ * Removing a picture here removes it from the LIBRARY. It does not take it
+ * off a page that uses it, and the confirmation says so rather than implying
+ * otherwise: the export walks each page's own schema by URL and never
+ * consults the library, so a page keeps its photograph until someone changes
+ * it on the page.
+ *
+ * Cascading would be the other choice and it is the wrong one — most sections
+ * are not valid without their photograph, so "delete this file" would quietly
+ * become "break the hero on two pages".
  * ─────────────────────────────────────────────────────────────────────
  */
 
@@ -86,6 +93,18 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
    * pictures instead of an empty screen — the same fault the alt tab had.
    */
   const [filter, setFilter] = useState<"missing" | "all" | null>(null);
+  /*
+   * The picture awaiting a delete confirmation, with the places that use it.
+   *
+   * The usage list is computed when the dialog opens rather than asked for
+   * then: the placements are already loaded, and a dialog that has to fetch
+   * before it can tell you what you are about to do is a dialog people click
+   * through.
+   */
+  const [deleting, setDeleting] = useState<{ asset: MediaAsset; used: ImagePlacement[] } | null>(
+    null,
+  );
+  const [removing, setRemoving] = useState(false);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const menuRef = useRef<HTMLSpanElement | null>(null);
 
@@ -185,12 +204,53 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
    */
   const placedUrlSet = new Set((placements ?? []).map((p) => p.url));
   const unusedAssets = (assets ?? []).filter((a) => !placedUrlSet.has(a.url));
+  /*
+   * Library file by URL, so a PLACED card can offer removal too.
+   *
+   * It could not before: the grid split rows into placed and unused, and only
+   * the unused branch drew the button — so a picture that had been uploaded
+   * AND used had no way to be removed at all, which is the gap this closes.
+   * A placed card with no entry here is a stock photograph that was never in
+   * the library, and there is nothing to remove.
+   */
+  const assetByUrl = new Map((assets ?? []).map((a) => [a.url, a] as const));
   const missingAlt =
     (placements ?? []).filter((p) => p.needsAlt).length +
     unusedAssets.filter((a) => !a.alt?.trim()).length;
   const missingTitle =
     (placements ?? []).filter((p) => p.needsTitle).length +
     unusedAssets.filter((a) => !a.title?.trim()).length;
+  /*
+   * Confirmed removal.
+   *
+   * Awaited, unlike the fire-and-forget it replaces: that removed the card
+   * from the screen and then dropped any failure on the floor, so a delete
+   * the server refused looked exactly like one it accepted until the next
+   * reload put the picture back.
+   */
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    const { asset } = deleting;
+    setRemoving(true);
+    setError(null);
+    try {
+      await deleteMediaAction({ siteId, assetId: asset.id });
+      setDeleting(null);
+      setNote(
+        `Removed “${asset.filename}” from your library.` +
+          (deleting.used.length
+            ? ` It is still on ${deleting.used.length === 1 ? "the page" : `${deleting.used.length} pages`} that use it.`
+            : ""),
+      );
+      await load();
+    } catch {
+      setError(`I couldn't remove “${asset.filename}”. It is still in your library.`);
+      setDeleting(null);
+    } finally {
+      setRemoving(false);
+    }
+  };
+
   /* Placed first — those are the ones that ship — then the rest of the library. */
   const allRows: Row[] = [
     ...(placements ?? []).map((p): Row => ({ kind: "placed", key: `p:${p.pageId}:${p.path}`, placement: p })),
@@ -415,6 +475,13 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
                 ? `${row.placement.sectionName} · ${row.placement.pageTitle}`
                 : "Not used on a page yet";
 
+            /*
+             * The library file behind this card, if there is one. A placed row
+             * is matched by URL because a placement stores the URL, not an
+             * asset id.
+             */
+            const libraryFile = row.kind === "unused" ? row.asset : assetByUrl.get(url);
+
             const target: OneTarget =
               row.kind === "placed"
                 ? { kind: "placed", pageId: row.placement.pageId, path: row.placement.path }
@@ -478,19 +545,22 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
                 />
 
                 {/*
-                  Only an unused file can be removed here. A placed one is
-                  still on a page: removing it from the library would leave a
-                  hole in a page the client has not looked at. Changing that
-                  picture is done on the page.
+                  Shown for any card backed by a library file, placed or not.
+                  A placed card with no library file behind it is a stock
+                  photograph that was never uploaded — there is nothing to
+                  remove, so no button.
                 */}
-                {row.kind === "unused" && (
+                {libraryFile && (
                   <button
                     type="button"
                     className={styles.imageRemove}
-                    onClick={() => {
-                      setAssets((prev) => prev?.filter((a) => a.id !== row.asset.id) ?? prev);
-                      void deleteMediaAction({ siteId, assetId: row.asset.id });
-                    }}
+                    disabled={busy || removing}
+                    onClick={() =>
+                      setDeleting({
+                        asset: libraryFile,
+                        used: (placements ?? []).filter((p) => p.url === libraryFile.url),
+                      })
+                    }
                   >
                     Remove from library
                   </button>
@@ -499,6 +569,16 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
             );
           })}
         </ul>
+      )}
+
+      {deleting && (
+        <DeleteImageDialog
+          asset={deleting.asset}
+          used={deleting.used}
+          removing={removing}
+          onKeep={() => setDeleting(null)}
+          onRemove={() => void confirmDelete()}
+        />
       )}
 
       {/*

@@ -7,7 +7,20 @@
   --bg: #f7f6f3;
   --accent: #5b6bff;
   --good: #17875a;
+  /*
+   * Caution and error are two different things, and for a while they shared
+   * one token. --warn is amber: "look at this" — a design swap that would
+   * lose a line of copy, an SEO note worth reading. --bad is red: an error,
+   * or a button that takes something away.
+   *
+   * They were one because the builder wrote `var(--warn, #b42318)` in 13
+   * places — a red fallback behind a token that resolves to amber, so the red
+   * never applied and every delete button, every error message and every
+   * over-the-limit counter rendered amber. The fallback was the intent; this
+   * gives it somewhere to live.
+   */
   --warn: #c9822a;
+  --bad: #b42318;
   --radius-lg: 22px;
   --radius-md: 14px;
   --radius-sm: 10px;
