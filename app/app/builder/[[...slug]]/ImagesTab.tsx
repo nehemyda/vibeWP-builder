@@ -80,6 +80,12 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
   const [dragging, setDragging] = useState(false);
   /* The picture being looked at full size, or null. */
   const [viewing, setViewing] = useState<{ url: string; label: string } | null>(null);
+  /*
+   * Which pictures are listed. Chosen when the rows arrive rather than fixed
+   * at "missing", so a site where everything is filled in opens on its
+   * pictures instead of an empty screen — the same fault the alt tab had.
+   */
+  const [filter, setFilter] = useState<"missing" | "all" | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const menuRef = useRef<HTMLSpanElement | null>(null);
 
@@ -109,6 +115,10 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
         if (!live) return;
         setAssets(a);
         setPlacements(p);
+        const anyMissing =
+          p.some((x) => x.needsAlt || x.needsTitle) ||
+          a.some((x) => !x.alt?.trim() || !x.title?.trim());
+        setFilter(anyMissing ? "missing" : "all");
       })
       .catch(() => live && setError("Couldn't load your images."));
     return () => {
@@ -168,16 +178,29 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
     }
   };
 
+  /*
+   * Counted across BOTH kinds, because generation acts on both. Counting only
+   * placements is what made a command claim one candidate and then report
+   * that nothing was written.
+   */
+  const placedUrlSet = new Set((placements ?? []).map((p) => p.url));
+  const unusedAssets = (assets ?? []).filter((a) => !placedUrlSet.has(a.url));
+  const missingAlt =
+    (placements ?? []).filter((p) => p.needsAlt).length +
+    unusedAssets.filter((a) => !a.alt?.trim()).length;
+  const missingTitle =
+    (placements ?? []).filter((p) => p.needsTitle).length +
+    unusedAssets.filter((a) => !a.title?.trim()).length;
   /* Placed first — those are the ones that ship — then the rest of the library. */
-  const placedUrls = new Set((placements ?? []).map((p) => p.url));
-  const rows: Row[] = [
+  const allRows: Row[] = [
     ...(placements ?? []).map((p): Row => ({ kind: "placed", key: `p:${p.pageId}:${p.path}`, placement: p })),
-    ...(assets ?? [])
-      .filter((a) => !placedUrls.has(a.url))
-      .map((a): Row => ({ kind: "unused", key: `a:${a.id}`, asset: a })),
+    ...unusedAssets.map((a): Row => ({ kind: "unused", key: `a:${a.id}`, asset: a })),
   ];
-  const missingAlt = (placements ?? []).filter((p) => p.needsAlt).length;
-  const missingTitle = (placements ?? []).filter((p) => p.needsTitle).length;
+  const isMissing = (r: Row) =>
+    r.kind === "placed"
+      ? r.placement.needsAlt || r.placement.needsTitle
+      : !r.asset.alt?.trim() || !r.asset.title?.trim();
+  const rows = filter === "missing" ? allRows.filter(isMissing) : allRows;
   const loaded = assets !== null && placements !== null;
 
   /*
@@ -341,7 +364,32 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
       {note && <p className={styles.seoNote}>{note}</p>}
       {!loaded && !error && <p className={styles.mediaHint}>Loading your images…</p>}
 
-      {loaded && rows.length === 0 && (
+      {loaded && allRows.length > 0 && (
+        <div className={styles.seoFilters}>
+          <button
+            type="button"
+            className={`${styles.seoFilter} ${filter === "missing" ? styles.seoFilterOn : ""}`}
+            aria-pressed={filter === "missing"}
+            onClick={() => setFilter("missing")}
+          >
+            Missing alt or title ({allRows.filter(isMissing).length})
+          </button>
+          <button
+            type="button"
+            className={`${styles.seoFilter} ${filter === "all" ? styles.seoFilterOn : ""}`}
+            aria-pressed={filter === "all"}
+            onClick={() => setFilter("all")}
+          >
+            All images ({allRows.length})
+          </button>
+        </div>
+      )}
+
+      {loaded && allRows.length > 0 && rows.length === 0 && (
+        <p className={styles.mediaHint}>Every picture has alt text and a title.</p>
+      )}
+
+      {loaded && allRows.length === 0 && (
         <div className={styles.mediaEmpty}>
           <p>No images yet.</p>
           <p className={styles.mediaHint}>

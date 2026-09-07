@@ -2313,27 +2313,31 @@
 .genWrap { position: relative; display: inline-flex; flex: none; }
 
 /*
- * The builder's accent, not the site's brand colour and not the plain dark of
- * the other buttons. This one command reaches a model and spends money, so it
- * should not look like the button beside it that only opens a file picker.
+ * Outlined, not filled, and no accent colour.
+ *
+ * This shipped filled in --accent, which is a real token but one nothing else
+ * in the builder uses as a button — so it read as a colour borrowed from the
+ * reference screenshot rather than as part of this app. Upload is the filled
+ * primary because getting pictures in is the common action; this is the
+ * secondary beside it, and outlined is how the rest of the app says that.
  */
 .genBtn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   appearance: none;
-  border: 0;
+  border: 1px solid var(--border, #e3e5e9);
   border-radius: 8px;
   padding: 8px 12px;
-  background: #5b6bff;
-  color: #fff;
+  background: var(--card, #fff);
+  color: var(--ink, #131922);
   font: 600 12.5px/1 inherit;
   cursor: pointer;
   white-space: nowrap;
 }
-.genBtn:hover:not(:disabled) { filter: brightness(1.08); }
+.genBtn:hover:not(:disabled) { border-color: var(--ink, #131922); }
 .genBtn:disabled { opacity: 0.5; cursor: default; }
-.genCaret { font-size: 11px; opacity: 0.85; }
+.genCaret { font-size: 11px; opacity: 0.55; }
 
 .genMenu {
   position: absolute;

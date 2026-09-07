@@ -197,11 +197,63 @@ export async function generateImageAltAction(opts: {
   const wantAlt = opts.field === "alt" || opts.field === "both";
   const wantTitle = opts.field === "title" || opts.field === "both";
 
-  const all = await listImageAltAction(opts.siteId);
+  /*
+   * PLACEMENTS AND LIBRARY FILES TOGETHER.
+   *
+   * This used to cover placements only, on the reasoning that describing a
+   * file nobody has placed spends a call on a picture no reader reaches. The
+   * tab shows one list, so a command that quietly acted on two thirds of it
+   * was the wrong call: a client looking at three cards with empty fields
+   * pressed the button and was told nothing was written.
+   */
+  const placements = await listImageAltAction(opts.siteId);
+  const library = await db
+    .select({
+      id: mediaAssets.id,
+      url: mediaAssets.url,
+      alt: mediaAssets.alt,
+      title: mediaAssets.title,
+    })
+    .from(mediaAssets)
+    .where(and(eq(mediaAssets.siteId, opts.siteId), isNull(mediaAssets.deletedAt)));
+
+  const placedUrls = new Set(placements.map((p) => p.url));
+
+  type Job = {
+    url: string;
+    context: string;
+    needsAlt: boolean;
+    needsTitle: boolean;
+    write: { pageId: string; path: string } | { assetId: string };
+  };
+
+  const jobs: Job[] = [
+    ...placements.map(
+      (p): Job => ({
+        url: p.url,
+        context: `${p.sectionName} on the ${p.pageTitle} page`,
+        needsAlt: p.needsAlt,
+        needsTitle: p.needsTitle,
+        write: { pageId: p.pageId, path: p.path },
+      }),
+    ),
+    ...library
+      .filter((a) => !placedUrls.has(a.url))
+      .map(
+        (a): Job => ({
+          url: a.url,
+          context: "in the library, not yet placed on a page",
+          needsAlt: !(a.alt ?? "").trim(),
+          needsTitle: !(a.title ?? "").trim(),
+          write: { assetId: a.id },
+        }),
+      ),
+  ];
+
   const targets =
     opts.scope === "all"
-      ? all
-      : all.filter((p) => (wantAlt && p.needsAlt) || (wantTitle && p.needsTitle));
+      ? jobs
+      : jobs.filter((j) => (wantAlt && j.needsAlt) || (wantTitle && j.needsTitle));
   if (targets.length === 0) {
     return {
       ok: true,
@@ -215,18 +267,24 @@ export async function generateImageAltAction(opts: {
     };
   }
 
-  /* Grouped by URL: one description per photograph, applied to each placement. */
-  const byUrl = new Map<string, ImagePlacement[]>();
-  for (const placement of targets) {
-    const group = byUrl.get(placement.url) ?? [];
-    group.push(placement);
-    byUrl.set(placement.url, group);
+  /* One description per photograph, applied to every place it is used. */
+  const byUrl = new Map<string, Job[]>();
+  for (const job of targets) {
+    const group = byUrl.get(job.url) ?? [];
+    group.push(job);
+    byUrl.set(job.url, group);
   }
 
   const describedAlt = new Map<string, string>();
   const describedTitle = new Map<string, string>();
   const urls = [...byUrl.keys()];
   const problems: string[] = [];
+  /*
+   * Counted, not swallowed. A picture whose URL has died was skipped in
+   * silence, so a run where the only candidate was a dead stock photograph
+   * reported "Nothing was written" and gave no reason at all.
+   */
+  let unreachable = 0;
 
   for (let i = 0; i < urls.length; i += BATCH) {
     const slice = urls.slice(i, i + BATCH);
@@ -234,25 +292,23 @@ export async function generateImageAltAction(opts: {
 
     for (const url of slice) {
       const fetched = await fetchImage(url);
-      if (!fetched) continue;
-      const where = byUrl.get(url)![0];
+      if (!fetched) {
+        unreachable += 1;
+        continue;
+      }
       subjects.push({
         key: url,
         bytes: fetched.bytes,
         mimeType: fetched.mimeType,
-        context: `${where.sectionName} on the ${where.pageTitle} page`,
+        context: byUrl.get(url)![0].context,
       });
     }
     if (subjects.length === 0) continue;
 
     /*
-     * The bytes are fetched once and reused for both prompts. Downloading a
-     * photograph twice to ask two questions about it would double the
-     * bandwidth for nothing.
-     *
-     * A failed call does not sink the rest: six unreadable photographs should
-     * not cost a client the twelve that were fine, and a failure on titles
-     * should not lose the alt text that already came back.
+     * The bytes are fetched once and reused for both prompts — two questions
+     * about one download. A failure on titles does not lose the alt text that
+     * already came back, and a failed batch does not sink the rest.
      */
     for (const kind of [wantAlt ? "alt" : null, wantTitle ? "title" : null].filter(
       (k): k is "alt" | "title" => !!k,
@@ -273,35 +329,58 @@ export async function generateImageAltAction(opts: {
   }
 
   /*
-   * Under "missing", only the side that was actually missing is written. A
-   * picture with good alt and no title must not have its alt rewritten
-   * because the client asked for titles.
+   * Under "missing", only the side that WAS missing is written: a picture with
+   * good alt and no title must not have its alt rewritten because titles were
+   * asked for.
    */
-  const writes = targets
-    .map((p) => {
-      const write: { pageId: string; path: string; alt?: string; title?: string } = {
-        pageId: p.pageId,
-        path: p.path,
-      };
-      const altValue = describedAlt.get(p.url);
-      const titleValue = describedTitle.get(p.url);
-      if (wantAlt && altValue && (opts.scope === "all" || p.needsAlt)) write.alt = altValue;
-      if (wantTitle && titleValue && (opts.scope === "all" || p.needsTitle)) {
-        write.title = titleValue;
-      }
-      return write;
-    })
-    .filter((w) => w.alt !== undefined || w.title !== undefined);
-  const written = await writeAlts(opts.siteId, writes);
+  let written = 0;
+  const pageWrites: Array<{ pageId: string; path: string; alt?: string; title?: string }> = [];
+
+  for (const job of targets) {
+    const altValue =
+      wantAlt && describedAlt.get(job.url) && (opts.scope === "all" || job.needsAlt)
+        ? describedAlt.get(job.url)
+        : undefined;
+    const titleValue =
+      wantTitle && describedTitle.get(job.url) && (opts.scope === "all" || job.needsTitle)
+        ? describedTitle.get(job.url)
+        : undefined;
+    if (altValue === undefined && titleValue === undefined) continue;
+
+    if ("assetId" in job.write) {
+      await db
+        .update(mediaAssets)
+        .set({
+          ...(altValue !== undefined ? { alt: altValue } : {}),
+          ...(titleValue !== undefined ? { title: titleValue } : {}),
+        })
+        .where(and(eq(mediaAssets.id, job.write.assetId), eq(mediaAssets.siteId, opts.siteId)));
+      written += 1;
+    } else {
+      pageWrites.push({ ...job.write, alt: altValue, title: titleValue });
+    }
+  }
+  written += await writeAlts(opts.siteId, pageWrites);
+
+  /* Said plainly, because "nothing happened" is the least useful answer. */
+  const notes: string[] = [];
+  if (unreachable > 0) {
+    notes.push(
+      `${unreachable} picture${unreachable === 1 ? "" : "s"} couldn't be loaded to look at — the file may have moved or been taken down`,
+    );
+  }
+  if (problems.length) notes.push(problems[0]);
 
   return {
     ok: true,
     written,
     message:
       written === 0
-        ? `Nothing was written${problems.length ? `: ${problems[0]}` : "."}`
+        ? notes.length
+          ? `Nothing was written: ${notes.join("; ")}.`
+          : "Nothing was written."
         : `Updated ${written} picture${written === 1 ? "" : "s"}. Publish to apply them.` +
-          (problems.length ? ` Some were skipped: ${problems[0]}` : ""),
+          (notes.length ? ` ${notes.join("; ")}.` : ""),
   };
 }
 
