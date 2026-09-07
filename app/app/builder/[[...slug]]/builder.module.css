@@ -2307,3 +2307,93 @@
 @media (prefers-reduced-motion: reduce) {
   .imageGenSpin { animation-duration: 2s; }
 }
+
+/* ── Generate with AI ───────────────────────────────────────────────── */
+
+.genWrap { position: relative; display: inline-flex; flex: none; }
+
+/*
+ * The builder's accent, not the site's brand colour and not the plain dark of
+ * the other buttons. This one command reaches a model and spends money, so it
+ * should not look like the button beside it that only opens a file picker.
+ */
+.genBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #5b6bff;
+  color: #fff;
+  font: 600 12.5px/1 inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.genBtn:hover:not(:disabled) { filter: brightness(1.08); }
+.genBtn:disabled { opacity: 0.5; cursor: default; }
+.genCaret { font-size: 11px; opacity: 0.85; }
+
+.genMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 244px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--card, #fff);
+  border: 1px solid var(--border, #e3e5e9);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.16);
+}
+
+/* The group heading, on its own ground like the reference's. */
+.genGroup {
+  display: block;
+  padding: 7px 10px 5px;
+  margin: 2px 0;
+  background: var(--bg, #f7f8fa);
+  border-radius: 6px;
+  font: 700 10px/1 inherit;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted, #757b83);
+}
+
+.genMenu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  appearance: none;
+  border: 0;
+  background: none;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink, #131922);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.genMenu button:hover:not(:disabled) { background: var(--bg, #f2f3f5); }
+.genMenu button:disabled { opacity: 0.4; cursor: default; }
+
+/* How many that command would touch, so the choice needs no guessing. */
+.genCount {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg, #f2f3f5);
+  font-size: 11px;
+  color: var(--ink-2, #4e5661);
+}
+
+.genConfirm { display: flex; gap: 4px; padding: 2px; }
+.genConfirm button { width: auto; font-size: 12px; }
+.genConfirmYes {
+  background: var(--warn, #b42318) !important;
+  color: #fff !important;
+}

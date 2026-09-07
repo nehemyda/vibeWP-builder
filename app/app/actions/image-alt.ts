@@ -63,6 +63,9 @@ export type ImagePlacement = {
   title: string;
   /** True when the alt is absent or the placeholder. */
   needsAlt: boolean;
+  /** True when there is no title. Absent is the only "missing" here — a
+   *  title has no placeholder, because nothing breaks without one. */
+  needsTitle: boolean;
 };
 
 async function assertAccess(siteId: string): Promise<void> {
@@ -111,6 +114,7 @@ export async function listImageAltAction(siteId: string): Promise<ImagePlacement
           alt,
           title: image.title ?? "",
           needsAlt: isPlaceholder(alt),
+          needsTitle: !(image.title ?? "").trim(),
         });
       }
     });
@@ -169,6 +173,15 @@ export type AltGenerateResult =
 export async function generateImageAltAction(opts: {
   siteId: string;
   scope: "missing" | "all";
+  /**
+   * Which field, or both.
+   *
+   * "both" is two model calls per batch, not one asking for two answers. The
+   * prompts are genuinely different jobs — a sentence describing the picture
+   * and a short label naming it — and merging them produced a title that was
+   * the alt with words removed.
+   */
+  field: "alt" | "title" | "both";
 }): Promise<AltGenerateResult> {
   await assertAccess(opts.siteId);
 
@@ -181,10 +194,25 @@ export async function generateImageAltAction(opts: {
     return { ok: false, message: "This site has no business details yet." };
   }
 
+  const wantAlt = opts.field === "alt" || opts.field === "both";
+  const wantTitle = opts.field === "title" || opts.field === "both";
+
   const all = await listImageAltAction(opts.siteId);
-  const targets = opts.scope === "all" ? all : all.filter((p) => p.needsAlt);
+  const targets =
+    opts.scope === "all"
+      ? all
+      : all.filter((p) => (wantAlt && p.needsAlt) || (wantTitle && p.needsTitle));
   if (targets.length === 0) {
-    return { ok: true, written: 0, message: "Every picture already has a description." };
+    return {
+      ok: true,
+      written: 0,
+      message:
+        opts.field === "title"
+          ? "Every picture already has a title."
+          : opts.field === "alt"
+            ? "Every picture already has alt text."
+            : "Every picture already has both.",
+    };
   }
 
   /* Grouped by URL: one description per photograph, applied to each placement. */
@@ -195,7 +223,8 @@ export async function generateImageAltAction(opts: {
     byUrl.set(placement.url, group);
   }
 
-  const described = new Map<string, string>();
+  const describedAlt = new Map<string, string>();
+  const describedTitle = new Map<string, string>();
   const urls = [...byUrl.keys()];
   const problems: string[] = [];
 
@@ -216,25 +245,53 @@ export async function generateImageAltAction(opts: {
     }
     if (subjects.length === 0) continue;
 
-    try {
-      const answers = await generateAltWithGemini(
-        describeBusiness(business),
-        subjects,
-        settings.geminiApiKey,
-      );
-      for (const [key, alt] of answers) described.set(key, alt);
-    } catch (err) {
-      /*
-       * A failed batch does not sink the rest. Six unreadable photographs
-       * should not cost a client the twelve that were fine.
-       */
-      problems.push(err instanceof Error ? err.message : "a batch failed");
+    /*
+     * The bytes are fetched once and reused for both prompts. Downloading a
+     * photograph twice to ask two questions about it would double the
+     * bandwidth for nothing.
+     *
+     * A failed call does not sink the rest: six unreadable photographs should
+     * not cost a client the twelve that were fine, and a failure on titles
+     * should not lose the alt text that already came back.
+     */
+    for (const kind of [wantAlt ? "alt" : null, wantTitle ? "title" : null].filter(
+      (k): k is "alt" | "title" => !!k,
+    )) {
+      try {
+        const answers = await generateAltWithGemini(
+          describeBusiness(business),
+          subjects,
+          settings.geminiApiKey,
+          kind,
+        );
+        const into = kind === "alt" ? describedAlt : describedTitle;
+        for (const [key, value] of answers) into.set(key, value);
+      } catch (err) {
+        problems.push(err instanceof Error ? err.message : "a batch failed");
+      }
     }
   }
 
+  /*
+   * Under "missing", only the side that was actually missing is written. A
+   * picture with good alt and no title must not have its alt rewritten
+   * because the client asked for titles.
+   */
   const writes = targets
-    .filter((p) => described.has(p.url))
-    .map((p) => ({ pageId: p.pageId, path: p.path, alt: described.get(p.url)! }));
+    .map((p) => {
+      const write: { pageId: string; path: string; alt?: string; title?: string } = {
+        pageId: p.pageId,
+        path: p.path,
+      };
+      const altValue = describedAlt.get(p.url);
+      const titleValue = describedTitle.get(p.url);
+      if (wantAlt && altValue && (opts.scope === "all" || p.needsAlt)) write.alt = altValue;
+      if (wantTitle && titleValue && (opts.scope === "all" || p.needsTitle)) {
+        write.title = titleValue;
+      }
+      return write;
+    })
+    .filter((w) => w.alt !== undefined || w.title !== undefined);
   const written = await writeAlts(opts.siteId, writes);
 
   return {
@@ -242,8 +299,8 @@ export async function generateImageAltAction(opts: {
     written,
     message:
       written === 0
-        ? `Nothing was described${problems.length ? `: ${problems[0]}` : "."}`
-        : `Described ${written} picture${written === 1 ? "" : "s"}. Publish to apply them.` +
+        ? `Nothing was written${problems.length ? `: ${problems[0]}` : "."}`
+        : `Updated ${written} picture${written === 1 ? "" : "s"}. Publish to apply them.` +
           (problems.length ? ` Some were skipped: ${problems[0]}` : ""),
   };
 }

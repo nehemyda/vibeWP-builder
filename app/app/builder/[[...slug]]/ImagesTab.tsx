@@ -68,11 +68,33 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
   const [note, setNote] = useState<string | null>(null);
   const [uploading, setUploading] = useState(0);
   const [working, setWorking] = useState<string | null>(null);
-  const [confirmAll, setConfirmAll] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  /*
+   * Which destructive command is awaiting confirmation, or null.
+   *
+   * A key rather than a boolean, because there are now three "rewrite
+   * everything" commands and a shared flag would confirm whichever was asked
+   * for last.
+   */
+  const [confirming, setConfirming] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   /* The picture being looked at full size, or null. */
   const [viewing, setViewing] = useState<{ url: string; label: string } | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const menuRef = useRef<HTMLSpanElement | null>(null);
+
+  /* Clicking away closes the menu — the same shape the section menu uses. */
+  useEffect(() => {
+    if (!menuOpen) return;
+    const away = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) {
+        setMenuOpen(false);
+        setConfirming(null);
+      }
+    };
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, [menuOpen]);
 
   const load = async () => {
     const [a, p] = await Promise.all([listMediaAction(siteId), listImageAltAction(siteId)]);
@@ -126,13 +148,15 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
     }
   }
 
-  const generate = async (scope: "missing" | "all") => {
-    setConfirmAll(false);
+  const generate = async (scope: "missing" | "all", field: "alt" | "title" | "both") => {
+    setMenuOpen(false);
+    setConfirming(null);
     setNote(null);
     setError(null);
-    setWorking(scope === "all" ? "Writing alt text for every picture…" : "Writing the missing alt text…");
+    const what = field === "both" ? "alt text and titles" : field === "alt" ? "alt text" : "titles";
+    setWorking(scope === "all" ? `Rewriting ${what}…` : `Writing the missing ${what}…`);
     try {
-      const result = await generateImageAltAction({ siteId, scope });
+      const result = await generateImageAltAction({ siteId, scope, field });
       if (result.ok) {
         setNote(result.message);
         await load();
@@ -152,8 +176,42 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
       .filter((a) => !placedUrls.has(a.url))
       .map((a): Row => ({ kind: "unused", key: `a:${a.id}`, asset: a })),
   ];
-  const missingCount = (placements ?? []).filter((p) => p.needsAlt).length;
+  const missingAlt = (placements ?? []).filter((p) => p.needsAlt).length;
+  const missingTitle = (placements ?? []).filter((p) => p.needsTitle).length;
   const loaded = assets !== null && placements !== null;
+
+  /*
+   * The commands, grouped by field the way the reference groups them. Every
+   * one is field × scope, so the menu is the whole matrix rather than a
+   * selection of it — a client who wants only titles rewritten should not
+   * have to work out that "rewrite all" would also redo their alt text.
+   */
+  const COMMANDS: Array<{
+    group: string;
+    items: Array<{ key: string; label: string; scope: "missing" | "all"; field: "alt" | "title" | "both"; count?: number }>;
+  }> = [
+    {
+      group: "Alt text",
+      items: [
+        { key: "alt-missing", label: "Pictures missing alt text", scope: "missing", field: "alt", count: missingAlt },
+        { key: "alt-all", label: "Rewrite every picture", scope: "all", field: "alt" },
+      ],
+    },
+    {
+      group: "Title",
+      items: [
+        { key: "title-missing", label: "Pictures missing a title", scope: "missing", field: "title", count: missingTitle },
+        { key: "title-all", label: "Rewrite every picture", scope: "all", field: "title" },
+      ],
+    },
+    {
+      group: "Both",
+      items: [
+        { key: "both-missing", label: "Fill anything missing", scope: "missing", field: "both" },
+        { key: "both-all", label: "Rewrite everything", scope: "all", field: "both" },
+      ],
+    },
+  ];
 
   return (
     <div
@@ -180,50 +238,89 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
           </p>
         </div>
         <div className={styles.seoActions}>
+          {/*
+            Upload is the filled primary. Getting pictures in is the thing a
+            client does first and most, and it had been the palest button on
+            the row — a ghost beside two darker ones, which reads as the least
+            important of the three.
+          */}
           <button
             type="button"
-            className={styles.seoGenerateGhost}
+            className={styles.seoGenerate}
             onClick={() => fileInput.current?.click()}
             disabled={uploading > 0}
           >
             {uploading > 0 ? `Uploading ${uploading}…` : "Upload images"}
           </button>
-          <button
-            type="button"
-            className={styles.seoGenerate}
-            disabled={!!working || missingCount === 0}
-            onClick={() => void generate("missing")}
-          >
-            {working ??
-              (missingCount === 0
-                ? "Nothing is missing alt text"
-                : `Generate the missing ${missingCount}`)}
-          </button>
-          {confirmAll ? (
-            <span className={styles.seoConfirm}>
-              <button
-                type="button"
-                className={styles.seoConfirmYes}
-                disabled={!!working}
-                onClick={() => void generate("all")}
-              >
-                Replace all
-              </button>
-              <button type="button" onClick={() => setConfirmAll(false)}>
-                Cancel
-              </button>
-            </span>
-          ) : (
+
+          <span className={styles.genWrap} ref={menuRef}>
             <button
               type="button"
-              className={styles.seoGenerateGhost}
+              className={styles.genBtn}
               disabled={!!working || rows.length === 0}
-              onClick={() => setConfirmAll(true)}
-              title="Rewrites the alt text on every picture, including any you wrote yourself"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
             >
-              Generate for all…
+              {working ?? "Generate with AI"}
+              <span className={styles.genCaret} aria-hidden="true">
+                ⌄
+              </span>
             </button>
-          )}
+
+            {menuOpen && (
+              <div className={styles.genMenu} role="menu">
+                {COMMANDS.map((section) => (
+                  <div key={section.group}>
+                    <span className={styles.genGroup}>{section.group}</span>
+                    {section.items.map((item) => {
+                      const empty = item.count === 0;
+                      /*
+                       * A rewrite asks first, in place, because there is no
+                       * undo on a description beyond typing it again. Filling
+                       * blanks does not — it takes nothing away.
+                       */
+                      if (confirming === item.key) {
+                        return (
+                          <span key={item.key} className={styles.genConfirm}>
+                            <button
+                              type="button"
+                              className={styles.genConfirmYes}
+                              onClick={() => void generate(item.scope, item.field)}
+                            >
+                              Replace them
+                            </button>
+                            <button type="button" onClick={() => setConfirming(null)}>
+                              Cancel
+                            </button>
+                          </span>
+                        );
+                      }
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          role="menuitem"
+                          disabled={empty}
+                          title={empty ? "Nothing is missing" : undefined}
+                          onClick={() =>
+                            item.scope === "all"
+                              ? setConfirming(item.key)
+                              : void generate(item.scope, item.field)
+                          }
+                        >
+                          <span>{item.label}</span>
+                          {item.count !== undefined && (
+                            <span className={styles.genCount}>{item.count}</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+          </span>
         </div>
       </header>
 
