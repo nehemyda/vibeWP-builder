@@ -2,6 +2,7 @@ import type { SectionDefinition } from "./types";
 import { SECTION_STYLE_FIELDS } from "@/lib/design/section-style";
 import { ELEMENT_STYLE_FIELDS } from "@/lib/design/element-style";
 import { PART_VISIBILITY_OPTIONS } from "@/lib/design/part-visibility";
+import { PART_SIZE_OPTIONS } from "@/lib/design/part-size";
 import { HeaderSimple } from "./header-simple";
 import { HeaderCentered } from "./header-centered";
 import { HeaderCta } from "./header-cta";
@@ -237,6 +238,7 @@ export const SECTIONS = DEFINED.map((section) =>
           ...SECTION_STYLE_FIELDS,
           ...ELEMENT_STYLE_FIELDS,
           ...PART_VISIBILITY_OPTIONS,
+          ...PART_SIZE_OPTIONS,
           ...section.fields,
         },
       },

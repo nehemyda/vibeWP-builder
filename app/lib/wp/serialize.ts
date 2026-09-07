@@ -3,6 +3,7 @@ import { styleClassesFor, styleFromClasses } from "@/lib/design/section-style";
 import { applyElementStyles, elementStylesFromHtml } from "@/lib/design/element-style";
 import { applyPartVisibility, partVisibilityFromHtml } from "@/lib/design/part-visibility";
 import { applyPartOrder, partOrderFromHtml, PART_ORDER_FIELD } from "@/lib/design/part-order";
+import { applyPartWidth, partWidthFromHtml } from "@/lib/design/part-size";
 import { getSectionByNodeType, SECTIONS } from "@/lib/sections";
 import { esc, escAttr } from "./blocks";
 import { defaultSpan, staticFormMarkup } from "@/lib/forms/static-markup";
@@ -90,6 +91,7 @@ export function schemaToGutenberg(
       // so they land at the same specificity as the rule they override.
       html = applyElementStyles(html, node.props);
       html = applyPartVisibility(html, node.props);
+      html = applyPartWidth(html, node.props);
       /*
        * Last, so it moves blocks that already carry their classes. Ordering
        * before the class passes would leave their regexes matching markup
@@ -538,6 +540,7 @@ export function gutenbergToSchema(html: string): PageSchema | null {
       const style = rootEl ? styleFromClasses(rootEl.getAttribute("class") ?? "") : {};
       const elementStyle = rootEl ? elementStylesFromHtml(rootEl.outerHTML) : {};
       const partVisibility = rootEl ? partVisibilityFromHtml(rootEl.outerHTML) : {};
+      const partWidth = rootEl ? partWidthFromHtml(rootEl.outerHTML) : {};
       /*
        * The order is read from the sequence the blocks are in, which IS the
        * fact — nothing had to be stamped into the client's exported content
@@ -548,7 +551,7 @@ export function gutenbergToSchema(html: string): PageSchema | null {
       nodes.push({
         id: `n_${section.key}`,
         type: section.nodeType,
-        props: { ...props, ...style, ...elementStyle, ...partVisibility, ...partOrder },
+        props: { ...props, ...style, ...elementStyle, ...partVisibility, ...partWidth, ...partOrder },
       });
     }
   }

@@ -7,6 +7,7 @@ import { textPaths } from "@/lib/design/text-map";
 import { plainText, readRichTextDom } from "@/lib/wp/richtext";
 import { imagePaths } from "@/lib/design/image-map";
 import { SCREENS, SECTION_PARTS, fieldFor as hideField } from "@/lib/design/part-visibility";
+import { widthFieldFor } from "@/lib/design/part-size";
 import {
   closePartMenu,
   hideDropLine,
@@ -876,6 +877,7 @@ export function PreviewFrame({
               (sc) => sc.key,
             ),
             isMedia: key === "media",
+            width: String(props2[widthFieldFor(key)] ?? "auto"),
           },
           contentDoc,
         );
@@ -1166,11 +1168,23 @@ export function PreviewFrame({
         event.preventDefault();
         event.stopPropagation();
         const action = (button as HTMLElement).dataset.action ?? "";
-        if (action === "hide-open") {
-          // A submenu, not an action: toggled here rather than on hover so it
-          // works by touch and by keyboard as well as by pointer.
+        /*
+         * Anything ending in "-open" is a submenu, not an action. Named as a
+         * pattern rather than listed: the guard used to name hide-open alone,
+         * so adding a Width submenu made "width-open" fall through and get
+         * dispatched as a width of "open".
+         *
+         * Toggled on click rather than hover so it works by touch and by
+         * keyboard as well as by pointer.
+         */
+        if (action.endsWith("-open")) {
           const owner = button.closest(".vpm-hasSub");
-          owner?.setAttribute("data-open", owner.getAttribute("data-open") === "1" ? "0" : "1");
+          const wasOpen = owner?.getAttribute("data-open") === "1";
+          // One submenu at a time, or two overlap each other.
+          menu
+            .querySelectorAll<HTMLElement>(".vpm-hasSub")
+            .forEach((el) => el.setAttribute("data-open", "0"));
+          owner?.setAttribute("data-open", wasOpen ? "0" : "1");
           return;
         }
         if (!openPart) return;

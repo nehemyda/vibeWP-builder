@@ -1,4 +1,5 @@
 import { SCREENS, SECTION_PARTS } from "./part-visibility";
+import { WIDTHS } from "./part-size";
 
 /**
  * The menu on a part of a section, opened from the part itself.
@@ -45,6 +46,8 @@ export type PartMenuState = {
   hiddenFrom: string[];
   /** Photos get "Replace image"; nothing else does. */
   isMedia: boolean;
+  /** The width step currently set, or "auto" for the design's own. */
+  width: string;
 };
 
 /**
@@ -307,7 +310,14 @@ export function mountPartMenu(doc: Document): HTMLElement {
 #${HOST_ID} button[data-danger] { color: #b42318; }
 #${HOST_ID} button[data-danger]:hover { background: #fdf1f0; }
 #${HOST_ID} .vpm-rule { height: 1px; margin: 4px 6px; background: rgb(0 0 0 / 0.09); }
-#${HOST_ID} .vpm-arrow { margin-left: auto; opacity: 0.5; font-size: 11px; }
+#${HOST_ID} .vpm-arrow { opacity: 0.5; font-size: 11px; }
+/* What the setting is now, so the submenu need not be opened to find out. */
+#${HOST_ID} .vpm-note {
+  margin-left: auto;
+  padding-left: 10px;
+  color: #757b83;
+  font-size: 11.5px;
+}
 #${HOST_ID} .vpm-tick { margin-left: auto; font-size: 12px; }
 /* The submenu sits beside the row that owns it, like the reference does. */
 #${HOST_ID} .vpm-sub {
@@ -343,14 +353,24 @@ export function openPartMenu(
   const hidden = new Set(state.hiddenFrom);
   const allHidden = SCREENS.every((s) => hidden.has(s.key));
 
+  const currentWidth = WIDTHS.find((w) => w.value === state.width)?.label ?? "";
+
   const item = (
     action: string,
     text: string,
-    opts: { disabled?: boolean; danger?: boolean; tick?: boolean; sub?: boolean } = {},
+    opts: {
+      disabled?: boolean;
+      danger?: boolean;
+      tick?: boolean;
+      sub?: boolean;
+      /** Shown greyed beside the label — what the setting currently is. */
+      note?: string;
+    } = {},
   ) =>
     `<button type="button" data-action="${action}"${opts.disabled ? " disabled" : ""}` +
     `${opts.danger ? " data-danger" : ""}>` +
     `<span>${text}</span>` +
+    (opts.note ? `<span class="vpm-note">${opts.note}</span>` : "") +
     (opts.sub ? `<span class="vpm-arrow">›</span>` : "") +
     (opts.tick ? `<span class="vpm-tick">✓</span>` : "") +
     `</button>`;
@@ -362,6 +382,16 @@ export function openPartMenu(
     item("up", "Move up", { disabled: !state.canMoveUp }) +
     item("down", "Move down", { disabled: !state.canMoveDown }) +
     `<div class="vpm-rule"></div>` +
+    /*
+     * Width in steps, not a number. A class is the only carrier that survives
+     * WordPress regenerating a block from its comment; see part-size.ts.
+     * Arbitrary pixels live on the image, where core keeps real attributes.
+     */
+    `<div class="vpm-hasSub" data-sub="width">` +
+    item("width-open", "Width", { sub: true, note: currentWidth }) +
+    `<div class="vpm-sub">` +
+    WIDTHS.map((w) => item(`width-${w.value}`, w.label, { tick: w.value === state.width })).join("") +
+    `</div></div>` +
     `<div class="vpm-hasSub" data-sub="hide">` +
     item("hide-open", "Hide from", { sub: true }) +
     `<div class="vpm-sub">` +

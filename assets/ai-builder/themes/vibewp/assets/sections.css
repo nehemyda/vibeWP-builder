@@ -3540,3 +3540,38 @@ body.yp-page {
 @media (max-width: 560px) {
   .yp-page .u-flip--mobile > *:first-child { order: 2; }
 }
+
+/* ────────────────────────────────────────────────────────────────────
+   ELEMENT WIDTH
+
+   Bounded steps rather than a free number, because the carrier is a CLASS.
+   WordPress regenerates a static block's HTML from the className in its
+   comment, so an inline width with no matching attribute makes the block
+   invalid in wp-admin — the client is told their content is unexpected, and
+   one click of Attempt Block Recovery strips it. A class survives that;
+   an arbitrary inline style does not.
+
+   Genuinely arbitrary pixels exist where WordPress itself supports them:
+   an image's width and height, which core keeps as real block attributes.
+
+   max-width is always 100% so a width chosen on a wide screen can never
+   overflow a narrow one. That is the one thing a client cannot see happening
+   at the moment they choose it.
+   ──────────────────────────────────────────────────────────────────── */
+
+.yp-page .u-w--25 { width: 25%; max-width: 100%; }
+.yp-page .u-w--33 { width: 33.3333%; max-width: 100%; }
+.yp-page .u-w--50 { width: 50%; max-width: 100%; }
+.yp-page .u-w--66 { width: 66.6667%; max-width: 100%; }
+.yp-page .u-w--75 { width: 75%; max-width: 100%; }
+.yp-page .u-w--100 { width: 100%; max-width: 100%; }
+
+/*
+ * On phones a fraction of the screen is almost never what was meant — a
+ * quarter-width heading on a 390px viewport is four words stacked in a
+ * column. Everything goes full width there, which is what every one of the
+ * 62 designs already does with its own columns at this size.
+ */
+@media (max-width: 560px) {
+  .yp-page [class*="u-w--"] { width: 100%; }
+}

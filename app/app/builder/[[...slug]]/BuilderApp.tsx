@@ -31,6 +31,7 @@ import { readClip, writeClip, type Clip } from "@/lib/design/clipboard";
 import { setSectionImageAction } from "@/app/actions/edit";
 import { MediaPanel } from "./MediaPanel";
 import { SCREENS, fieldFor as hideField } from "@/lib/design/part-visibility";
+import { widthFieldFor } from "@/lib/design/part-size";
 import { PART_ORDER_FIELD } from "@/lib/design/part-order";
 import {
   schemaToGutenberg,
@@ -1814,6 +1815,25 @@ export function BuilderApp({
                       void runCanvasOp(
                         { kind: "remove_part", section: ref, part },
                         `Removing part of the ${label}`,
+                      );
+                      return;
+                    }
+
+                    /*
+                     * "-open" actions are submenu toggles handled in the
+                     * canvas and never reach here; the belt-and-braces check
+                     * is because dispatching a width of "open" would be a
+                     * refusal the client could not interpret.
+                     */
+                    if (action.startsWith("width-") && !action.endsWith("-open")) {
+                      void runCanvasOp(
+                        {
+                          kind: "set_option",
+                          section: ref,
+                          option: widthFieldFor(part),
+                          value: action.slice("width-".length),
+                        },
+                        `Resizing part of the ${label}`,
                       );
                       return;
                     }
