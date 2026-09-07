@@ -79,6 +79,65 @@ export function DialogHarness() {
         mid-removal
       </label>
       {/*
+        The toolbar and the pager, at a count the real site will not reach for
+        a while — 47 pictures, which is the first count where three pages, a
+        clamp and a narrowing search all exist at once.
+      */}
+      <h2 style={{ font: "700 14px/1.3 system-ui", margin: "18px 0 0" }}>Toolbar and pager</h2>
+      <div style={{ width: "min(900px, 100%)" }}>
+        <div className={styles.imageTools}>
+          <div className={styles.seoFilters}>
+            <button type="button" className={`${styles.seoFilter} ${styles.seoFilterOn}`}>
+              Missing alt or title (12)
+            </button>
+            <button type="button" className={styles.seoFilter}>
+              All images (47)
+            </button>
+          </div>
+          <label className={styles.imageSearch}>
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path
+                d="M7.2 12.4A5.2 5.2 0 1 0 7.2 2a5.2 5.2 0 0 0 0 10.4ZM11 11l3 3"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+            <input
+              type="search"
+              defaultValue="bread"
+              placeholder="Search name, alt, title or page"
+            />
+            <button type="button" className={styles.imageSearchClear} aria-label="Clear">
+              ✕
+            </button>
+          </label>
+        </div>
+
+        <div className={styles.pager}>
+          <span className={styles.pagerCount}>Showing 21–40 of 47</span>
+          <div className={styles.pagerBtns}>
+            <button type="button" className={styles.pagerBtn}>
+              ‹ Previous
+            </button>
+            {[1, 2, 3].map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`${styles.pagerNum} ${n === 2 ? styles.pagerNumOn : ""}`}
+              >
+                {n}
+              </button>
+            ))}
+            <button type="button" className={styles.pagerBtn}>
+              Next ›
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/*
         The delete chip in position, over both extremes. The markup mirrors the
         card's thumbnail wrapper in ImagesTab — the part whose geometry and
         contrast are the question; the text fields below it are unchanged.

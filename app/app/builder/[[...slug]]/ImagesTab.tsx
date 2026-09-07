@@ -18,6 +18,7 @@ import {
   type OneTarget,
 } from "@/app/actions/image-alt";
 import { DeleteImageDialog, type DeleteTarget } from "./DeleteImageDialog";
+import { galleryPage } from "@/lib/design/gallery-page";
 import styles from "./builder.module.css";
 
 /**
@@ -65,6 +66,17 @@ import styles from "./builder.module.css";
  * ─────────────────────────────────────────────────────────────────────
  */
 
+/*
+ * Twenty a page — five rows of the four-across grid.
+ *
+ * Paged in the browser, not the database: the tab counts need the whole set
+ * anyway, and listImageAltAction has to walk every page's schema to find the
+ * placements at all, so there is no query to paginate. That holds while a
+ * site's pictures number in the hundreds; a library in the thousands would
+ * need the fetch itself to page, and this is the line to revisit.
+ */
+const PER_PAGE = 20;
+
 type Row =
   | { kind: "placed"; key: string; placement: ImagePlacement }
   | { kind: "unused"; key: string; asset: MediaAsset };
@@ -107,6 +119,17 @@ export function ImagesTab({
    * pictures instead of an empty screen — the same fault the alt tab had.
    */
   const [filter, setFilter] = useState<"missing" | "all" | null>(null);
+  /*
+   * What is typed in the search box, and which page of results is showing.
+   *
+   * Both narrow the SAME list the filter tabs narrow, and paging is applied
+   * last — so the page number belongs to the filtered, searched result and not
+   * to the library. Which is why every control that changes the result resets
+   * it to 1: staying on page 5 of a set that now has two pages is the classic
+   * way a search box appears to return nothing.
+   */
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   /*
    * The picture awaiting a delete confirmation, and what deleting it means.
    *
@@ -317,7 +340,34 @@ export function ImagesTab({
     r.kind === "placed"
       ? r.placement.needsAlt || r.placement.needsTitle
       : !r.asset.alt?.trim() || !r.asset.title?.trim();
-  const rows = filter === "missing" ? allRows.filter(isMissing) : allRows;
+
+  /*
+   * Everything a person can see on a card is searchable, because that is what
+   * they will type: the file's name, the words they wrote in either field, and
+   * where it sits. Searching filenames alone would miss every stock photograph
+   * on the site — those have no filename a client has ever seen.
+   */
+  const searchable = (r: Row) =>
+    (r.kind === "placed"
+      ? [r.placement.alt, r.placement.title, r.placement.sectionName, r.placement.pageTitle]
+      : [r.asset.filename, r.asset.alt, r.asset.title]
+    )
+      .filter(Boolean)
+      .join(" ");
+
+  const {
+    rows,
+    matched,
+    pageCount,
+    page: current,
+  } = galleryPage(allRows, {
+    keep: filter === "missing" ? isMissing : undefined,
+    query,
+    searchable,
+    page,
+    perPage: PER_PAGE,
+  });
+  const searching = query.trim().length > 0;
   const loaded = assets !== null && placements !== null;
 
   /*
@@ -482,28 +532,90 @@ export function ImagesTab({
       {!loaded && !error && <p className={styles.mediaHint}>Loading your images…</p>}
 
       {loaded && allRows.length > 0 && (
-        <div className={styles.seoFilters}>
-          <button
-            type="button"
-            className={`${styles.seoFilter} ${filter === "missing" ? styles.seoFilterOn : ""}`}
-            aria-pressed={filter === "missing"}
-            onClick={() => setFilter("missing")}
-          >
-            Missing alt or title ({allRows.filter(isMissing).length})
-          </button>
-          <button
-            type="button"
-            className={`${styles.seoFilter} ${filter === "all" ? styles.seoFilterOn : ""}`}
-            aria-pressed={filter === "all"}
-            onClick={() => setFilter("all")}
-          >
-            All images ({allRows.length})
-          </button>
+        <div className={styles.imageTools}>
+          <div className={styles.seoFilters}>
+            <button
+              type="button"
+              className={`${styles.seoFilter} ${filter === "missing" ? styles.seoFilterOn : ""}`}
+              aria-pressed={filter === "missing"}
+              onClick={() => {
+                setFilter("missing");
+                setPage(1);
+              }}
+            >
+              Missing alt or title ({allRows.filter(isMissing).length})
+            </button>
+            <button
+              type="button"
+              className={`${styles.seoFilter} ${filter === "all" ? styles.seoFilterOn : ""}`}
+              aria-pressed={filter === "all"}
+              onClick={() => {
+                setFilter("all");
+                setPage(1);
+              }}
+            >
+              All images ({allRows.length})
+            </button>
+          </div>
+
+          {/*
+            Search sits with the filters because it does the same job — it
+            narrows the same list — and putting it above the grid instead
+            would read as a second, separate control over something else.
+          */}
+          <label className={styles.imageSearch}>
+            <span className={styles.srOnly}>Search your pictures</span>
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path
+                d="M7.2 12.4A5.2 5.2 0 1 0 7.2 2a5.2 5.2 0 0 0 0 10.4ZM11 11l3 3"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+            <input
+              type="search"
+              value={query}
+              placeholder="Search name, alt, title or page"
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
+            />
+            {query && (
+              <button
+                type="button"
+                className={styles.imageSearchClear}
+                aria-label="Clear the search"
+                onClick={() => {
+                  setQuery("");
+                  setPage(1);
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </label>
         </div>
       )}
 
-      {loaded && allRows.length > 0 && rows.length === 0 && (
-        <p className={styles.mediaHint}>Every picture has alt text and a title.</p>
+      {/*
+        Three different empty results, said three different ways. One message
+        for all of them would tell a client searching for "bread" that every
+        picture has alt text, which is both untrue and unhelpful.
+      */}
+      {loaded && allRows.length > 0 && matched.length === 0 && (
+        <p className={styles.mediaHint}>
+          {searching ? (
+            <>
+              Nothing matches “{query.trim()}”
+              {filter === "missing" ? " among the pictures missing alt text or a title" : ""}.
+            </>
+          ) : (
+            "Every picture has alt text and a title."
+          )}
+        </p>
       )}
 
       {loaded && allRows.length === 0 && (
@@ -649,6 +761,71 @@ export function ImagesTab({
             );
           })}
         </ul>
+      )}
+
+      {/*
+        The pager.
+
+        The arrows appear only when there is more than one page, because a
+        pager over a single page is furniture. The count line stays whenever
+        anything is listed — "Showing 1–20 of 47" is what tells you a pager
+        exists at all, before you have scrolled far enough to see it.
+      */}
+      {loaded && matched.length > 0 && (
+        <div className={styles.pager}>
+          <span className={styles.pagerCount}>
+            {matched.length <= PER_PAGE
+              ? `${matched.length} picture${matched.length === 1 ? "" : "s"}`
+              : `Showing ${(current - 1) * PER_PAGE + 1}–${Math.min(
+                  current * PER_PAGE,
+                  matched.length,
+                )} of ${matched.length}`}
+          </span>
+
+          {pageCount > 1 && (
+            <div className={styles.pagerBtns}>
+              <button
+                type="button"
+                className={styles.pagerBtn}
+                disabled={current <= 1}
+                onClick={() => setPage(current - 1)}
+              >
+                ‹ Previous
+              </button>
+              {/*
+                Numbered, because "the third page" is a place a client comes
+                back to. Capped at nine so a large library cannot push the row
+                wider than the panel; past that the arrows and a position
+                carry it.
+              */}
+              {pageCount <= 9 ? (
+                Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    className={`${styles.pagerNum} ${n === current ? styles.pagerNumOn : ""}`}
+                    aria-current={n === current ? "page" : undefined}
+                    onClick={() => setPage(n)}
+                  >
+                    {n}
+                  </button>
+                ))
+              ) : (
+                <span className={styles.pagerAt}>
+                  {current} / {pageCount}
+                </span>
+              )}
+              <button
+                type="button"
+                className={styles.pagerBtn}
+                disabled={current >= pageCount}
+                onClick={() => setPage(current + 1)}
+              >
+                Next ›
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {deleting && (

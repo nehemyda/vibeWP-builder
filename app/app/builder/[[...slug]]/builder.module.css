@@ -2550,3 +2550,134 @@
 .confirmGo:hover:not(:disabled) { filter: brightness(1.06); }
 .confirmKeep:disabled,
 .confirmGo:disabled { opacity: 0.55; cursor: default; }
+
+/*
+ * The Images tab's toolbar: the filter tabs and the search box.
+ *
+ * One row, because they do one job between them — narrowing the same list.
+ * Search below the tabs would read as a separate control over something else.
+ * The filter row keeps its own bottom margin, so this cancels it and owns the
+ * spacing for both.
+ */
+.imageTools {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+/*
+ * The filters take the slack, which is what puts search on the right.
+ *
+ * Search used to claim the right edge with `margin-left: auto`, and an auto
+ * margin eats the free space BEFORE flex-grow gets it — so once the panel
+ * narrowed and search wrapped onto its own line, it sat stranded at 300px
+ * against the right edge instead of filling the line it now had to itself.
+ */
+.imageTools .seoFilters { margin-bottom: 0; flex: 1 1 auto; }
+
+.imageSearch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* First to wrap when the panel narrows, and it fills the line once it does. */
+  min-width: 220px;
+  flex: 1 1 260px;
+  max-width: 340px;
+  padding: 0 8px;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 8px;
+  background: var(--card, #fff);
+}
+.imageSearch:focus-within { border-color: var(--ink, #131922); }
+.imageSearch svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--muted, #757b83);
+}
+.imageSearch input {
+  flex: 1;
+  min-width: 0;
+  appearance: none;
+  border: 0;
+  outline: none;
+  background: none;
+  padding: 8px 0;
+  font: 500 12.5px/1.2 inherit;
+  color: var(--ink, #131922);
+}
+/* Safari draws its own clear button on type=search; this one is ours. */
+.imageSearch input::-webkit-search-decoration,
+.imageSearch input::-webkit-search-cancel-button {
+  appearance: none;
+}
+.imageSearchClear {
+  flex: none;
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 2px 4px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--muted, #757b83);
+  cursor: pointer;
+}
+.imageSearchClear:hover { color: var(--ink, #131922); }
+
+/*
+ * The pager.
+ *
+ * The count sits on the left and stays even when there is one page, because
+ * "47 pictures" answers a question the grid does not: how many there are in
+ * total, rather than how many you can currently see.
+ */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #e3e5e9);
+}
+.pagerCount { font-size: 12px; color: var(--muted, #757b83); }
+.pagerBtns { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+
+.pagerBtn,
+.pagerNum {
+  appearance: none;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 7px;
+  background: var(--card, #fff);
+  color: var(--ink, #131922);
+  font: 600 12px/1 inherit;
+  cursor: pointer;
+}
+.pagerBtn { padding: 7px 10px; }
+/* Square, and wide enough that a two-digit page does not change its size. */
+.pagerNum { min-width: 28px; padding: 7px 4px; text-align: center; }
+.pagerBtn:hover:not(:disabled),
+.pagerNum:hover:not(.pagerNumOn) { border-color: var(--ink, #131922); }
+.pagerBtn:disabled { opacity: 0.4; cursor: default; }
+.pagerNumOn {
+  background: var(--ink, #131922);
+  border-color: var(--ink, #131922);
+  color: #fff;
+}
+.pagerAt { font: 600 12px/1 inherit; color: var(--muted, #757b83); padding: 0 6px; }
+
+/* Named for a screen reader, invisible to everyone else. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
