@@ -69,7 +69,20 @@ type Row =
   | { kind: "placed"; key: string; placement: ImagePlacement }
   | { kind: "unused"; key: string; asset: MediaAsset };
 
-export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) {
+export function ImagesTab({
+  siteId,
+  busy,
+  onPagesChanged,
+}: {
+  siteId: string;
+  busy?: boolean;
+  /**
+   * Called after this panel changes a PAGE, so the canvas underneath can
+   * repaint. Alt and title writes change a page too, but invisibly; taking a
+   * photograph off one does not.
+   */
+  onPagesChanged?: () => void | Promise<void>;
+}) {
   const [assets, setAssets] = useState<MediaAsset[] | null>(null);
   const [placements, setPlacements] = useState<ImagePlacement[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -271,7 +284,16 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
           where: `${p.sectionName} · ${p.pageTitle}`,
           alsoInLibrary: Boolean(libraryFile),
         },
-        run: () => clearImagePlacementAction({ siteId, pageId: p.pageId, path: p.path }),
+        run: async () => {
+          const result = await clearImagePlacementAction({
+            siteId,
+            pageId: p.pageId,
+            path: p.path,
+          });
+          /* Only on success — a refused write left the page as it was. */
+          if (result.ok) await onPagesChanged?.();
+          return result;
+        },
         label: `Took the picture off the ${p.sectionName} on ${p.pageTitle}. Publish to apply it.`,
       };
     }

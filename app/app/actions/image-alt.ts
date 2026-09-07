@@ -103,6 +103,23 @@ export async function listImageAltAction(siteId: string): Promise<ImagePlacement
         ?.nodes ?? [];
     nodes.forEach((node, nodeIndex) => {
       for (const { path, image } of imagePaths(node.props)) {
+        /*
+         * An EMPTY slot is not a picture.
+         *
+         * Clearing a photograph off a page leaves the key in place with an
+         * empty url — that is how every section says "no picture here", and
+         * it has to stay a recognisable image slot so a new photograph can be
+         * dropped into it later: `set_image` guards itself with `readImage`,
+         * so teaching `imagePaths` to skip empty urls would mean a picture
+         * could be deleted and never replaced.
+         *
+         * So the slot is filtered HERE, by the one consumer that lists
+         * pictures for a person to manage. Without this the Images tab drew a
+         * card for the photograph it had just removed and handed React
+         * `<img src="">`, which the browser answers by re-requesting the page.
+         */
+        if (!image.url.trim()) continue;
+
         const alt = image.alt ?? "";
         out.push({
           pageId: row.id,

@@ -707,6 +707,26 @@ export function BuilderApp({
   }
 
   /**
+   * Re-reads the pages from the server and repaints everything that follows.
+   *
+   * The tail of every successful write, extracted because a second caller
+   * arrived: the Images tab can now take a photograph off a page, and the
+   * dashboard sits OVER the canvas — so without this the client removes a
+   * picture, closes the dashboard, and the section still shows it. The canvas
+   * had no route back from a change made outside it.
+   *
+   * It re-reads rather than patching local state for the same reason paintFrom
+   * exists: the server is what the export will use, so the canvas should be
+   * showing what the server holds and not a guess at it.
+   */
+  async function repaintFromServer(slug: string) {
+    const refreshed = await listPagesAction(siteId);
+    setPages(refreshed);
+    paintFrom(refreshed, slug);
+    await refreshHistory(slug);
+  }
+
+  /**
    * Repaints the canvas from a freshly-read page list.
    *
    * One function so the schema and the hero summary can never disagree —
@@ -1119,12 +1139,7 @@ export function BuilderApp({
     if (result.ok && "chrome" in result && result.chrome) {
       setChrome(result.chrome as typeof chrome);
     }
-    if (result.ok) {
-      const refreshed = await listPagesAction(siteId);
-      setPages(refreshed);
-      paintFrom(refreshed, activeSlug);
-      await refreshHistory(activeSlug);
-    }
+    if (result.ok) await repaintFromServer(activeSlug);
 
     setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: result.message } : m)));
     remember("ai", result.message);
@@ -1254,12 +1269,7 @@ export function BuilderApp({
       return;
     }
 
-    if (result.ok) {
-      const refreshed = await listPagesAction(siteId);
-      setPages(refreshed);
-      paintFrom(refreshed, activeSlug);
-      await refreshHistory(activeSlug);
-    }
+    if (result.ok) await repaintFromServer(activeSlug);
 
     setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: result.message } : m)));
     remember("ai", result.message);
@@ -2096,7 +2106,18 @@ export function BuilderApp({
                 onClose={() => openDash(null)}
               />
             )}
-            {dashTab === "images" && <ImagesTab siteId={siteId} busy={Boolean(canvasBusy)} />}
+            {dashTab === "images" && (
+              <ImagesTab
+                siteId={siteId}
+                busy={Boolean(canvasBusy)}
+                /*
+                  Taking a picture off a page changes the page, and this panel
+                  covers the canvas. Without this the section behind it keeps
+                  the photograph until something else happens to reload.
+                */
+                onPagesChanged={() => repaintFromServer(activeSlug)}
+              />
+            )}
             {dashTab === "seo" && <SeoPanel siteId={siteId} />}
           </SiteDashboard>
         )}
