@@ -83,6 +83,7 @@ export const ServicesFeatured: SectionDefinition<ServicesFeaturedProps> = {
       (f?.image?.url
         ? image(f.image.url, requireAlt(f.image.alt, f.title), "yp-svcf__frame", {
             id: f.image.id,
+            title: f.image.title,
             width: f.image.width,
             height: f.image.height,
           })

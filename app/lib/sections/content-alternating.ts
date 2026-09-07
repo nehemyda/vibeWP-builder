@@ -82,6 +82,7 @@ export const ContentAlternating: SectionDefinition<ContentAlternatingProps> = {
               "yp-alt__media",
               image(r.image.url, requireAlt(r.image.alt, r.title), "yp-alt__frame", {
                 id: r.image.id,
+                title: r.image.title,
                 width: r.image.width,
                 height: r.image.height,
               }),

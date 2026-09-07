@@ -87,6 +87,7 @@ export const HeroDuotone: SectionDefinition<HeroDuotoneProps> = {
           "yp-hero-duotone__media",
           image(p.image.url, requireAlt(p.image.alt, p.heading), "yp-hero-duotone__frame", {
             id: p.image.id,
+            title: p.image.title,
             width: p.image.width,
             height: p.image.height,
           }),

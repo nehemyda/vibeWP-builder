@@ -295,6 +295,8 @@ export const mediaAssets = pgTable("media_assets", {
   width: integer("width"),
   height: integer("height"),
   alt: text("alt"),
+  /** Shown on hover. Beside alt, not instead of it — see migrate-batch28.ts. */
+  title: text("title"),
   /** "upload" | "stock" | "wordpress" — where the file came from. */
   source: text("source").notNull().default("upload"),
   photographer: text("photographer"),

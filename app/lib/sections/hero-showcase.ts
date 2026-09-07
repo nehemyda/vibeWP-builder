@@ -118,6 +118,7 @@ export const HeroShowcase: SectionDefinition<HeroShowcaseProps> = {
           "yp-hero-showcase__media",
           image(p.image.url, requireAlt(p.image.alt, p.heading), "yp-hero-showcase__frame", {
             id: p.image.id,
+            title: p.image.title,
             width: p.image.width,
             height: p.image.height,
           }) + badge,

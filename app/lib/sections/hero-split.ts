@@ -8,7 +8,20 @@ export type HeroSplitProps = {
   body?: string;
   features?: string[];
   actions?: Array<{ label: string; href: string; variant: "primary" | "outline" | "ghost" }>;
-  image?: { url?: string; alt?: string; id?: number; width?: number; height?: number };
+  /*
+   * Declared inline here rather than as SectionImage, which every other
+   * section uses. Kept for now because this is the oldest section and its
+   * shape is what the byte-exact round-trip gate is anchored to; `title` is
+   * added to match, so the field exists everywhere it is emitted.
+   */
+  image?: {
+    url?: string;
+    alt?: string;
+    title?: string;
+    id?: number;
+    width?: number;
+    height?: number;
+  };
 };
 
 const text = (el: HTMLElement | null): string => (el ? el.textContent.trim() : "");
@@ -105,6 +118,7 @@ export const HeroSplit: SectionDefinition<HeroSplitProps> = {
           "yp-hero__media",
           image(p.image.url, requireAlt(p.image.alt, p.heading), "yp-hero__frame", {
             id: p.image.id,
+            title: p.image.title,
             width: p.image.width,
             height: p.image.height,
           }),

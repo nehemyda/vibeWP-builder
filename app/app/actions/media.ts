@@ -60,6 +60,7 @@ export type MediaAsset = {
   url: string;
   filename: string;
   alt: string | null;
+  title: string | null;
   width: number | null;
   height: number | null;
   byteSize: number;
@@ -90,6 +91,7 @@ const shape = (row: typeof mediaAssets.$inferSelect): MediaAsset => ({
   url: row.url,
   filename: row.filename,
   alt: row.alt,
+  title: row.title,
   width: row.width,
   height: row.height,
   byteSize: row.byteSize,
@@ -189,6 +191,7 @@ export async function uploadMediaAction(form: FormData): Promise<UploadResult> {
        * "IMG_4821" into a screen reader; the gallery asks for it instead.
        */
       alt: null,
+      title: null,
       source: "upload",
       checksum,
       createdBy: userId,
@@ -198,16 +201,27 @@ export async function uploadMediaAction(form: FormData): Promise<UploadResult> {
   return { ok: true, asset: shape(row), duplicate: false };
 }
 
-/** Sets the alt text on one asset. */
+/**
+ * Sets the alt text and/or the title on one asset.
+ *
+ * Only the fields named are written, so saving one cannot blank the other —
+ * which is what a single "write the asset" call invites.
+ */
 export async function setMediaAltAction(opts: {
   siteId: string;
   assetId: string;
-  alt: string;
+  alt?: string;
+  title?: string;
 }): Promise<{ ok: boolean }> {
   await assertAccess(opts.siteId);
+  const patch: Record<string, string | null> = {};
+  if (opts.alt !== undefined) patch.alt = opts.alt.trim().slice(0, 300) || null;
+  if (opts.title !== undefined) patch.title = opts.title.trim().slice(0, 300) || null;
+  if (Object.keys(patch).length === 0) return { ok: true };
+
   await db
     .update(mediaAssets)
-    .set({ alt: opts.alt.trim().slice(0, 300) || null })
+    .set(patch)
     // siteId in the WHERE, not just the id: the id alone would let one site
     // edit another's row if it ever leaked.
     .where(and(eq(mediaAssets.id, opts.assetId), eq(mediaAssets.siteId, opts.siteId)));

@@ -32,6 +32,14 @@
 export type ImageValue = {
   url: string;
   alt?: string;
+  /**
+   * The image's title — a tooltip, carried by core's own block attribute.
+   *
+   * Distinct from alt and not a copy of it. Alt is what replaces the picture
+   * for someone who cannot see it; the title is extra, shown on hover, and
+   * announced by some screen readers IN ADDITION to alt.
+   */
+  title?: string;
   /** Set once the file lives in the client's WordPress media library. */
   id?: number;
   width?: number;

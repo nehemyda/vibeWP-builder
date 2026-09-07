@@ -106,6 +106,19 @@ export function image(
     lightbox?: boolean;
     /** Set for images inside a gallery — how core groups them. */
     inGallery?: boolean;
+    /**
+     * The image's title, as core's own block attribute.
+     *
+     * core/image declares `title` with source "attribute" on the img, so it
+     * is read back from the markup rather than stored in the block comment —
+     * which is why it is emitted on the element only, and why it round-trips
+     * without any parser of ours having to know about it as a special case.
+     *
+     * It renders as a tooltip. Not a substitute for alt, and never a place to
+     * repeat it: a screen reader may announce both, and hearing the same
+     * sentence twice is worse than hearing it once.
+     */
+    title?: string;
   },
   /** Rendered as the block's own figcaption, which is where core keeps it. */
   caption?: string,
@@ -140,9 +153,10 @@ export function image(
   const dataId = meta?.inGallery && meta?.id ? ` data-id="${meta.id}"` : "";
   const width = meta?.width ? ` width="${meta.width}"` : "";
   const height = meta?.height ? ` height="${meta.height}"` : "";
+  const title = meta?.title?.trim() ? ` title="${escAttr(meta.title.trim())}"` : "";
 
   return `<!-- wp:image ${JSON.stringify(attrs)} -->
-<figure class="${figureClass}"><img src="${escAttr(src)}" alt="${escAttr(safeAlt)}"${imgClass}${dataId}${width}${height}/>${
+<figure class="${figureClass}"><img src="${escAttr(src)}" alt="${escAttr(safeAlt)}"${title}${imgClass}${dataId}${width}${height}/>${
     caption ? `<figcaption class="wp-element-caption">${esc(caption)}</figcaption>` : ""
   }</figure>
 <!-- /wp:image -->`;

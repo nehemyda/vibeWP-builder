@@ -11,13 +11,13 @@ import {
 import {
   generateImageAltAction,
   listImageAltAction,
-  setImageAltAction,
+  setImageMetaAction,
   type ImagePlacement,
 } from "@/app/actions/image-alt";
 import styles from "./builder.module.css";
 
 /**
- * Every picture on the site, in one list: upload, alt text, delete.
+ * Every picture on the site, as a grid: upload, alt text, title, delete.
  *
  * ─────────────────────────────────────────────────────────────────────
  * WHY THIS IS ONE SCREEN AND NOT TWO
@@ -38,6 +38,14 @@ import styles from "./builder.module.css";
  * carries. An unused file's alt lives on the file, and travels with it into
  * whichever section later uses it. Same field, same words, two destinations —
  * which is invisible and correct, rather than two forms to learn.
+ *
+ * WHY A GRID AND NOT ROWS
+ *
+ * A row per picture put one thumbnail beside a wide text field, so a screen
+ * showed six pictures and a great deal of white. Pictures are found by
+ * looking, so the grid shows four across and the fields sit under each one —
+ * and a click opens the full photograph, because a 4-across thumbnail is for
+ * recognising, not for judging.
  *
  * WHY GENERATION ONLY COVERS PLACEMENTS
  *
@@ -60,6 +68,8 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
   const [working, setWorking] = useState<string | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
   const [dragging, setDragging] = useState(false);
+  /* The picture being looked at full size, or null. */
+  const [viewing, setViewing] = useState<{ url: string; label: string } | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const load = async () => {
@@ -243,7 +253,7 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
       )}
 
       {loaded && rows.length > 0 && (
-        <ul className={styles.altList}>
+        <ul className={styles.imageGrid}>
           {rows.map((row) => {
             const url = row.kind === "placed" ? row.placement.url : row.asset.url;
             const alt =
@@ -252,55 +262,74 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
                   ? ""
                   : row.placement.alt
                 : (row.asset.alt ?? "");
+            const title = row.kind === "placed" ? row.placement.title : (row.asset.title ?? "");
             const where =
               row.kind === "placed"
                 ? `${row.placement.sectionName} · ${row.placement.pageTitle}`
-                : "In your library, not used on a page yet";
+                : "Not used on a page yet";
+
+            const commit = async (patch: { alt?: string; title?: string }) => {
+              if (row.kind === "placed") {
+                const result = await setImageMetaAction({
+                  siteId,
+                  pageId: row.placement.pageId,
+                  path: row.placement.path,
+                  ...patch,
+                });
+                if (!result.ok) setError(result.message ?? "That didn't save.");
+              } else {
+                await setMediaAltAction({ siteId, assetId: row.asset.id, ...patch });
+              }
+              await load();
+            };
 
             return (
-              <li key={row.key} className={styles.altRow}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className={styles.altThumb} src={url} alt="" loading="lazy" />
-                <div className={styles.altFields}>
-                  <span className={styles.altWhere}>{where}</span>
-                  <AltField
-                    key={`${row.key}:${alt}`}
-                    value={alt}
-                    disabled={busy}
-                    onCommit={async (next) => {
-                      if (row.kind === "placed") {
-                        const result = await setImageAltAction({
-                          siteId,
-                          pageId: row.placement.pageId,
-                          path: row.placement.path,
-                          alt: next,
-                        });
-                        if (!result.ok) setError(result.message ?? "That didn't save.");
-                      } else {
-                        await setMediaAltAction({ siteId, assetId: row.asset.id, alt: next });
-                      }
-                      await load();
-                    }}
-                  />
-                </div>
+              <li key={row.key} className={styles.imageCard}>
+                <button
+                  type="button"
+                  className={styles.imageThumbBtn}
+                  title="View the full picture"
+                  onClick={() => setViewing({ url, label: where })}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" loading="lazy" />
+                </button>
+
+                <span className={styles.imageWhere}>{where}</span>
+
+                <Field
+                  key={`${row.key}:alt:${alt}`}
+                  label="Alt text"
+                  hint="What a screen reader says instead of the picture"
+                  value={alt}
+                  disabled={busy}
+                  onCommit={(v) => void commit({ alt: v })}
+                />
+                <Field
+                  key={`${row.key}:title:${title}`}
+                  label="Title"
+                  hint="Shown on hover. Not a second alt text."
+                  value={title}
+                  disabled={busy}
+                  onCommit={(v) => void commit({ title: v })}
+                />
+
                 {/*
                   Only an unused file can be removed here. A placed one is
                   still on a page: removing it from the library would leave a
-                  hole in the middle of a page the client has not looked at.
-                  Changing that picture is done on the page.
+                  hole in a page the client has not looked at. Changing that
+                  picture is done on the page.
                 */}
                 {row.kind === "unused" && (
                   <button
                     type="button"
-                    className={styles.mediaRemove}
-                    title="Remove from your library"
-                    aria-label={`Remove ${row.asset.filename}`}
+                    className={styles.imageRemove}
                     onClick={() => {
                       setAssets((prev) => prev?.filter((a) => a.id !== row.asset.id) ?? prev);
                       void deleteMediaAction({ siteId, assetId: row.asset.id });
                     }}
                   >
-                    ×
+                    Remove from library
                   </button>
                 )}
               </li>
@@ -309,17 +338,46 @@ export function ImagesTab({ siteId, busy }: { siteId: string; busy?: boolean }) 
         </ul>
       )}
 
+      {/*
+        The lightbox. Its own overlay inside the dashboard rather than a second
+        dialog: it is a bigger look at something already on screen, so it
+        closes on anything — the backdrop, the button, Escape.
+      */}
+      {viewing && (
+        <div
+          className={styles.lightbox}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Picture from ${viewing.label}`}
+          onClick={() => setViewing(null)}
+          onKeyDown={(e) => e.key === "Escape" && setViewing(null)}
+          tabIndex={-1}
+          ref={(el) => el?.focus()}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={viewing.url} alt="" />
+          <span className={styles.lightboxWhere}>{viewing.label}</span>
+          <button type="button" className={styles.lightboxClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+      )}
+
       {dragging && <div className={styles.mediaDrop}>Drop to upload</div>}
     </div>
   );
 }
 
-/** One alt field, committed on blur. */
-function AltField({
+/** One labelled field, committed on blur. */
+function Field({
+  label,
+  hint,
   value,
   disabled,
   onCommit,
 }: {
+  label: string;
+  hint: string;
   value: string;
   disabled?: boolean;
   onCommit: (value: string) => void | Promise<void>;
@@ -330,14 +388,19 @@ function AltField({
    */
   const [draft, setDraft] = useState(value);
   return (
-    <input
-      type="text"
-      className={styles.seoInput}
-      value={draft}
-      disabled={disabled}
-      placeholder="What is in this picture?"
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => draft.trim() !== value.trim() && void onCommit(draft)}
-    />
+    <label className={styles.imageField}>
+      <span className={styles.imageFieldLabel} title={hint}>
+        {label}
+      </span>
+      <input
+        type="text"
+        className={styles.seoInput}
+        value={draft}
+        disabled={disabled}
+        placeholder={hint}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => draft.trim() !== value.trim() && void onCommit(draft)}
+      />
+    </label>
   );
 }

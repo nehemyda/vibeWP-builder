@@ -57,6 +57,8 @@ export type ImagePlacement = {
   sectionName: string;
   url: string;
   alt: string;
+  /** The tooltip, carried by core's own block attribute. Not a second alt. */
+  title: string;
   /** True when the alt is absent or the placeholder. */
   needsAlt: boolean;
 };
@@ -105,6 +107,7 @@ export async function listImageAltAction(siteId: string): Promise<ImagePlacement
           sectionName: getSectionByNodeType(node.type)?.name ?? node.type ?? "Section",
           url: image.url,
           alt,
+          title: image.title ?? "",
           needsAlt: isPlaceholder(alt),
         });
       }
@@ -123,17 +126,24 @@ export async function listImageAltAction(siteId: string): Promise<ImagePlacement
   );
 }
 
-/** Writes one placement's alt text. */
-export async function setImageAltAction(opts: {
+/**
+ * Writes one placement's alt text, or its title, or both.
+ *
+ * One action for both because they are one form: a client filling in a
+ * picture's details should not care that one field is what replaces the image
+ * and the other is a tooltip.
+ */
+export async function setImageMetaAction(opts: {
   siteId: string;
   pageId: string;
   /** "<nodeIndex>.<path within the node>" as listImageAltAction reports it. */
   path: string;
-  alt: string;
+  alt?: string;
+  title?: string;
 }): Promise<{ ok: boolean; message?: string }> {
   await assertAccess(opts.siteId);
   const written = await writeAlts(opts.siteId, [
-    { pageId: opts.pageId, path: opts.path, alt: opts.alt },
+    { pageId: opts.pageId, path: opts.path, alt: opts.alt, title: opts.title },
   ]);
   return written > 0 ? { ok: true } : { ok: false, message: "That picture isn't there any more." };
 }
@@ -245,7 +255,7 @@ export async function generateImageAltAction(opts: {
  */
 async function writeAlts(
   siteId: string,
-  writes: Array<{ pageId: string; path: string; alt: string }>,
+  writes: Array<{ pageId: string; path: string; alt?: string; title?: string }>,
 ): Promise<number> {
   if (writes.length === 0) return 0;
 
@@ -283,7 +293,14 @@ async function writeAlts(
        * Merged onto the image that is there, so the URL, the dimensions and
        * any stock credit survive — only the description changes.
        */
-      const next: ImageValue = { ...existing.image, alt: write.alt.trim().slice(0, 300) };
+      /*
+       * Only the fields this write names. Passing undefined for the other
+       * would erase a title while saving an alt, which is what a single
+       * "write the image" function invites if it takes a whole value.
+       */
+      const next: ImageValue = { ...existing.image };
+      if (write.alt !== undefined) next.alt = write.alt.trim().slice(0, 300);
+      if (write.title !== undefined) next.title = write.title.trim().slice(0, 300) || undefined;
       nodes[nodeIndex] = { ...node, props: writeImage(node.props, inner, next) };
       touched += 1;
     }

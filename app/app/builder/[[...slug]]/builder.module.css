@@ -2145,14 +2145,115 @@
 
 .imagesTab { position: relative; display: grid; gap: 4px; }
 
+
+/* ── The images grid ────────────────────────────────────────────────── */
+
 /*
- * Two columns of rows once there is room for them. A single column of
- * 116px-thumbnail rows across 1400px is one picture and an ocean of text
- * field; two columns puts twice as many pictures on screen, which is what
- * this list is for.
+ * Four across, as asked, and fewer as the dialog narrows. auto-fit with a
+ * minimum rather than a hard `repeat(4, …)`: at 900px four columns would be
+ * 200px each with two text fields under them, which is narrower than the
+ * words they hold.
  */
-@media (min-width: 1180px) {
-  .imagesTab .altList {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.imageGrid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(228px, 1fr));
+  gap: 16px;
 }
+@media (min-width: 1120px) {
+  .imageGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.imageCard {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 10px;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 10px;
+  background: var(--card, #fff);
+}
+
+.imageThumbBtn {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--bg, #f2f3f5);
+  /* 4:3 — tall enough to recognise a photograph, short enough for four rows. */
+  aspect-ratio: 4 / 3;
+  cursor: zoom-in;
+}
+.imageThumbBtn img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.imageThumbBtn:hover { outline: 2px solid var(--ink, #131922); outline-offset: 1px; }
+
+.imageWhere {
+  font-size: 11px;
+  color: var(--muted, #757b83);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.imageField { display: grid; gap: 2px; min-width: 0; }
+.imageFieldLabel {
+  font: 600 10px/1.4 inherit;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted, #757b83);
+}
+
+.imageRemove {
+  justify-self: start;
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  font: 600 11px/1 inherit;
+  color: var(--muted, #9aa0aa);
+  cursor: pointer;
+}
+.imageRemove:hover { color: var(--warn, #b42318); }
+
+/*
+ * The lightbox. Inside the dashboard rather than a second dialog, because it
+ * is a closer look at something already on screen — so everything closes it.
+ */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  padding: 40px;
+  background: rgb(12 14 17 / 0.82);
+  cursor: zoom-out;
+}
+.lightbox img {
+  max-width: min(1100px, 100%);
+  max-height: 78vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.5);
+}
+.lightboxWhere { color: #d7dae0; font-size: 12.5px; }
+.lightboxClose {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  appearance: none;
+  border: 0;
+  background: rgb(255 255 255 / 0.14);
+  color: #fff;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.lightboxClose:hover { background: rgb(255 255 255 / 0.26); }

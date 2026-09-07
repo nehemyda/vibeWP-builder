@@ -83,6 +83,7 @@ export const HeroPattern: SectionDefinition<HeroPatternProps> = {
           "yp-hero-pattern__media",
           image(p.image.url, requireAlt(p.image.alt, p.heading), "yp-hero-pattern__frame", {
             id: p.image.id,
+            title: p.image.title,
             width: p.image.width,
             height: p.image.height,
           }),

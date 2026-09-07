@@ -14,6 +14,8 @@ export type Action = { label: string; href: string; variant: "primary" | "outlin
 export type SectionImage = {
   url: string;
   alt: string;
+  /** The image's title attribute — a tooltip, not a second alt. */
+  title?: string;
   id?: number;
   width?: number;
   height?: number;
@@ -68,9 +70,14 @@ export function parseImage(scope: HTMLElement, frameSelector: string): SectionIm
   const width = Number(img.getAttribute("width"));
   const height = Number(img.getAttribute("height"));
 
+  const title = img.getAttribute("title")?.trim();
+
   return {
     url,
     alt: img.getAttribute("alt")?.trim() ?? "",
+    // Omitted when absent rather than set empty, so an image without a title
+    // round-trips to the same bytes it came from.
+    ...(title ? { title } : {}),
     ...(idMatch ? { id: Number(idMatch[1]) } : {}),
     ...(Number.isFinite(width) && width > 0 ? { width } : {}),
     ...(Number.isFinite(height) && height > 0 ? { height } : {}),

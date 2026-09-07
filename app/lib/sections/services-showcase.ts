@@ -83,6 +83,7 @@ export const ServicesShowcase: SectionDefinition<ServicesShowcaseProps> = {
           (i.image?.url
             ? image(i.image.url, requireAlt(i.image.alt, i.title), "yp-svcs__frame", {
                 id: i.image.id,
+                title: i.image.title,
                 width: i.image.width,
                 height: i.image.height,
               })
