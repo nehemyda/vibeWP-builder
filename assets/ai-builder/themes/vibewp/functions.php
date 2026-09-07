@@ -248,6 +248,7 @@ add_action( 'init', 'vibewp_register_patterns' );
  * is the precedent it was built from.
  */
 require_once get_theme_file_path( 'inc/business-details.php' );
+require_once get_theme_file_path( 'inc/seo.php' );
 
 function vibewp_render_year_token( $block_content ) {
 	if ( false === strpos( $block_content, '{{year}}' ) ) {

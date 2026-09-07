@@ -431,6 +431,16 @@ export async function exportToWordPressAction(
         title: isHome ? site.name : (page.title ?? page.slug),
         blockMarkup: markup,
         asFrontPage: isHome,
+        /*
+         * The page's meta tags, as post meta the theme renders. Sent on every
+         * export including when empty, so clearing a description in VibeWP
+         * clears it on the live site rather than leaving the old one behind.
+         */
+        meta: {
+          title: page.metaTitle,
+          description: page.metaDescription,
+          noIndex: page.noIndex,
+        },
       });
       if (isHome || !frontPageUrl) frontPageUrl = pushed.url;
 

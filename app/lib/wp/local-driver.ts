@@ -322,6 +322,37 @@ export async function provisionSite(opts: {
 }
 
 /**
+ * The post meta the theme's inc/seo.php reads, via a file.
+ *
+ * NOT interpolated into the script, even JSON-encoded. PHP expands
+ * $variables inside a double-quoted string, so a description containing "$5
+ * off" is fine but one containing "$id" or "{$total}" would be silently
+ * rewritten — or worse — on the client's live site. There is no escaping of
+ * free text into PHP source that is obviously correct at a glance, and this
+ * is a client's own words going onto their own site.
+ *
+ * The page's content already travels by file for the same class of reason.
+ * This follows it: the data never becomes code.
+ *
+ * An absent value DELETES the meta rather than setting it empty. The theme
+ * emits nothing without a value, and an empty description tag is worse than
+ * no tag at all — so absence has to stay absence.
+ */
+function metaScript(path: string | null): string {
+  if (!path) return "";
+  return `
+    $meta = json_decode(file_get_contents(${JSON.stringify(path)}), true);
+    foreach ([
+      "_vibewp_meta_title"       => $meta["title"] ?? null,
+      "_vibewp_meta_description" => $meta["description"] ?? null,
+      "_vibewp_no_index"         => !empty($meta["noIndex"]) ? "1" : null,
+    ] as $key => $value) {
+      if ($value === null || $value === "") { delete_post_meta($id, $key); }
+      else { update_post_meta($id, $key, $value); }
+    }`;
+}
+
+/**
  * Creates the page if its slug is absent, updates it if present — the
  * "first export creates, later exports update" rule, at page level.
  * Returns the resulting page's permalink.
@@ -332,13 +363,33 @@ export async function upsertPage(opts: {
   title: string;
   blockMarkup: string;
   asFrontPage?: boolean;
+  /**
+   * What search engines are told about this page.
+   *
+   * Written as post meta the theme reads, so the values live on the client's
+   * own post and survive whatever they later do with plugins. Undefined means
+   * "the client has not written one", and the meta is DELETED rather than set
+   * empty — an empty description tag is worse than none, and the theme's
+   * "emit nothing without a value" rule depends on absence being absence.
+   */
+  meta?: {
+    title?: string | null;
+    description?: string | null;
+    noIndex?: boolean;
+  };
 }): Promise<{ postId: number; url: string }> {
-  const { installPath, slug, title, blockMarkup, asFrontPage } = opts;
+  const { installPath, slug, title, blockMarkup, asFrontPage, meta } = opts;
 
   // Content goes via a temp file: block markup is long and full of quotes,
   // which is exactly what breaks when passed as a shell argument.
   const tmp = join(installPath, `.vibewp-import-${slug}.html`);
   await writeFile(tmp, blockMarkup, "utf8");
+
+  let metaTmp: string | null = null;
+  if (meta) {
+    metaTmp = join(installPath, `.vibewp-meta-${slug}.json`);
+    await writeFile(metaTmp, JSON.stringify(meta), "utf8");
+  }
 
   const script = `
     $slug = ${JSON.stringify(slug)};
@@ -360,12 +411,26 @@ export async function upsertPage(opts: {
         ? `update_option("show_on_front", "page"); update_option("page_on_front", $id);`
         : ""
     }
+    ${metaScript(metaTmp)}
     echo json_encode(["postId" => (int) $id, "url" => get_permalink($id)]);
   `;
 
-  const out = await wp(["eval", script, `--path=${installPath}`]);
-  const parsed = JSON.parse(out) as { postId: number; url: string };
-  return parsed;
+  try {
+    const out = await wp(["eval", script, `--path=${installPath}`]);
+    return JSON.parse(out) as { postId: number; url: string };
+  } finally {
+    /*
+     * Both hand-off files are removed, whatever happened.
+     *
+     * They live in the WordPress root, which is served — so
+     * .vibewp-import-home.html and .vibewp-meta-home.json were reachable over
+     * HTTP and accumulated one pair per page per export. Nothing secret, but a
+     * client's site should not be littered with our scratch files, and the
+     * meta one carries what they wrote.
+     */
+    await rm(tmp, { force: true });
+    if (metaTmp) await rm(metaTmp, { force: true });
+  }
 }
 
 /**

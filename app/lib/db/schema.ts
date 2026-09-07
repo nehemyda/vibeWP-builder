@@ -163,6 +163,17 @@ export const sitePages = pgTable("site_pages", {
    * conflict on every page a client had merely opened. See lib/wp/serialize.ts.
    */
   syncedSchemaJson: jsonb("synced_schema_json"),
+  /**
+   * What search engines are told about this page. See migrate-batch27.ts.
+   *
+   * Null means nobody has written one; empty means someone cleared it. The
+   * generator needs that difference to leave a deliberately blank field alone.
+   */
+  metaTitle: text("meta_title"),
+  metaDescription: text("meta_description"),
+  noIndex: boolean("no_index").notNull().default(false),
+  /** When the model last wrote these, so a client's own words can be spared. */
+  metaGeneratedAt: timestamp("meta_generated_at", { withTimezone: true }),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
