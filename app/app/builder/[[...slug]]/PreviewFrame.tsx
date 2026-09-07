@@ -9,8 +9,12 @@ import { imagePaths } from "@/lib/design/image-map";
 import { SCREENS, SECTION_PARTS, fieldFor as hideField } from "@/lib/design/part-visibility";
 import {
   closePartMenu,
+  hidePartChip,
+  mountPartChip,
   mountPartMenu,
   openPartMenu,
+  showPartChip,
+  PART_CHIP_ID,
   PART_MENU_ID,
 } from "@/lib/design/part-menu";
 import {
@@ -98,6 +102,17 @@ function selectorFor(selection: CanvasSelection): string {
 }
 
 const SELECTABLE = "[data-vibewp-node],[data-vibewp-chrome]";
+
+/**
+ * The builder's own overlays inside the preview document.
+ *
+ * A click landing on any of them must not be read as a click on the page.
+ */
+const CHROME_SELECTOR = [
+  "#vibewp-text-toolbar",
+  `#${PART_CHIP_ID}`,
+  `#${PART_MENU_ID}`,
+].join(",");
 
 /**
  * Which styleable element the click landed in, if any.
@@ -806,6 +821,7 @@ export function PreviewFrame({
        * in both cases, and no mapping table is needed.
        */
       const menu = mountPartMenu(contentDoc);
+      const chip = mountPartChip(contentDoc);
       const partEl = new Map<string, Element>();
       for (const el of Array.from(section.querySelectorAll("[class*='__']"))) {
         for (const part of SECTION_PARTS) {
@@ -840,30 +856,100 @@ export function PreviewFrame({
         );
       };
 
+      /** Which part the chip is currently sitting on. */
+      let chipPart: string | null = null;
+
       for (const [key, el] of partEl) {
         el.setAttribute("data-vibewp-part", key);
+        const label = SECTION_PARTS.find((p) => p.key === key)?.label ?? key;
+
         /*
-         * Opened with the RIGHT button, and with a plain click only on the
-         * gutter chip below. A left click on a part still has to place a
-         * caret in it — that is the whole of inline editing — so it cannot
-         * also mean "open a menu".
+         * The chip on hover is the way IN. Right-click still works and is
+         * faster once known, but it was the only way at first and the client's
+         * report was "I'm not seeing anything" — which was accurate. A left
+         * click on the part itself has to place a caret, so it cannot also
+         * open a menu; the chip is a separate target sitting above the words.
          */
+        const onEnter = () => {
+          if (menu.getAttribute("data-open") === "1") return;
+          chipPart = key;
+          showPartChip(chip, el.getBoundingClientRect(), label, contentDoc);
+        };
         const onContext = (event: Event) => {
           event.preventDefault();
           event.stopPropagation();
+          hidePartChip(contentDoc);
           showMenu(key);
         };
+        el.addEventListener("mouseenter", onEnter);
         el.addEventListener("contextmenu", onContext);
         cleanups.push(() => {
+          el.removeEventListener("mouseenter", onEnter);
           el.removeEventListener("contextmenu", onContext);
           el.removeAttribute("data-vibewp-part");
         });
       }
 
+      /*
+       * Hidden when the pointer leaves both the part and the chip. Checked on
+       * the document rather than per element, because moving from a part onto
+       * its own chip leaves the part — and hiding it there would make the
+       * chip impossible to click.
+       */
+      const onMove = (event: Event) => {
+        const target = event.target as Element | null;
+        if (target?.closest?.(`#${PART_CHIP_ID}`)) return;
+        if (target?.closest?.("[data-vibewp-part]")) return;
+        if (menu.getAttribute("data-open") === "1") return;
+        hidePartChip(contentDoc);
+        chipPart = null;
+      };
+      contentDoc.addEventListener("mouseover", onMove);
+
+      const onChipDown = (event: Event) => {
+        if (!(event.target as Element | null)?.closest?.("[data-chip-more]")) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!chipPart) return;
+        /*
+         * The chip is deliberately NOT hidden here.
+         *
+         * Hiding it in its own mousedown took it out of the layout before the
+         * browser resolved the click, so the click's target became <body> —
+         * which is not builder chrome, so the guard above let it through and
+         * the section deselected. The chip was under the cursor; the click
+         * was not on it.
+         *
+         * It is left alone and covered by the menu, and the hover handler
+         * already declines to move it while a menu is open.
+         */
+        showMenu(chipPart);
+      };
+      chip.addEventListener("mousedown", onChipDown);
+
+      cleanups.push(() => {
+        contentDoc.removeEventListener("mouseover", onMove);
+        chip.removeEventListener("mousedown", onChipDown);
+        hidePartChip(contentDoc);
+      });
+
+      /*
+       * On CLICK, not mousedown.
+       *
+       * A click's target is fixed when it is dispatched, so a handler may
+       * hide its own element and the target still resolves to it. Acting on
+       * mousedown and closing the menu there did the opposite: the menu left
+       * the layout before the click was resolved, the click landed on <body>,
+       * and the section deselected under a menu item that had just worked.
+       *
+       * stopPropagation as well, so the canvas's own click handler never sees
+       * it at all rather than relying on the chrome guard to recognise it.
+       */
       const onMenuDown = (event: Event) => {
         const button = (event.target as Element | null)?.closest?.("[data-action]");
         if (!button) return;
         event.preventDefault();
+        event.stopPropagation();
         const action = (button as HTMLElement).dataset.action ?? "";
         if (action === "hide-open") {
           // A submenu, not an action: toggled here rather than on hover so it
@@ -878,7 +964,7 @@ export function PreviewFrame({
         openPart = null;
         handlers.current.onPartAction?.(action, part, found);
       };
-      menu.addEventListener("mousedown", onMenuDown);
+      menu.addEventListener("click", onMenuDown);
 
       const awayFromMenu = (event: Event) => {
         if (!(event.target as Element | null)?.closest?.(`#${PART_MENU_ID}`)) {
@@ -888,7 +974,7 @@ export function PreviewFrame({
       };
       contentDoc.addEventListener("mousedown", awayFromMenu);
       cleanups.push(() => {
-        menu.removeEventListener("mousedown", onMenuDown);
+        menu.removeEventListener("click", onMenuDown);
         contentDoc.removeEventListener("mousedown", awayFromMenu);
         closePartMenu(contentDoc);
       });
@@ -957,12 +1043,18 @@ export function PreviewFrame({
       const onLinkClick = (event: MouseEvent) => {
         const el = event.target as Element | null;
         /*
-         * The formatting bar is builder chrome painted into the page, not part
-         * of the page. Without this, clicking Bold found no section under the
-         * cursor, deselected everything, and tore down the very editor the
-         * click was aimed at.
+         * Builder chrome painted into the page is not part of the page.
+         *
+         * Every one of these lives in <body>, outside any section, so a click
+         * on it finds nothing under the cursor and deselects everything —
+         * tearing down the editor the click was aimed at. It cost the
+         * formatting bar its Bold button once; the part chip and its menu
+         * arrived later and reintroduced the same fault, because the guard
+         * named one overlay instead of the category.
+         *
+         * Named as a list so the next overlay is added here and not debugged.
          */
-        if (el?.closest?.("#vibewp-text-toolbar")) return;
+        if (el?.closest?.(CHROME_SELECTOR)) return;
         const link = el?.closest?.("[data-vibewp-slug]");
         const slug = link?.getAttribute("data-vibewp-slug");
         if (slug) {

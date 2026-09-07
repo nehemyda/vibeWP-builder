@@ -34,6 +34,7 @@ import { SCREENS, SECTION_PARTS } from "./part-visibility";
  */
 
 const HOST_ID = "vibewp-part-menu";
+const CHIP_ID = "vibewp-part-chip";
 
 /** What the menu needs to know to draw itself for one part. */
 export type PartMenuState = {
@@ -45,6 +46,108 @@ export type PartMenuState = {
   /** Photos get "Replace image"; nothing else does. */
   isMedia: boolean;
 };
+
+/**
+ * The chip that says a part has a menu.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THIS HAD TO EXIST
+ *
+ * The menu was built to open on right-click and nothing else. It worked, and
+ * it was undiscoverable: the client's first report was "I'm not seeing
+ * anything", which was exactly right — there was nothing to see. A hover
+ * outline says "this is a thing"; it does not say "there are six actions
+ * behind a button on your mouse you may not have thought to press".
+ *
+ * So each part gets a small label with a ⋯ on it while the cursor is over it,
+ * the same affordance the reference editor uses. It doubles as teaching: the
+ * chip says "Heading", so the idea that a section is made of named parts
+ * arrives before any menu is opened.
+ *
+ * It sits ABOVE the part rather than on it, so it never covers the words and
+ * never swallows the click that places a caret in them.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export function mountPartChip(doc: Document): HTMLElement {
+  const existing = doc.getElementById(CHIP_ID);
+  if (existing) return existing as HTMLElement;
+
+  const style = doc.createElement("style");
+  style.id = `${CHIP_ID}-style`;
+  style.textContent = `
+#${CHIP_ID} {
+  all: initial;
+  position: absolute;
+  z-index: 2147483090;
+  display: none;
+  font-family: ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+}
+#${CHIP_ID}[data-open="1"] { display: block; }
+#${CHIP_ID} .vpc-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 8px;
+  border-radius: 6px;
+  background: #17181c;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.22);
+  white-space: nowrap;
+}
+#${CHIP_ID} .vpc-name {
+  color: #fff;
+  font: 700 10px/1.5 inherit;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+#${CHIP_ID} .vpc-more {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 18px;
+  border-radius: 4px;
+  color: #d7dae0;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+#${CHIP_ID} .vpc-more:hover { background: rgb(255 255 255 / 0.16); color: #fff; }`;
+  doc.head.appendChild(style);
+
+  const host = doc.createElement("div");
+  host.id = CHIP_ID;
+  host.innerHTML =
+    `<div class="vpc-bar">` +
+    `<span class="vpc-name"></span>` +
+    `<button type="button" class="vpc-more" data-chip-more aria-label="Part actions" title="Move, hide or delete this part">⋯</button>` +
+    `</div>`;
+  doc.body.appendChild(host);
+  return host;
+}
+
+/** Puts the chip on a part. Returns nothing; the caller owns when to hide it. */
+export function showPartChip(host: HTMLElement, rect: DOMRect, label: string, doc: Document): void {
+  const name = host.querySelector(".vpc-name");
+  if (name) name.textContent = label;
+  host.setAttribute("data-open", "1");
+
+  const bar = host.firstElementChild as HTMLElement;
+  const height = bar.offsetHeight || 24;
+  const scrollX = doc.defaultView?.scrollX ?? 0;
+  const scrollY = doc.defaultView?.scrollY ?? 0;
+
+  // Above the part, unless it is at the very top of the page — then just inside.
+  const above = rect.top - height - 4;
+  host.style.left = `${Math.round(Math.max(4, rect.left) + scrollX)}px`;
+  host.style.top = `${Math.round((above < 4 ? rect.top + 2 : above) + scrollY)}px`;
+}
+
+export function hidePartChip(doc: Document): void {
+  doc.getElementById(CHIP_ID)?.setAttribute("data-open", "0");
+}
+
+export const PART_CHIP_ID = CHIP_ID;
 
 export function mountPartMenu(doc: Document): HTMLElement {
   const existing = doc.getElementById(HOST_ID);
