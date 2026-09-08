@@ -186,6 +186,133 @@ export function DialogHarness() {
           onRemove={() => setRemoving(true)}
         />
       )}
+
+      {/*
+        The SEO table's layout, at realistic content lengths.
+
+        A static rebuild of SeoPanel's markup rather than the panel itself —
+        it authenticates against the real database and this route has no
+        session. The CSS under test lives entirely in builder.module.css, so
+        matching class names is enough to see whether the grid, the zebra
+        stripes, the hidden field labels and the header row actually hold up
+        against nine pages of real-length copy, at both the wide and the
+        narrow breakpoint.
+      */}
+      <h2 style={{ font: "700 14px/1.3 system-ui", margin: "18px 0 0" }}>SEO table</h2>
+      <div className={styles.seoWrap} style={{ width: "min(1400px, 100%)" }}>
+        <div className={styles.seoTableHead} aria-hidden="true">
+          <span>Page</span>
+          <span>Focus keyword</span>
+          <span>Title</span>
+          <span>Description</span>
+          <span>Canonical URL</span>
+          <span>Hide from search engines</span>
+        </div>
+        <ul className={styles.seoList}>
+          {[
+            {
+              title: "Home",
+              slug: "",
+              badge: "Written by AI",
+              kw: "celebration cakes bath",
+              t: "Sunrise Bakery Test | Artisan Sourdough & Cakes in Bath",
+              d: "Crafting long-fermented sourdough, pastries, and custom cakes fresh daily from 4 AM on Market Street, Bath. Everything made on-site until sold out.",
+              canon: "",
+              warnings: [] as string[],
+            },
+            {
+              title: "About",
+              slug: "about",
+              badge: "Written by AI",
+              kw: "",
+              t: "Our Story: Fresh Sourdough & Cakes Baked Daily in Bath",
+              d: "Every morning from 4am, our small team at Sunrise Bakery Bath bakes fresh sourdough, pastries, and custom cakes on site. Learn our story and passion here.",
+              canon: "",
+              warnings: ["Same title as Home", "No focus keyword set"],
+            },
+            {
+              title: "Quote",
+              slug: "quote",
+              badge: null,
+              kw: "custom cake quote bath",
+              t: "Get a Quote",
+              d: "",
+              canon: "",
+              warnings: ["No description set"],
+            },
+            {
+              title: "Menu & Pricing",
+              slug: "menu-and-pricing",
+              badge: "Written by AI",
+              kw: "sourdough prices bath",
+              t: "Menu & Pricing — Sunrise Bakery Bath",
+              d: "See our daily sourdough loaves, pastries and celebration cake prices. Order ahead for collection from our Market Street bakery in Bath.",
+              canon: "https://sunrisebakery.example.com/menu",
+              warnings: [],
+            },
+          ].map((p, i) => (
+            <li key={i} className={styles.seoRow}>
+              <div className={styles.seoPage}>
+                <strong>{p.title}</strong>
+                <span className={styles.seoSlug}>/{p.slug}</span>
+                {p.badge && <span className={styles.seoBadge}>{p.badge}</span>}
+                {i === 2 && <span className={styles.seoBadge}>Saving…</span>}
+              </div>
+
+              {[
+                { label: "Focus keyword", limit: 60, value: p.kw, placeholder: "e.g. celebration cakes bath" },
+                { label: "Title", limit: 60, value: p.t, placeholder: "e.g. Sourdough & Celebration Cakes in Bath" },
+                { label: "Description", limit: 160, value: p.d, placeholder: "One sentence a person would click on.", multiline: true },
+                { label: "Canonical URL", limit: 500, value: p.canon, placeholder: "Leave empty unless this page copies another URL" },
+              ].map((f) => (
+                <label key={f.label} className={styles.seoField}>
+                  <span className={styles.seoFieldHead}>
+                    <span className={styles.seoFieldLabel}>{f.label}</span>
+                    <span className={styles.seoCount}>
+                      {f.value.length}/{f.limit}
+                    </span>
+                  </span>
+                  {f.multiline ? (
+                    <textarea rows={3} className={styles.seoInput} defaultValue={f.value} placeholder={f.placeholder} />
+                  ) : (
+                    <input type="text" className={styles.seoInput} defaultValue={f.value} placeholder={f.placeholder} />
+                  )}
+                </label>
+              ))}
+
+              <label className={styles.seoNoIndex}>
+                <input type="checkbox" readOnly checked={false} />
+                <span className={styles.seoNoIndexText}>Hide from search engines</span>
+              </label>
+
+              {p.warnings.length > 0 && (
+                <ul className={styles.seoWarnings}>
+                  {p.warnings.map((w) => (
+                    <li key={w}>{w}</li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ul>
+
+        <div className={styles.pager}>
+          <span className={styles.pagerCount}>Showing 1–20 of 34</span>
+          <div className={styles.pagerBtns}>
+            <button type="button" className={styles.pagerBtn} disabled>
+              ‹ Previous
+            </button>
+            {[1, 2].map((n) => (
+              <button key={n} type="button" className={`${styles.pagerNum} ${n === 1 ? styles.pagerNumOn : ""}`}>
+                {n}
+              </button>
+            ))}
+            <button type="button" className={styles.pagerBtn}>
+              Next ›
+            </button>
+          </div>
+        </div>
+      </div>
     </main>
   );
 }

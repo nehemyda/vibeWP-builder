@@ -8,7 +8,16 @@ import {
   type PageSeo,
 } from "@/app/actions/seo";
 import { DESC_LIMIT, TITLE_LIMIT } from "@/lib/seo/limits";
+import { galleryPage } from "@/lib/design/gallery-page";
 import styles from "./builder.module.css";
+
+/*
+ * Twenty a page, the same count and the same reasoning as the Images tab:
+ * enough that a site with a normal handful of pages never sees a pager at
+ * all, and a bound so a site with a great many pages does not render them
+ * all into one DOM at once.
+ */
+const PER_PAGE = 20;
 
 /**
  * Titles and descriptions for every page, in one table.
@@ -48,6 +57,12 @@ export function SeoPanel({ siteId }: { siteId: string }) {
   const [note, setNote] = useState<string | null>(null);
   /* Overwriting what the client typed asks first. Filling blanks does not. */
   const [confirmAll, setConfirmAll] = useState(false);
+  /*
+   * Which page of the FILTERED list is showing. Reset to 1 wherever the
+   * filter changes — staying on page 3 of a tab that now has one page is the
+   * classic way a filter appears to return nothing.
+   */
+  const [page, setPage] = useState(1);
 
   const generate = async (scope: "missing" | "all") => {
     setConfirmAll(false);
@@ -118,11 +133,28 @@ export function SeoPanel({ siteId }: { siteId: string }) {
   };
 
   const missing = (p: PageSeo) => !p.metaTitle?.trim() || !p.metaDescription?.trim();
-  const shown = (pages ?? []).filter((p) =>
-    filter === "all" ? true : filter === "attention" ? p.warnings.length > 0 : missing(p),
-  );
   const missingCount = (pages ?? []).filter(missing).length;
   const attentionCount = (pages ?? []).filter((p) => p.warnings.length > 0).length;
+
+  /*
+   * galleryPage does the filtering and the paging in one step — the same
+   * function the Images tab uses, so the two panels page the same way rather
+   * than two implementations that could quietly drift apart. There is no
+   * search box here, so query is always empty and the search half of it is
+   * simply never exercised.
+   */
+  const {
+    rows: shown,
+    matched,
+    pageCount,
+    page: current,
+  } = galleryPage(pages ?? [], {
+    keep: filter === "all" ? undefined : filter === "attention" ? (p) => p.warnings.length > 0 : missing,
+    query: "",
+    searchable: () => "",
+    page,
+    perPage: PER_PAGE,
+  });
 
   return (
     <div className={styles.seoWrap}>
@@ -198,7 +230,10 @@ export function SeoPanel({ siteId }: { siteId: string }) {
                 type="button"
                 className={`${styles.seoFilter} ${filter === key ? styles.seoFilterOn : ""}`}
                 aria-pressed={filter === key}
-                onClick={() => setFilter(key)}
+                onClick={() => {
+                  setFilter(key);
+                  setPage(1);
+                }}
               >
                 {label}
               </button>
@@ -213,6 +248,25 @@ export function SeoPanel({ siteId }: { siteId: string }) {
                   ? "Nothing needs attention."
                   : "No pages yet."}
             </p>
+          )}
+
+          {/*
+            Column headers for the wide layout only — builder.module.css hides
+            this entirely below 1080px, where each page is still a stack of
+            labelled fields. aria-hidden because the labels a screen reader
+            needs are on each field itself (see seoFieldLabel); without this a
+            wide-screen user would hear every heading twice, once here and
+            once per row.
+          */}
+          {shown.length > 0 && (
+            <div className={styles.seoTableHead} aria-hidden="true">
+              <span>Page</span>
+              <span>Focus keyword</span>
+              <span>Title</span>
+              <span>Description</span>
+              <span>Canonical URL</span>
+              <span>Hide from search engines</span>
+            </div>
           )}
 
           <ul className={styles.seoList}>
@@ -271,7 +325,12 @@ export function SeoPanel({ siteId }: { siteId: string }) {
                     checked={page.noIndex}
                     onChange={(e) => void save(page, { noIndex: e.target.checked })}
                   />
-                  <span>Hide from search engines</span>
+                  {/*
+                    Visible below 1080px, where this is the only place the
+                    words appear; hidden the same way seoFieldLabel is above
+                    that, once the column header says it instead.
+                  */}
+                  <span className={styles.seoNoIndexText}>Hide from search engines</span>
                 </label>
 
                 {page.warnings.length > 0 && (
@@ -284,6 +343,62 @@ export function SeoPanel({ siteId }: { siteId: string }) {
               </li>
             ))}
           </ul>
+
+          {/*
+            The pager. Same shape and the same classes as the Images tab's —
+            one visual language for "there are more of these than fit on
+            screen" rather than two.
+          */}
+          {matched.length > 0 && (
+            <div className={styles.pager}>
+              <span className={styles.pagerCount}>
+                {matched.length <= PER_PAGE
+                  ? `${matched.length} page${matched.length === 1 ? "" : "s"}`
+                  : `Showing ${(current - 1) * PER_PAGE + 1}–${Math.min(
+                      current * PER_PAGE,
+                      matched.length,
+                    )} of ${matched.length}`}
+              </span>
+
+              {pageCount > 1 && (
+                <div className={styles.pagerBtns}>
+                  <button
+                    type="button"
+                    className={styles.pagerBtn}
+                    disabled={current <= 1}
+                    onClick={() => setPage(current - 1)}
+                  >
+                    ‹ Previous
+                  </button>
+                  {pageCount <= 9 ? (
+                    Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        className={`${styles.pagerNum} ${n === current ? styles.pagerNumOn : ""}`}
+                        aria-current={n === current ? "page" : undefined}
+                        onClick={() => setPage(n)}
+                      >
+                        {n}
+                      </button>
+                    ))
+                  ) : (
+                    <span className={styles.pagerAt}>
+                      {current} / {pageCount}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className={styles.pagerBtn}
+                    disabled={current >= pageCount}
+                    onClick={() => setPage(current + 1)}
+                  >
+                    Next ›
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -336,12 +451,19 @@ function Field({
   return (
     <label className={styles.seoField}>
       <span className={styles.seoFieldHead}>
-        <span>{label}</span>
+        <span className={styles.seoFieldLabel}>{label}</span>
         <span className={over ? styles.seoCountOver : styles.seoCount}>
           {draft.trim().length}/{limit}
         </span>
       </span>
-      {multiline ? <textarea rows={2} {...props} /> : <input type="text" {...props} />}
+      {/*
+        3 rows, not 2 — the wide table layout gives description a narrower
+        column than the field had at full width, so the same sentence wraps
+        onto more lines. 2 clipped the tail of an ordinary description behind
+        a scrollbar with no visual sign anything was hidden; 3 fits nearly all
+        of them, and resize:vertical (on .seoInput) is there for the rest.
+      */}
+      {multiline ? <textarea rows={3} {...props} /> : <input type="text" {...props} />}
     </label>
   );
 }
