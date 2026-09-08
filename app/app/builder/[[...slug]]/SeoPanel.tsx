@@ -265,7 +265,17 @@ export function SeoPanel({ siteId }: { siteId: string }) {
               <span>Title</span>
               <span>Description</span>
               <span>Canonical URL</span>
-              <span>Hide from search engines</span>
+              {/*
+                "No index" here, not the full "Hide from search engines" —
+                this row is decorative (aria-hidden, see above), so it only
+                has to make sense to someone looking at it, and the full
+                phrase was wrapping across four lines in an 86px column. The
+                checkbox's own label, read by a screen reader and shown at
+                every width below 1080px, keeps the plain-English version;
+                the title attribute puts it back for a sighted reader who
+                hovers.
+              */}
+              <span title="Hide this page from search engines">No index</span>
             </div>
           )}
 

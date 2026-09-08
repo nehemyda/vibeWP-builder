@@ -206,7 +206,7 @@ export function DialogHarness() {
           <span>Title</span>
           <span>Description</span>
           <span>Canonical URL</span>
-          <span>Hide from search engines</span>
+          <span title="Hide this page from search engines">No index</span>
         </div>
         <ul className={styles.seoList}>
           {[
