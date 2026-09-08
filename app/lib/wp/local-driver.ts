@@ -31,6 +31,28 @@ const THEME_SRC =
   join(process.cwd(), "..", "assets", "ai-builder", "themes", "vibewp");
 const PORT_BASE = Number(process.env.VIBEWP_PORT_BASE ?? 8801);
 
+/**
+ * A temp directory the operating system will not empty underneath us.
+ *
+ * `wp server` runs PHP's built-in web server with a router script that WP-CLI
+ * extracts from its own .phar into sys_get_temp_dir() — on macOS, a folder
+ * under /var/folders that the OS periodically purges. When it goes, the server
+ * keeps its socket open and answers EVERY request with
+ *
+ *   Fatal error: Failed opening required '…-router.php'
+ *
+ * served as a 200 with a text/html body. Pages still looked right in the
+ * builder, because the canvas renders from the schema rather than from
+ * WordPress — but every photograph on an exported site is fetched from this
+ * server, so the pictures, and only the pictures, silently turned into broken
+ * images. "Sometimes images are missing" was the OS's temp cleaner running.
+ *
+ * sys_get_temp_dir() honours TMPDIR, so the server is given one inside the
+ * sites directory instead. Verified: `php -r 'echo sys_get_temp_dir();'`
+ * follows TMPDIR on this machine.
+ */
+const SERVER_TMP = join(SITES_ROOT, ".run", "tmp");
+
 /** WP-CLI needs generous memory: core extraction OOMs at the 128M default. */
 async function wp(args: string[], cwd?: string): Promise<string> {
   const { stdout } = await run(PHP, ["-d", "memory_limit=1G", WP_CLI, ...args], {
@@ -107,15 +129,34 @@ export async function ensureSiteServing(opts: {
 }): Promise<{ serving: boolean; error?: string }> {
   const { installPath, port } = opts;
 
-  if (await isPortListening(port)) return { serving: true };
+  /*
+   * An open socket is not a working server, and assuming it was is what let
+   * this fail silently for who knows how long. The check now asks the server
+   * for something and looks at the answer; a listener that is answering with
+   * PHP fatals is killed and replaced rather than trusted.
+   */
+  if (await isPortListening(port)) {
+    if (await isServerHealthy(port)) return { serving: true };
+    await killListener(port);
+  }
 
   try {
     // Keep output so a failure to boot can be diagnosed later.
     const logFile = await open(join(installPath, ".vibewp-server.log"), "a");
+    await mkdir(SERVER_TMP, { recursive: true });
     const child = spawn(
       PHP,
       ["-d", "memory_limit=512M", WP_CLI, "server", `--path=${installPath}`, "--host=localhost", `--port=${port}`],
-      { detached: true, stdio: ["ignore", logFile.fd, logFile.fd] },
+      {
+        detached: true,
+        stdio: ["ignore", logFile.fd, logFile.fd],
+        /*
+         * TMPDIR is the whole point — see SERVER_TMP. Without it WP-CLI puts
+         * the router PHP needs in a folder macOS is free to delete, and the
+         * server outlives its own router.
+         */
+        env: { ...process.env, TMPDIR: SERVER_TMP },
+      },
     );
     child.unref();
     await logFile.close();
@@ -123,12 +164,84 @@ export async function ensureSiteServing(opts: {
     return { serving: false, error: err instanceof Error ? err.message : String(err) };
   }
 
-  // PHP's built-in server binds quickly, but not instantly.
+  // PHP's built-in server binds quickly, but not instantly. Waiting for a
+  // real answer rather than for the bind, for the reason above.
   for (let attempt = 0; attempt < 25; attempt += 1) {
-    if (await isPortListening(port)) return { serving: true };
+    if ((await isPortListening(port)) && (await isServerHealthy(port))) {
+      return { serving: true };
+    }
     await new Promise((r) => setTimeout(r, 200));
   }
   return { serving: false, error: `Server did not start on port ${port}` };
+}
+
+/**
+ * Whether the server on this port is actually answering, or only listening.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * IT LOOKS FOR THE FATAL, NOT FOR A PARTICULAR FILE
+ *
+ * The first version of this fetched a core JavaScript file and called an
+ * HTML content-type a failure. That is wrong in a way worth recording: a
+ * genuine 404 from WordPress is also HTML, so the day core renames that file
+ * — or the day it is fetched before the theme is synced — every export would
+ * decide the server was broken, kill it, and start another. A health check
+ * that can be wrong in the direction of "kill the server" is worse than none.
+ *
+ * So it asks for the site root, which always exists, and looks for the thing
+ * that actually goes wrong: PHP's built-in server answering a fatal error
+ * with a 200. A themed 404 page and a working home page are both fine; only
+ * a fatal is not.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export async function isServerHealthy(port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`http://localhost:${port}/`, {
+      signal: AbortSignal.timeout(5000),
+      redirect: "manual",
+    });
+    if (res.status >= 500) return false;
+
+    /*
+     * Only the head of the body. A PHP fatal is emitted before anything else,
+     * so it is in the first few hundred bytes — and a whole WordPress page is
+     * not worth reading to find out that it rendered.
+     */
+    const head = (await res.text()).slice(0, 1200);
+    return !/Fatal error|Failed opening required|Parse error/i.test(head);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Stops whatever is holding a port, so a broken server can be replaced.
+ *
+ * By port rather than by a PID we remember, because the process outlives the
+ * request that started it and survives restarts of this app — there is no
+ * handle to keep. lsof is asked for the listener only, so this cannot pick up
+ * a browser's outbound connection to the same port.
+ */
+async function killListener(port: number): Promise<void> {
+  try {
+    const { stdout } = await run("/usr/sbin/lsof", [
+      "-nP",
+      `-iTCP:${port}`,
+      "-sTCP:LISTEN",
+      "-t",
+    ]);
+    for (const pid of stdout.trim().split(/\s+/).filter(Boolean)) {
+      try {
+        process.kill(Number(pid), "SIGTERM");
+      } catch {
+        // Already gone, or not ours to signal. Either way, nothing to do.
+      }
+    }
+    // SIGTERM is not instant, and rebinding a port still held would fail.
+    await new Promise((r) => setTimeout(r, 400));
+  } catch {
+    // No lsof, or nothing listening. The spawn below will report the truth.
+  }
 }
 
 /**
