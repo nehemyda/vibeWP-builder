@@ -3536,6 +3536,10 @@ body.yp-page {
  */
 .yp-page [class*="__heading"].u-heading--primary { color: var(--primary); }
 
+/* Same trick, for body copy: one rule reaches all 36 families that have one. */
+.yp-page [class*="__body"].u-body--ink { color: var(--ink); }
+.yp-page [class*="__body"].u-body--muted { color: var(--muted); }
+
 /* ────────────────────────────────────────────────────────────────────
    RESPONSIVE VISIBILITY AND COLUMN ORDER
 

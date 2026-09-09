@@ -92,6 +92,37 @@ export const ELEMENT_ROLES: ElementRole[] = [
     ],
   },
   {
+    key: "body",
+    label: "Body copy",
+    // The section's own supporting paragraph, in any of the 36 families that
+    // have one. Checked each of the 36 by name first: all 36 are genuine body
+    // copy, none is a repeating item's own text — a card's body among six is
+    // a different role, not this one, and this class token never names that.
+    match: /yp-[a-z0-9-]+__body\b/g,
+    except: [],
+    options: [
+      {
+        field: "bodyColor",
+        spec: {
+          type: "choice",
+          label: "Colour",
+          hint: "Default is the design's own body colour — usually a softer grey than the heading.",
+          choices: ["default", "ink", "muted"],
+          default: "default",
+        },
+        /*
+         * One section (the dark form band) already sets its own body colour
+         * for its own reason — pale text on a dark ground. Choosing "ink"
+         * there specifically would fight that, the same way choosing an
+         * odd heading colour on a tinted section could reduce contrast: a
+         * bounded choice still needs a look at the result, it just cannot
+         * be typed into the wrong shape.
+         */
+        classes: { default: "", ink: "u-body--ink", muted: "u-body--muted" },
+      },
+    ],
+  },
+  {
     key: "button",
     label: "Buttons",
     // Both variants, so a section's buttons move together — which is what is
