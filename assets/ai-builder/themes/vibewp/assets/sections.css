@@ -1686,10 +1686,21 @@ body.yp-page {
 { box-sizing: border-box; margin-block-start: 0; margin-block-end: 0; }
 
 /* Shared container + section heading scale. */
-.yp-page .yp-alt, .yp-page .yp-steps, .yp-page .yp-check, .yp-page .yp-gallery,
+/*
+ * Five split OUT of this group — .yp-check, .yp-faqh, .yp-faqs, .yp-ctabox,
+ * .yp-ctadual — each moved onto its own inner wrapper below, the same move
+ * applied throughout this file, and for the identical reason: each one's
+ * wrapper was checked and found to hold everything the section renders, this
+ * time including the heading, unlike the eight left here. .yp-alt,
+ * .yp-steps, .yp-gallery, .yp-pricing, .yp-compare, .yp-faq2, .yp-faqg and
+ * .yp-faqo all emit their own heading BEFORE their grid/list/table wrapper,
+ * so the same move would leave it unconstrained the moment "full" width was
+ * chosen — not checked for the deeper fix that would need, and kept exactly
+ * as they were.
+ */
+.yp-page .yp-alt, .yp-page .yp-steps, .yp-page .yp-gallery,
 .yp-page .yp-pricing, .yp-page .yp-compare, .yp-page .yp-faq2, .yp-page .yp-faqg,
-.yp-page .yp-faqh, .yp-page .yp-faqo, .yp-page .yp-faqs, .yp-page .yp-ctabox,
-.yp-page .yp-ctadual {
+.yp-page .yp-faqo {
   max-width: var(--container); margin: 0 auto;
   padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
@@ -1745,7 +1756,11 @@ body.yp-page {
 .yp-page .yp-stats__label { margin: 0; font-size: calc(0.9rem * var(--yp-text-scale, 1)); color: var(--muted); }
 
 /* ---- Checklist: ticks via ::marker, not characters in the text ---- */
-.yp-page .yp-check__grid { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: start; }
+.yp-page .yp-check__grid {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+  display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: start;
+}
 .yp-page .yp-check__copy { display: flex; flex-direction: column; align-items: flex-start; gap: 1.1rem; }
 .yp-page .yp-check__body { margin: 0; max-width: 44ch; font-size: calc(1.04rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-check__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; }
@@ -1941,7 +1956,11 @@ body.yp-page {
   font-family: var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--primary); }
 .yp-page .yp-faqg__list { border-top: 1px solid var(--line); }
 .yp-page .yp-faqg__item { border-bottom: 1px solid var(--line); }
-.yp-page .yp-faqh__grid { display: grid; grid-template-columns: 1.5fr 0.9fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: start; }
+.yp-page .yp-faqh__grid {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+  display: grid; grid-template-columns: 1.5fr 0.9fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: start;
+}
 .yp-page .yp-faqh__main { min-width: 0; }
 .yp-page .yp-faqh__list { margin-top: 1.6rem; border-top: 1px solid var(--line); }
 .yp-page .yp-faqh__item { border-bottom: 1px solid var(--line); }
@@ -1959,7 +1978,11 @@ body.yp-page {
   font-family: var(--font-mono); font-size: calc(0.95rem * var(--yp-text-scale, 1)); font-weight: 700; color: var(--primary); }
 .yp-page .yp-faqo__question { margin: 0 0 0.5rem; font-size: calc(1.15rem * var(--yp-text-scale, 1)); font-weight: 700; letter-spacing: -0.01em; }
 .yp-page .yp-faqo__answer { margin: 0; max-width: 68ch; font-size: calc(1rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
-.yp-page .yp-faqs__grid { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: start; }
+.yp-page .yp-faqs__grid {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+  display: grid; grid-template-columns: 0.85fr 1.15fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: start;
+}
 /* Heading follows the reader down a long list. No script needed. */
 .yp-page .yp-faqs__aside { position: sticky; top: 2rem; display: grid; gap: 0.8rem; }
 .yp-page .yp-faqs__body { margin: 0; font-size: calc(1rem * var(--yp-text-scale, 1)); color: var(--ink-2); max-width: 34ch; }
@@ -1998,7 +2021,23 @@ body.yp-page {
 .yp-page .yp-ctasplit__body { margin: 0; font-size: calc(1rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-ctasplit__actions { display: flex; gap: 0.8rem; flex: none; }
 
-.yp-page .yp-ctabox__card { border: 1px solid var(--line); border-radius: 20px; padding: 2.4rem 2rem 2.6rem;
+.yp-page .yp-ctabox {
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+}
+
+/*
+ * Only max-width/margin move here — NOT the section's own top/bottom/gutter
+ * padding, which stays on .yp-ctabox above. This one is different from
+ * every other move in this file: .yp-ctabox__card already owns a padding of
+ * its own for a different reason (the bordered card's inner spacing), and a
+ * plain `padding` shorthand would have overwritten it outright. Leaving the
+ * section's padding on the root instead is exactly CtaBand's own shape —
+ * background can still reach it, sitting OUTSIDE the max-width-constrained
+ * card, providing the vertical breathing room around it either way.
+ */
+.yp-page .yp-ctabox__card {
+  max-width: var(--container); margin: 0 auto;
+  border: 1px solid var(--line); border-radius: 20px; padding: 2.4rem 2rem 2.6rem;
   background: var(--surface); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.9rem; }
 .yp-page .yp-ctabox__eyebrow { margin: 0; font-family: var(--font-mono); font-size: calc(0.7rem * var(--yp-text-scale, 1)); font-weight: 600;
   letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary); }
@@ -2020,7 +2059,11 @@ body.yp-page {
 .yp-page .yp-ctaimg__actions { display: flex; flex-wrap: wrap; gap: 0.8rem; justify-content: center; margin-top: 0.3rem; }
 .yp-page .yp-ctaimg__actions .yp-btn--outline a { border-color: rgba(255,255,255,0.5); color: #fff; }
 
-.yp-page .yp-ctadual__inner { display: grid; gap: 1.8rem; }
+.yp-page .yp-ctadual__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+  display: grid; gap: 1.8rem;
+}
 .yp-page .yp-ctadual__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
 .yp-page .yp-ctadual__option { border: 1px solid var(--line); border-radius: 18px; padding: 1.8rem 1.9rem 2rem;
   background: var(--surface); display: flex; flex-direction: column; align-items: flex-start; gap: 0.7rem; }
@@ -3684,6 +3727,11 @@ body.yp-page {
 .yp-page .u-row--full .yp-formp__inner,
 .yp-page .u-row--full .yp-formd__inner,
 .yp-page .u-row--full .yp-formx__inner,
+.yp-page .u-row--full .yp-check__grid,
+.yp-page .u-row--full .yp-faqh__grid,
+.yp-page .u-row--full .yp-faqs__grid,
+.yp-page .u-row--full .yp-ctabox__card,
+.yp-page .u-row--full .yp-ctadual__inner,
 .yp-page .u-row--full .yp-contact__grid {
   max-width: none !important;
 }
