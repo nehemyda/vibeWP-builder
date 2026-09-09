@@ -15,6 +15,7 @@ import {
   withPreviewPlaceholders,
 } from "@/lib/wp/serialize";
 import { getSectionByKey, getSectionByNodeType } from "@/lib/sections";
+import { SECTION_STYLE_OPTIONS, sectionOwnOptions } from "@/lib/design/section-style";
 import { PreviewFrame, type CanvasSelection, type SectionBox } from "@/app/builder/[[...slug]]/PreviewFrame";
 import { CanvasOverlay } from "@/app/builder/[[...slug]]/CanvasOverlay";
 import { DesignPanel, type CatalogueEntry } from "@/app/builder/[[...slug]]/DesignPanel";
@@ -327,6 +328,13 @@ export function CanvasHarness() {
                   name: labelFor(styleFor),
                   role: styleFor.role,
                   onClearRole: () => setStyleFor({ kind: "node", index: styleFor.index }),
+                  // Mirrors BuilderApp.tsx: the shared options plus whatever
+                  // this section declares for itself (hero-split's
+                  // background/layout, once that lands here).
+                  options: [
+                    ...SECTION_STYLE_OPTIONS,
+                    ...sectionOwnOptions(getSectionByKey(order[styleFor.index])?.fields),
+                  ],
                   values: secStyle[styleFor.index] ?? {},
                   onChange: (field, value) => {
                     setSecStyle((prev) => ({

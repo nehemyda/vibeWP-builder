@@ -49,7 +49,7 @@ import { DesignPanel, type CatalogueEntry } from "./DesignPanel";
 import { StylePanel } from "./StylePanel";
 import { saveDesignTokensAction } from "@/app/actions/design";
 import { sanitiseTokens, type DesignTokens } from "@/lib/design/tokens";
-import { SECTION_STYLE_OPTIONS } from "@/lib/design/section-style";
+import { SECTION_STYLE_OPTIONS, sectionOwnOptions } from "@/lib/design/section-style";
 import { ELEMENT_ROLES } from "@/lib/design/element-style";
 import { WordPressLockNotice } from "./WordPressLockNotice";
 import { SiteDetailsDrawer, type SiteDetails } from "./SiteDetailsDrawer";
@@ -2182,34 +2182,49 @@ export function BuilderApp({
             scope={siteName}
             section={
               styleFor && styleFor.kind === "node" && nodes[styleFor.index]
-                ? {
-                    name: labelOfSelection(styleFor),
-                    role: styleFor.role,
-                    onClearRole: () => setStyleFor({ kind: "node", index: styleFor.index }),
-                    values: Object.fromEntries(
-                      [
-                        ...SECTION_STYLE_OPTIONS,
-                        ...ELEMENT_ROLES.flatMap((r) => r.options),
-                      ].map((o) => [
-                        o.field,
-                        String(nodes[styleFor.index]?.props?.[o.field] ?? o.spec.default ?? "default"),
-                      ]),
-                    ),
+                ? (() => {
                     /*
-                     * Dispatched as set_option, the operation that already
-                     * exists — so it is validated against the field's choices,
-                     * written with a revision, and undoable, with no new code
-                     * and no second path to keep in step with chat.
+                     * This section's own options, on top of the shared ones —
+                     * background and width on a hero, say. Read from the
+                     * registry entry for whatever type is actually selected,
+                     * so a new field a section declares for itself appears
+                     * here with no change to this file.
                      */
-                    onChange: (field, value) => {
-                      const ref = nodes[styleFor.index]?.type;
-                      if (!ref) return;
-                      void runCanvasOp(
-                        { kind: "set_option", section: ref, option: field, value },
-                        `Restyling the ${labelOfSelection(styleFor)}`,
-                      );
-                    },
-                  }
+                    const ownOptions = sectionOwnOptions(
+                      getSectionByNodeType(nodes[styleFor.index]?.type)?.fields,
+                    );
+                    return {
+                      name: labelOfSelection(styleFor),
+                      role: styleFor.role,
+                      onClearRole: () => setStyleFor({ kind: "node", index: styleFor.index }),
+                      options: [...SECTION_STYLE_OPTIONS, ...ownOptions],
+                      values: Object.fromEntries(
+                        [
+                          ...SECTION_STYLE_OPTIONS,
+                          ...ownOptions,
+                          ...ELEMENT_ROLES.flatMap((r) => r.options),
+                        ].map((o) => [
+                          o.field,
+                          String(nodes[styleFor.index]?.props?.[o.field] ?? o.spec.default ?? "default"),
+                        ]),
+                      ),
+                      /*
+                       * Dispatched as set_option, the operation that already
+                       * exists — so it is validated against the field's
+                       * choices, written with a revision, and undoable, with
+                       * no new code and no second path to keep in step with
+                       * chat.
+                       */
+                      onChange: (field: string, value: string) => {
+                        const ref = nodes[styleFor.index]?.type;
+                        if (!ref) return;
+                        void runCanvasOp(
+                          { kind: "set_option", section: ref, option: field, value },
+                          `Restyling the ${labelOfSelection(styleFor)}`,
+                        );
+                      },
+                    };
+                  })()
                 : undefined
             }
             busy={Boolean(canvasBusy)}

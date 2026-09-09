@@ -1,8 +1,8 @@
 "use client";
 
 import { DESIGN_TOKENS, TOKEN_GROUPS, type DesignTokens } from "@/lib/design/tokens";
-import { SECTION_STYLE_OPTIONS } from "@/lib/design/section-style";
 import { ELEMENT_ROLES } from "@/lib/design/element-style";
+import type { FieldSpec } from "@/lib/sections/types";
 import styles from "./builder.module.css";
 
 /**
@@ -68,6 +68,15 @@ export function StylePanel({
     role?: string;
     /** Back up to the whole section from the breadcrumb. */
     onClearRole?: () => void;
+    /*
+     * Every option this section actually has: the shared ones every section
+     * gets (heading size, space around it) followed by whatever THIS
+     * section declares for itself (a hero's background, a gallery's photos
+     * per row). Assembled by the caller — sectionOwnOptions() plus
+     * SECTION_STYLE_OPTIONS — rather than imported here, so this component
+     * never needs to know which registry entry is selected.
+     */
+    options: Array<{ field: string; spec: FieldSpec }>;
   };
 }) {
   const set = (name: string, value: number) => ({ ...tokens, [name]: value });
@@ -108,7 +117,7 @@ export function StylePanel({
     ) : section ? (
       <section className={styles.styleGroup}>
         <h3 className={styles.styleGroupName}>This section</h3>
-        {SECTION_STYLE_OPTIONS.map((option) => {
+        {section.options.map((option) => {
           const value = section.values[option.field] ?? String(option.spec.default ?? "default");
           return (
             <div key={option.field} className={styles.styleRow}>
@@ -217,7 +226,10 @@ export function StylePanel({
             className={styles.styleReset}
             disabled={busy}
             onClick={() => {
-              for (const option of SECTION_STYLE_OPTIONS) {
+              // Every option shown, not just the shared ones — a client who
+              // asks to "reset this section" means everything on the panel,
+              // background and width included.
+              for (const option of section.options) {
                 section.onChange(option.field, String(option.spec.default ?? "default"));
               }
             }}

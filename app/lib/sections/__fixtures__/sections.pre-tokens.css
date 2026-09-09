@@ -134,13 +134,10 @@ body.yp-page {
    HeroSplit
    ============================================================ */
 
-.yp-page .yp-hero {
+.yp-page .yp-hero__grid {
   max-width: var(--container);
   margin: 0 auto;
   padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
-}
-
-.yp-page .yp-hero__grid {
   display: grid;
   grid-template-columns: 1.08fr 0.92fr;
   gap: var(--space-gap);

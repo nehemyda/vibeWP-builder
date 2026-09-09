@@ -1,4 +1,7 @@
-import type { FieldSpec } from "@/lib/sections/types";
+import { isOptionField, type FieldSpec } from "@/lib/sections/types";
+import { ELEMENT_STYLE_FIELDS } from "./element-style";
+import { PART_VISIBILITY_OPTIONS } from "./part-visibility";
+import { PART_SIZE_OPTIONS } from "./part-size";
 
 /**
  * Style settings every page section carries.
@@ -133,4 +136,51 @@ export function allStyleClasses(): string[] {
 
 export function isStyleField(field: string): boolean {
   return BY_FIELD.has(field);
+}
+
+/*
+ * Names already spoken for by a shared family — every field the Style panel
+ * shows through some OTHER route, so a section's own option of the same name
+ * is never listed twice.
+ */
+const SHARED_FIELD_NAMES = new Set([
+  ...Object.keys(SECTION_STYLE_FIELDS),
+  ...Object.keys(ELEMENT_STYLE_FIELDS),
+  ...Object.keys(PART_VISIBILITY_OPTIONS),
+  ...Object.keys(PART_SIZE_OPTIONS),
+]);
+
+/**
+ * A section's OWN option fields — background, width, "photos per row" —
+ * as opposed to the ones above that every section gets for free.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THIS IS SEPARATE FROM SECTION_STYLE_OPTIONS
+ *
+ * Everything above works on any section because every one of them reads the
+ * same shared multiplier variable through styleClassesFor — a control that
+ * means the same thing everywhere, applied through one generic pipeline with
+ * no section-specific code.
+ *
+ * A field like hero-split's `background` is not like that: it only works
+ * because THAT section's own toGutenberg reads it and writes its own class,
+ * onto CSS that only that section declares. Merging it into the shared list
+ * would put a working-looking control on every other section where changing
+ * it does nothing — a control that lies is worse than one that is missing.
+ *
+ * So this reads the field back out of the section's OWN registry entry
+ * instead: whatever `choice`/`boolean`/`number` field a section declares for
+ * itself, beyond the shared families, shows up here automatically. Add a
+ * field to a section and its control appears in the Style panel with no
+ * change to this file or to BuilderApp — the same promise the registry
+ * already makes everywhere else.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export function sectionOwnOptions(
+  fields: Record<string, FieldSpec> | undefined,
+): Array<{ field: string; spec: FieldSpec }> {
+  if (!fields) return [];
+  return Object.entries(fields)
+    .filter(([field, spec]) => isOptionField(spec) && !SHARED_FIELD_NAMES.has(field))
+    .map(([field, spec]) => ({ field, spec }));
 }

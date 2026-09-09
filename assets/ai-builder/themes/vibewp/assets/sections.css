@@ -134,13 +134,33 @@ body.yp-page {
    HeroSplit
    ============================================================ */
 
-.yp-page .yp-hero {
+/*
+ * The ROOT carries no width of its own any more — moved onto .yp-hero__grid
+ * below, which is what used to be centered here. .u-bg--tint and
+ * .u-hero--full, the two rules this makes possible, are declared with the
+ * rest of the per-section style utilities near the end of this file, not
+ * here — see PER-SECTION STYLE UTILITIES. New rules append there so the
+ * declarations above them keep their positions; this file's own token gate
+ * checks that.
+ *
+ * WHY THE ROOT HAD TO LOSE ITS WIDTH AT ALL: a background on this element
+ * would only ever colour the centered 1160px box, because that box IS this
+ * element. A client asking to add colour "behind" the section means the
+ * whole row, edge to edge — and the only way this element can be both full
+ * width (for a colour to reach the edges) and unchanged in appearance (for a
+ * client who sets no colour) is for it to carry no width constraint of its
+ * own at all.
+ *
+ * This was a pure CSS move — no markup changed, so the exported HTML this
+ * section produces is byte-identical to before. That matters more here than
+ * anywhere else in the theme: this is the one section with live client sites
+ * behind it, kept as the registry's own regression anchor specifically
+ * because its markup must not shift.
+ */
+.yp-page .yp-hero__grid {
   max-width: var(--container);
   margin: 0 auto;
   padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
-}
-
-.yp-page .yp-hero__grid {
   display: grid;
   grid-template-columns: 1.08fr 0.92fr;
   gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
@@ -3574,4 +3594,28 @@ body.yp-page {
  */
 @media (max-width: 560px) {
   .yp-page [class*="u-w--"] { width: 100%; }
+}
+
+/*
+ * ── Split hero: background + width ──────────────────────────────────
+ * Declared here rather than beside .yp-hero itself, per this section's own
+ * new convention (see the comment above .yp-hero__grid): appended rules
+ * keep everything above them at the position this file's token gate checks.
+ */
+.yp-page .yp-hero.u-bg--tint {
+  /* The exact wash CtaBand already ships with normal (non-inverted) text
+     colours on top of it — borrowed rather than invented, so this is known
+     to read correctly before it is ever seen. */
+  background: color-mix(in oklch, var(--primary) 8%, var(--surface));
+}
+
+/*
+ * "Full" only removes the centering — .yp-hero__grid's own gutter padding
+ * stays, so content still keeps its distance from the browser edge rather
+ * than touching it. !important because this exists specifically to override
+ * .yp-hero__grid's max-width regardless of which wins on specificity alone;
+ * that is its entire job, not a sign of a losing fight.
+ */
+.yp-page .yp-hero.u-hero--full .yp-hero__grid {
+  max-width: none !important;
 }

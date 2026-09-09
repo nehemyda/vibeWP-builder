@@ -22,6 +22,10 @@ export type HeroSplitProps = {
     width?: number;
     height?: number;
   };
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 const text = (el: HTMLElement | null): string => (el ? el.textContent.trim() : "");
@@ -68,6 +72,32 @@ export const HeroSplit: SectionDefinition<HeroSplitProps> = {
       of: { label: { type: "text", label: "Label" }, href: { type: "link", label: "Links to" } },
     },
     image: { type: "image", label: "Photo", hint: "Portrait crop, 4:5" },
+    /*
+     * Declared here, not in the shared SECTION_STYLE_FIELDS every section
+     * gets merged in lib/sections/index.ts. Those are safe to hand to any
+     * section because every one of them reads the same shared multiplier
+     * variable — a control that means the same thing everywhere. This one
+     * only works because THIS section happens to keep its grid in a separate
+     * child (.yp-hero__grid) that the background sits behind; a section whose
+     * root carries its own max-width directly has no such child to spare, and
+     * declaring this globally would put a working-looking control on a
+     * section where it does nothing. Declared per-section until that is
+     * checked and fixed section by section.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The photo and copy stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the photo and copy.",
+      choices: ["contained", "full"],
+      default: "contained",
+    },
   },
 
   aiPrompt:
@@ -125,7 +155,23 @@ export const HeroSplit: SectionDefinition<HeroSplitProps> = {
         )
       : "";
 
-    return group("yp-hero", group("yp-hero__grid", copy + media), "section");
+    /*
+     * Both classes always land on the ROOT — the same place every other
+     * option's class lands (u-headings--lg, is-sticky, cols-3) — even though
+     * background and width take effect on two different elements below it.
+     * One rule either reader can trust: a section's own settings show up as
+     * classes on the thing selected in the canvas, never buried on a child
+     * the class list does not mention.
+     */
+    const rootClass = [
+      "yp-hero",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-hero--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return group(rootClass, group("yp-hero__grid", copy + media), "section");
   },
 
   fromGutenberg(root) {
@@ -156,7 +202,11 @@ export const HeroSplit: SectionDefinition<HeroSplitProps> = {
       });
     }
 
+    const heroClass = hero.getAttribute("class") ?? "";
+
     return {
+      background: heroClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: heroClass.includes("u-hero--full") ? "full" : "contained",
       eyebrow: text(hero.querySelector(".yp-hero__eyebrow")),
       heading: text(hero.querySelector(".yp-hero__heading")),
       body: text(hero.querySelector(".yp-hero__body")),
