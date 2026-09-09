@@ -78,6 +78,17 @@ export const ELEMENT_ROLES: ElementRole[] = [
         },
         classes: { default: "", left: "u-align--left", centre: "u-align--center", right: "u-align--right" },
       },
+      {
+        field: "headingColor",
+        spec: {
+          type: "choice",
+          label: "Colour",
+          hint: "Default is the same ink colour as the rest of the page's text.",
+          choices: ["default", "primary"],
+          default: "default",
+        },
+        classes: { default: "", primary: "u-heading--primary" },
+      },
     ],
   },
   {

@@ -3525,6 +3525,17 @@ body.yp-page {
 .yp-page .u-img--border-thin img { border: 1px solid var(--ink); }
 .yp-page .u-img--border-thick img { border: 3px solid var(--ink); }
 
+/*
+ * One generic rule reaches every section's heading, whichever family it
+ * belongs to — [class*="__heading"] matches yp-hero__heading,
+ * yp-features__heading, all 62 of them, the same way the role's own match
+ * regex does. Never applied to .yp-logos__heading in practice: that class
+ * is excluded from the heading role at the point the utility class gets
+ * appended (see ELEMENT_ROLES' "except"), so this selector never needs to
+ * repeat that exclusion itself.
+ */
+.yp-page [class*="__heading"].u-heading--primary { color: var(--primary); }
+
 /* ────────────────────────────────────────────────────────────────────
    RESPONSIVE VISIBILITY AND COLUMN ORDER
 
