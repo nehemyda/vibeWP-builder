@@ -3505,6 +3505,17 @@ body.yp-page {
 .yp-page .u-img--16x9 img { aspect-ratio: 16 / 9; object-fit: cover; width: 100%; height: auto; }
 .yp-page .u-img--4x5 img { aspect-ratio: 4 / 5; object-fit: cover; width: 100%; height: auto; }
 
+/*
+ * Border, in the site's own ink colour rather than a free colour picker —
+ * a bounded step (none/thin/thick), the same shape as every other option
+ * here, so it survives as a class rather than as an inline style Gutenberg
+ * would strip on save. The radius classes above already control the
+ * CORNER; this is independent of them, so a rounded photo can also take a
+ * border without the two options needing to know about each other.
+ */
+.yp-page .u-img--border-thin img { border: 1px solid var(--ink); }
+.yp-page .u-img--border-thick img { border: 3px solid var(--ink); }
+
 /* ────────────────────────────────────────────────────────────────────
    RESPONSIVE VISIBILITY AND COLUMN ORDER
 

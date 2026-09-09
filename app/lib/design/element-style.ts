@@ -138,6 +138,17 @@ export const ELEMENT_ROLES: ElementRole[] = [
         },
         classes: { default: "", square: "u-img--1x1", landscape: "u-img--16x9", portrait: "u-img--4x5" },
       },
+      {
+        field: "imageBorder",
+        spec: {
+          type: "choice",
+          label: "Border",
+          hint: "A line around the photo, in the site's own ink colour.",
+          choices: ["none", "thin", "thick"],
+          default: "none",
+        },
+        classes: { none: "", thin: "u-img--border-thin", thick: "u-img--border-thick" },
+      },
     ],
   },
 ];
