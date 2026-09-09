@@ -1687,18 +1687,23 @@ body.yp-page {
 
 /* Shared container + section heading scale. */
 /*
- * Five split OUT of this group — .yp-check, .yp-faqh, .yp-faqs, .yp-ctabox,
- * .yp-ctadual — each moved onto its own inner wrapper below, the same move
- * applied throughout this file, and for the identical reason: each one's
- * wrapper was checked and found to hold everything the section renders, this
- * time including the heading, unlike the eight left here. .yp-alt,
- * .yp-steps, .yp-gallery, .yp-pricing, .yp-compare, .yp-faq2, .yp-faqg and
- * .yp-faqo all emit their own heading BEFORE their grid/list/table wrapper,
- * so the same move would leave it unconstrained the moment "full" width was
- * chosen — not checked for the deeper fix that would need, and kept exactly
- * as they were.
+ * Five split OUT of this group earlier — .yp-check, .yp-faqh, .yp-faqs,
+ * .yp-ctabox, .yp-ctadual — each moved onto its own inner wrapper, because
+ * each one's wrapper already held everything the section renders, heading
+ * included. .yp-gallery is a SIXTH, split out differently: its heading and
+ * intro sit OUTSIDE .yp-gallery__grid with no shared wrapper at all, so
+ * there was nothing existing to move onto — a NEW one was added
+ * (.yp-gallery__inner) purely to give the two of them one ancestor to
+ * share. That is a markup change, not just a CSS one; see the comment
+ * where it is used in content-gallery.ts for what that costs and why it
+ * still renders pixel-for-pixel identically by default.
+ *
+ * .yp-alt, .yp-steps, .yp-pricing, .yp-compare, .yp-faq2, .yp-faqg and
+ * .yp-faqo remain: each has the identical "heading outside the wrapper"
+ * shape and would need the same new-wrapper treatment, not yet done for
+ * any of them.
  */
-.yp-page .yp-alt, .yp-page .yp-steps, .yp-page .yp-gallery,
+.yp-page .yp-alt, .yp-page .yp-steps,
 .yp-page .yp-pricing, .yp-page .yp-compare, .yp-page .yp-faq2, .yp-page .yp-faqg,
 .yp-page .yp-faqo {
   max-width: var(--container); margin: 0 auto;
@@ -3732,6 +3737,22 @@ body.yp-page {
 .yp-page .u-row--full .yp-faqs__grid,
 .yp-page .u-row--full .yp-ctabox__card,
 .yp-page .u-row--full .yp-ctadual__inner,
+.yp-page .u-row--full .yp-gallery__inner,
 .yp-page .u-row--full .yp-contact__grid {
   max-width: none !important;
+}
+
+/*
+ * Work gallery: a NEW wrapper, not a moved property.
+ *
+ * .yp-gallery__grid already existed; .yp-gallery__heading and
+ * .yp-gallery__intro did not have one to share with it, so this element
+ * exists purely to give them one. Declared here, at the true end of the
+ * file, for the same reason every other new rule in this section is: an
+ * insertion anywhere else shifts every declaration after it, which is
+ * exactly what this file's token gate is built to catch.
+ */
+.yp-page .yp-gallery__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }

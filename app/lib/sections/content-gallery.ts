@@ -10,6 +10,10 @@ export type ContentGalleryProps = {
   heading?: string;
   intro?: string;
   items?: Array<{ image?: SectionImage; caption?: string }>;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -54,6 +58,32 @@ export const ContentGallery: SectionDefinition<ContentGalleryProps> = {
         image: { type: "image", label: "Photo" },
         caption: { type: "text", label: "Caption" },
       },
+    },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from every other section that has
+     * this pair: the heading and intro here sit OUTSIDE .yp-gallery__grid
+     * with nothing to move onto, so toGutenberg wraps them together in a
+     * NEW element (.yp-gallery__inner) that exists purely to give this
+     * option somewhere to reach. That changes the exported MARKUP shape by
+     * default, not just its CSS — the first section in this family where
+     * that was true. What it does not change is the rendered pixels: the
+     * new wrapper carries exactly the width and padding the root used to,
+     * so an unset section looks identical to before.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The heading and photos stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the heading and photos.",
+      choices: ["contained", "full"],
+      default: "contained",
     },
   },
 
@@ -126,9 +156,17 @@ export const ContentGallery: SectionDefinition<ContentGalleryProps> = {
       .filter(Boolean)
       .join("");
 
-    return group(
+    const rootClass = [
       "yp-gallery",
-      head + gallery(tiles, `yp-gallery__grid cols-${cols}`, cols),
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return group(
+      rootClass,
+      group("yp-gallery__inner", head + gallery(tiles, `yp-gallery__grid cols-${cols}`, cols)),
       "section",
     );
   },
@@ -136,7 +174,10 @@ export const ContentGallery: SectionDefinition<ContentGalleryProps> = {
   fromGutenberg(root) {
     const el = root.querySelector(".yp-gallery");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       lightbox: Boolean(el.querySelector(".yp-gallery__frame.has-lightbox")),
       columns:
         (el.querySelector(".yp-gallery__grid")?.getAttribute("class") ?? "")

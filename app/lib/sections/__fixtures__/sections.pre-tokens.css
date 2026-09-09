@@ -1643,7 +1643,7 @@ body.yp-page {
 { box-sizing: border-box; margin-block-start: 0; margin-block-end: 0; }
 
 /* Shared container + section heading scale. */
-.yp-page .yp-alt, .yp-page .yp-steps, .yp-page .yp-gallery,
+.yp-page .yp-alt, .yp-page .yp-steps,
 .yp-page .yp-pricing, .yp-page .yp-compare, .yp-page .yp-faq2, .yp-page .yp-faqg,
 .yp-page .yp-faqo {
   max-width: var(--container); margin: 0 auto;
