@@ -108,6 +108,17 @@ export const ELEMENT_ROLES: ElementRole[] = [
         },
         classes: { small: "u-btn--sm", default: "", large: "u-btn--lg" },
       },
+      {
+        field: "buttonBorder",
+        spec: {
+          type: "choice",
+          label: "Border",
+          hint: "Thicker or none, on top of whichever colour each button already has.",
+          choices: ["default", "none", "thick"],
+          default: "default",
+        },
+        classes: { default: "", none: "u-btn--border-none", thick: "u-btn--border-thick" },
+      },
     ],
   },
   {

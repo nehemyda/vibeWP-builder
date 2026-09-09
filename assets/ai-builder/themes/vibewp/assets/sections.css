@@ -3456,6 +3456,15 @@ body.yp-page {
 .yp-page .u-btn--sm .wp-block-button__link { padding: 0.6rem 1.1rem; font-size: 0.88rem; }
 .yp-page .u-btn--lg .wp-block-button__link { padding: 1rem 1.9rem; font-size: 1.05rem; }
 
+/*
+ * Width only, deliberately — colour and style stay whatever the button's own
+ * variant (primary/outline/ghost) already set. border-width is an
+ * independent longhand: a later, more specific rule can win on JUST the
+ * width and leave the shorthand's colour and style alone.
+ */
+.yp-page .u-btn--border-none .wp-block-button__link { border-width: 0; }
+.yp-page .u-btn--border-thick .wp-block-button__link { border-width: 3px; }
+
 /* ============================================================
    THE GLOBAL OVERRIDE LAYER
 
