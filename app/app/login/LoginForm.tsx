@@ -157,7 +157,15 @@ export function LoginForm({ prompt }: { prompt: string | null }) {
               aria-label={showPassword ? "Hide password" : "Show password"}
               onClick={() => setShowPassword((v) => !v)}
             >
-              {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              {/*
+                The icon shows the field's CURRENT state, not the action the
+                button performs — the reverse of the aria-label above. Hidden
+                (the default) is the crossed eye; revealed is the open one.
+                Flipped from the first version, which did it the Material/
+                GitHub way (icon = what clicking will do); this is the
+                1Password/LastPass convention instead, per the brief above.
+              */}
+              {showPassword ? <EyeIcon /> : <EyeOffIcon />}
             </button>
           </div>
         </div>
