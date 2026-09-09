@@ -8,6 +8,10 @@ export type HeroDuotoneProps = {
   body?: string;
   actions?: Action[];
   image?: SectionImage;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -50,6 +54,26 @@ export const HeroDuotone: SectionDefinition<HeroDuotoneProps> = {
       type: "image",
       label: "Photo",
       hint: "Anything with clear shapes — colour doesn't matter, it gets tinted",
+    },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Works here for the identical structural reason:
+     * .yp-hero-duotone__grid already wraps everything under the root with
+     * nothing else emitted alongside it.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The photo and copy stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the photo and copy.",
+      choices: ["contained", "full"],
+      default: "contained",
     },
   },
 
@@ -94,14 +118,25 @@ export const HeroDuotone: SectionDefinition<HeroDuotoneProps> = {
         )
       : "";
 
-    return group("yp-hero-duotone", group("yp-hero-duotone__grid", copy + media), "section");
+    const rootClass = [
+      "yp-hero-duotone",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return group(rootClass, group("yp-hero-duotone__grid", copy + media), "section");
   },
 
   fromGutenberg(root) {
     const el = root.querySelector(".yp-hero-duotone");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     const img = parseImage(el, ".yp-hero-duotone__frame");
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       eyebrow: text(el.querySelector(".yp-hero-duotone__eyebrow")),
       heading: text(el.querySelector(".yp-hero-duotone__heading")),
       body: text(el.querySelector(".yp-hero-duotone__body")),

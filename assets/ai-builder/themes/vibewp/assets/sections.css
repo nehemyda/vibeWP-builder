@@ -1039,12 +1039,10 @@ body.yp-page {
 
 /* ---- 5. Hero with cards ---------------------------------------------- */
 
-.yp-page .yp-hero-cards {
+.yp-page .yp-hero-cards__grid-outer {
   max-width: var(--container);
   margin: 0 auto;
   padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
-}
-.yp-page .yp-hero-cards__grid-outer {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
@@ -1259,11 +1257,9 @@ body.yp-page {
 
 /* ---- 3. Duotone ------------------------------------------------------ */
 
-.yp-page .yp-hero-duotone {
+.yp-page .yp-hero-duotone__grid {
   max-width: var(--container); margin: 0 auto;
   padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
-}
-.yp-page .yp-hero-duotone__grid {
   display: grid; grid-template-columns: 1fr 1fr;
   gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: center;
 }
@@ -1343,11 +1339,9 @@ body.yp-page {
 
 /* ---- 5. Pattern panel with overlapping photo ------------------------- */
 
-.yp-page .yp-hero-pattern {
+.yp-page .yp-hero-pattern__grid {
   max-width: var(--container); margin: 0 auto;
   padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
-}
-.yp-page .yp-hero-pattern__grid {
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
   align-items: center;
@@ -3267,11 +3261,9 @@ body.yp-page {
 .yp-page .yp-formb, .yp-page .yp-formb * { box-sizing: border-box; }
 
 /* ── Form with reassurance: copy left, form right ── */
-.yp-page .yp-formx {
+.yp-page .yp-formx__inner {
   width: 100%; max-width: var(--container); margin: 0 auto;
   padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
-}
-.yp-page .yp-formx__inner {
   display: grid; grid-template-columns: 1fr 1.15fr; gap: clamp(2rem, 5vw, 4.5rem);
   align-items: start;
 }
@@ -3329,11 +3321,9 @@ body.yp-page {
 }
 
 /* ── Form with contact details beside it ── */
-.yp-page .yp-formd {
+.yp-page .yp-formd__inner {
   width: 100%; max-width: var(--container); margin: 0 auto;
   padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
-}
-.yp-page .yp-formd__inner {
   display: grid; grid-template-columns: 1.3fr 0.85fr; gap: clamp(2rem, 5vw, 4rem);
   align-items: start;
 }
@@ -3370,11 +3360,9 @@ body.yp-page {
 }
 
 /* ── Form with a photograph ── */
-.yp-page .yp-formp {
+.yp-page .yp-formp__inner {
   width: 100%; max-width: var(--container); margin: 0 auto;
   padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
-}
-.yp-page .yp-formp__inner {
   display: grid; grid-template-columns: 1fr 1fr; gap: clamp(1.6rem, 4vw, 3.5rem);
   align-items: stretch;
 }
@@ -3677,6 +3665,12 @@ body.yp-page {
  * entire job, not a sign of a losing fight.
  */
 .yp-page .u-row--full .yp-hero__grid,
-.yp-page .u-row--full .yp-contact-visit__grid {
+.yp-page .u-row--full .yp-contact-visit__grid,
+.yp-page .u-row--full .yp-hero-duotone__grid,
+.yp-page .u-row--full .yp-hero-cards__grid-outer,
+.yp-page .u-row--full .yp-hero-pattern__grid,
+.yp-page .u-row--full .yp-formp__inner,
+.yp-page .u-row--full .yp-formd__inner,
+.yp-page .u-row--full .yp-formx__inner {
   max-width: none !important;
 }
