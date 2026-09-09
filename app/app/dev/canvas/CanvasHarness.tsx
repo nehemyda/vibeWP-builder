@@ -164,7 +164,19 @@ export function CanvasHarness() {
               setSelection(sel);
               // Leaving a section leaves its edit mode — see BuilderApp.
               if (sel?.kind !== "node" || sel.index !== editingIndex) setEditingIndex(null);
-              if (sel?.kind === "node" && styleOpen) setStyleFor(sel);
+              /*
+               * Selecting a section opens the style panel by itself now —
+               * see the same change in BuilderApp.tsx's onSelect. Mirrored
+               * here so this harness stays a true stand-in for the real
+               * wiring rather than demonstrating a version of it that no
+               * longer exists.
+               */
+              if (sel?.kind === "node") {
+                setStyleFor(sel);
+                setStyleOpen(true);
+              } else {
+                setStyleOpen(false);
+              }
               note(sel ? `select ${JSON.stringify(sel)} → ${labelFor(sel)}` : "deselect");
             }}
             onGeometry={setBoxes}
@@ -198,8 +210,10 @@ export function CanvasHarness() {
             onEdit={(sel) => {
               if (sel.kind !== "node") return;
               if (editingIndex === sel.index) {
+                // Done leaves text editing only — see BuilderApp.tsx's
+                // onEdit. The section is still selected, so its style panel
+                // stays open exactly as selecting it left it.
                 setEditingIndex(null);
-                setStyleOpen(false);
                 note(`done editing ${labelFor(sel)}`);
                 return;
               }

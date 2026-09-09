@@ -1809,10 +1809,28 @@ export function BuilderApp({
                     if (sel?.kind !== "node" || sel.index !== editingIndex) {
                       setEditingIndex(null);
                     }
-                    // Clicking a different element while styling retargets the
-                    // panel — otherwise the controls describe one thing while
-                    // the outline is around another.
-                    if (sel?.kind === "node" && styleOpen) setStyleFor(sel);
+                    /*
+                     * Selecting a section opens the style panel on its own —
+                     * it used to only appear once Edit was clicked, which is
+                     * one click more than "select a section, see its style
+                     * controls" implies. Edit still exists for making text
+                     * typeable; it no longer has to be entered just to see
+                     * what a section's own settings are.
+                     *
+                     * openStylePanel() is safe to call every time a node is
+                     * selected — it collapses chat and clears the design
+                     * panel on that same edge, which is one panel too many
+                     * regardless of how this one opened.
+                     */
+                    if (sel?.kind === "node") {
+                      setStyleFor(sel);
+                      if (!styleOpen) openStylePanel();
+                    } else if (styleOpen) {
+                      // Deselecting (clicking the canvas background, a
+                      // different kind of target) closes it rather than
+                      // leaving it pointed at a section no longer outlined.
+                      closeStylePanel();
+                    }
                     // Clicking a different section while the panel is open
                     // retargets it, rather than leaving it pointed at the
                     // section that is no longer outlined.
@@ -1970,12 +1988,20 @@ export function BuilderApp({
                   onEdit={(sel) => {
                     if (sel.kind !== "node") return;
                     if (editingIndex === sel.index) {
-                      // Done. The panel goes with it — they were entered together.
+                      /*
+                       * Done leaves TEXT editing. The section is still
+                       * selected — selecting it is what opens the style panel
+                       * now, not entering edit mode — so the panel stays
+                       * exactly as it was rather than closing under a click
+                       * that never touched the selection.
+                       */
                       setEditingIndex(null);
-                      closeStylePanel();
                       return;
                     }
                     setEditingIndex(sel.index);
+                    // Already open from selecting this section; harmless to
+                    // repeat, and correct on the rare path that reaches Edit
+                    // without a selection event having fired first.
                     setStyleFor(sel);
                     openStylePanel();
                   }}
