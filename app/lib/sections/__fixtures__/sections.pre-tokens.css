@@ -430,8 +430,7 @@ body.yp-page {
 
 .yp-page .yp-features,
 .yp-page .yp-quotes,
-.yp-page .yp-faq,
-.yp-page .yp-contact {
+.yp-page .yp-faq {
   max-width: var(--container);
   margin: 0 auto;
   padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
@@ -647,6 +646,9 @@ body.yp-page {
    ============================================================ */
 
 .yp-page .yp-contact__grid {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   gap: var(--space-gap);

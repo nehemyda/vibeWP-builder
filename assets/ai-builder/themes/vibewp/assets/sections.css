@@ -451,10 +451,19 @@ body.yp-page {
    and mobile stays proportionate without per-section media queries.
    ============================================================ */
 
+/*
+ * .yp-contact split OUT of this group: it has no width of its own any more,
+ * moved onto .yp-contact__grid below — the same move applied to Split Hero
+ * and Contact: Visit us, and for the identical reason its markup was
+ * checked and found to match: the grid already wraps everything this
+ * section renders. .yp-features, .yp-quotes and .yp-faq were never checked
+ * for the same thing (their own headings sit OUTSIDE their grid/list
+ * wrapper, so the same move would leave the heading unconstrained) and keep
+ * exactly what they had.
+ */
 .yp-page .yp-features,
 .yp-page .yp-quotes,
-.yp-page .yp-faq,
-.yp-page .yp-contact {
+.yp-page .yp-faq {
   max-width: var(--container);
   margin: 0 auto;
   padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
@@ -670,6 +679,9 @@ body.yp-page {
    ============================================================ */
 
 .yp-page .yp-contact__grid {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
@@ -3671,6 +3683,7 @@ body.yp-page {
 .yp-page .u-row--full .yp-hero-pattern__grid,
 .yp-page .u-row--full .yp-formp__inner,
 .yp-page .u-row--full .yp-formd__inner,
-.yp-page .u-row--full .yp-formx__inner {
+.yp-page .u-row--full .yp-formx__inner,
+.yp-page .u-row--full .yp-contact__grid {
   max-width: none !important;
 }
