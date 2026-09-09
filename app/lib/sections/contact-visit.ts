@@ -19,6 +19,10 @@ export type ContactVisitProps = {
   directions?: string;
   actions?: Action[];
   image?: SectionImage;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -66,6 +70,27 @@ export const ContactVisit: SectionDefinition<ContactVisitProps> = {
       of: { label: { type: "text", label: "Label" }, href: { type: "link", label: "Links to" } },
     },
     image: { type: "image", label: "Photo of the premises", hint: "The frontage, ideally" },
+    /*
+     * Declared per-section, not merged into every section — see the same
+     * note on hero-split.ts. Works here for the identical structural reason:
+     * .yp-contact-visit__grid already wraps EVERYTHING under the root with
+     * nothing else emitted alongside it, so the root is free to carry a
+     * background with nothing left uncontained when width stays "contained".
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The photo and copy stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the photo and copy.",
+      choices: ["contained", "full"],
+      default: "contained",
+    },
   },
 
   aiPrompt:
@@ -135,12 +160,22 @@ export const ContactVisit: SectionDefinition<ContactVisitProps> = {
         )
       : "";
 
-    return group("yp-contact-visit", group("yp-contact-visit__grid", copy + media), "section");
+    const rootClass = [
+      "yp-contact-visit",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return group(rootClass, group("yp-contact-visit__grid", copy + media), "section");
   },
 
   fromGutenberg(root) {
     const el = root.querySelector(".yp-contact-visit");
     if (!el) return null;
+
+    const elClass = el.getAttribute("class") ?? "";
 
     const byLabel = new Map<string, string>();
     for (const row of el.querySelectorAll(".yp-contact-visit__row")) {
@@ -151,6 +186,8 @@ export const ContactVisit: SectionDefinition<ContactVisitProps> = {
 
     const img = parseImage(el, ".yp-contact-visit__frame");
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-contact-visit__heading")),
       body: text(el.querySelector(".yp-contact-visit__body")),
       address: byLabel.get("address") ?? "",

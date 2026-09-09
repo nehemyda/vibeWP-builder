@@ -166,7 +166,7 @@ export const HeroSplit: SectionDefinition<HeroSplitProps> = {
     const rootClass = [
       "yp-hero",
       p.background === "tint" ? "u-bg--tint" : "",
-      p.layout === "full" ? "u-hero--full" : "",
+      p.layout === "full" ? "u-row--full" : "",
     ]
       .filter(Boolean)
       .join(" ");
@@ -206,7 +206,7 @@ export const HeroSplit: SectionDefinition<HeroSplitProps> = {
 
     return {
       background: heroClass.includes("u-bg--tint") ? "tint" : "none",
-      layout: heroClass.includes("u-hero--full") ? "full" : "contained",
+      layout: heroClass.includes("u-row--full") ? "full" : "contained",
       eyebrow: text(hero.querySelector(".yp-hero__eyebrow")),
       heading: text(hero.querySelector(".yp-hero__heading")),
       body: text(hero.querySelector(".yp-hero__body")),

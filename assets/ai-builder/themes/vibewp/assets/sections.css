@@ -137,11 +137,11 @@ body.yp-page {
 /*
  * The ROOT carries no width of its own any more — moved onto .yp-hero__grid
  * below, which is what used to be centered here. .u-bg--tint and
- * .u-hero--full, the two rules this makes possible, are declared with the
+ * .u-row--full, the two classes this makes possible, are declared with the
  * rest of the per-section style utilities near the end of this file, not
- * here — see PER-SECTION STYLE UTILITIES. New rules append there so the
- * declarations above them keep their positions; this file's own token gate
- * checks that.
+ * here — see the "Section background + full width" block. New rules append
+ * there so the declarations above them keep their positions; this file's
+ * own token gate checks that.
  *
  * WHY THE ROOT HAD TO LOSE ITS WIDTH AT ALL: a background on this element
  * would only ever colour the centered 1160px box, because that box IS this
@@ -1425,9 +1425,18 @@ body.yp-page {
 .yp-page .yp-contact-visit,   .yp-page .yp-contact-visit *,
 .yp-page .yp-contact-band,    .yp-page .yp-contact-band * { margin-block-start: 0; margin-block-end: 0; }
 
+/*
+ * .yp-contact-visit split OUT of this group: it has no width of its own any
+ * more, moved onto .yp-contact-visit__grid below — the same move Split Hero
+ * got, and for the identical reason its markup was checked and found to
+ * match: the grid already wraps everything this section renders, so the
+ * root is free to carry a background without leaving anything else
+ * uncontained. See "Section background + full width" near the end of this
+ * file. .yp-contact-cards and .yp-contact-hours were never checked for the
+ * same thing and keep exactly what they had.
+ */
 .yp-page .yp-contact-cards,
-.yp-page .yp-contact-hours,
-.yp-page .yp-contact-visit {
+.yp-page .yp-contact-hours {
   max-width: var(--container);
   margin: 0 auto;
   padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
@@ -1584,6 +1593,9 @@ body.yp-page {
 /* ---- 4. Visit us ----------------------------------------------------- */
 
 .yp-page .yp-contact-visit__grid {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: grid; grid-template-columns: 1fr 1fr;
   gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: center;
 }
@@ -3632,12 +3644,25 @@ body.yp-page {
 }
 
 /*
- * ── Split hero: background + width ──────────────────────────────────
- * Declared here rather than beside .yp-hero itself, per this section's own
- * new convention (see the comment above .yp-hero__grid): appended rules
- * keep everything above them at the position this file's token gate checks.
+ * ── Section background + full width ─────────────────────────────────
+ *
+ * Shared by every section that has been through this move — Split Hero,
+ * then Contact: Visit us, both checked individually for the same shape
+ * before being added here. Declared once, appended, per the same
+ * convention as everything else in this block: new rules keep everything
+ * above them at the position this file's token gate checks.
+ *
+ * u-bg--tint is genuinely generic — background is a property on whatever
+ * carries the class, nothing about it depends on which section. u-row--full
+ * is NOT: it has to name the specific descendant that holds each section's
+ * own max-width, because that class differs per section
+ * (.yp-hero__grid, .yp-contact-visit__grid, ...). This list is an
+ * ALLOW-LIST, not a pattern match — adding a section here means someone
+ * checked its markup has one wrapper covering everything the way these do,
+ * the same way ELEMENT_ROLES declares which classes a role covers rather
+ * than deriving it from a suffix that does not reliably mean one thing.
  */
-.yp-page .yp-hero.u-bg--tint {
+.yp-page .u-bg--tint {
   /* The exact wash CtaBand already ships with normal (non-inverted) text
      colours on top of it — borrowed rather than invented, so this is known
      to read correctly before it is ever seen. */
@@ -3645,12 +3670,13 @@ body.yp-page {
 }
 
 /*
- * "Full" only removes the centering — .yp-hero__grid's own gutter padding
- * stays, so content still keeps its distance from the browser edge rather
- * than touching it. !important because this exists specifically to override
- * .yp-hero__grid's max-width regardless of which wins on specificity alone;
- * that is its entire job, not a sign of a losing fight.
+ * Only the centering goes — each grid's own gutter padding stays, so content
+ * still keeps its distance from the browser edge rather than touching it.
+ * !important because this exists specifically to override each grid's own
+ * max-width regardless of which wins on specificity alone; that is its
+ * entire job, not a sign of a losing fight.
  */
-.yp-page .yp-hero.u-hero--full .yp-hero__grid {
+.yp-page .u-row--full .yp-hero__grid,
+.yp-page .u-row--full .yp-contact-visit__grid {
   max-width: none !important;
 }
