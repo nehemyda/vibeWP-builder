@@ -8,6 +8,10 @@ export type HeroStackedProps = {
   body?: string;
   actions?: Action[];
   image?: SectionImage;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -43,6 +47,29 @@ export const HeroStacked: SectionDefinition<HeroStackedProps> = {
       type: "image",
       label: "Wide photo",
       hint: "LANDSCAPE, roughly 16:9 — unlike the other heroes",
+    },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: like hero-centered, this
+     * section's own max-width already lives on the root, and .__copy has an
+     * unrelated, narrower 44rem typographic column that "full" doesn't
+     * touch. But .__media has no max-width of its own, so removing the
+     * root's constraint lets the photo — the one hero image that wants to
+     * be wide — bleed to the row's own edges while the headline stays put.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The headline column stays the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches the photo edge to edge; the headline column stays centred and no wider.",
+      choices: ["contained", "full"],
+      default: "contained",
     },
   },
 
@@ -90,14 +117,24 @@ export const HeroStacked: SectionDefinition<HeroStackedProps> = {
         )
       : "";
 
-    return group("yp-hero-stacked", copy + media, "section");
+    const rootClass = [
+      "yp-hero-stacked",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(rootClass, copy + media, "section");
   },
 
   fromGutenberg(root) {
     const el = root.querySelector(".yp-hero-stacked");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     const img = parseImage(el, ".yp-hero-stacked__frame");
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       eyebrow: text(el.querySelector(".yp-hero-stacked__eyebrow")),
       heading: text(el.querySelector(".yp-hero-stacked__heading")),
       body: text(el.querySelector(".yp-hero-stacked__body")),

@@ -3804,3 +3804,27 @@ body.yp-page {
   max-width: var(--container); margin: 0 auto;
   padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
+
+/*
+ * Centred hero: no new wrapper needed, and not part of the u-row--full
+ * allow-list above, because its own container width already lives on the
+ * root (.yp-hero-centered, declared with the other hero types) rather than
+ * on a descendant wrapper. u-row--full lands on that same root element, so
+ * this overrides it directly. .yp-hero-centered__inner's own max-width is
+ * an unrelated 46rem typographic column and is untouched either way.
+ */
+.yp-page .yp-hero-centered.u-row--full {
+  max-width: none !important;
+}
+
+/*
+ * Stacked hero: the same shape as centred hero above — its own max-width
+ * lives on the root, not a descendant, so u-row--full overrides it
+ * directly. .__copy has its own unrelated 44rem typographic column and
+ * stays put; .__media has none of its own, so it bleeds to the row's
+ * edges along with the root, which is the point for the one hero whose
+ * image wants to be wide.
+ */
+.yp-page .yp-hero-stacked.u-row--full {
+  max-width: none !important;
+}
