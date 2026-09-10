@@ -7,6 +7,10 @@ export type ServicesPricelistProps = {
   intro?: string;
   groups?: Array<{ title: string; items?: Array<{ name: string; note?: string; price: string }> }>;
   footnote?: string;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -53,6 +57,27 @@ export const ServicesPricelist: SectionDefinition<ServicesPricelistProps> = {
       },
     },
     footnote: { type: "text", label: "Footnote", hint: "VAT, minimums, how quotes work", maxChars: 150 },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: heading, intro and the
+     * footnote all sit outside .yp-svcp__groups with no shared ancestor, so
+     * toGutenberg wraps all three around the groups together in a NEW
+     * element (.yp-svcp__inner) — the same fix conversion-pricing needed.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The heading, prices and footnote stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the heading, prices and footnote.",
+      choices: ["contained", "full"],
+      default: "contained",
+    },
   },
 
   aiPrompt:
@@ -124,11 +149,21 @@ export const ServicesPricelist: SectionDefinition<ServicesPricelistProps> = {
       .filter(Boolean)
       .join("");
 
-    return group(
+    const rootClass = [
       "yp-svcp",
-      head +
-        group("yp-svcp__groups", groups) +
-        (p.footnote ? paragraph(p.footnote, "yp-svcp__footnote") : ""),
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(
+      rootClass,
+      group(
+        "yp-svcp__inner",
+        head +
+          group("yp-svcp__groups", groups) +
+          (p.footnote ? paragraph(p.footnote, "yp-svcp__footnote") : ""),
+      ),
       "section",
     );
   },
@@ -136,7 +171,10 @@ export const ServicesPricelist: SectionDefinition<ServicesPricelistProps> = {
   fromGutenberg(root) {
     const el = root.querySelector(".yp-svcp");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-svcp__heading")),
       intro: text(el.querySelector(".yp-svcp__intro")),
       groups: el

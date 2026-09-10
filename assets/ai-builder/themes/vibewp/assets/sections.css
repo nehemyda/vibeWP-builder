@@ -2742,12 +2742,12 @@ body.yp-page {
   margin-block-end: 0;
 }
 
-.yp-page .yp-svcs, .yp-page .yp-svcf, .yp-page .yp-svce,
-.yp-page .yp-svcp, .yp-page .yp-svca {
-  max-width: var(--container);
-  margin: 0 auto;
-  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
-}
+/*
+ * All five shared this rule; all five have since had the same new-wrapper
+ * treatment content-gallery got — .yp-svcs__inner, .yp-svcf__inner,
+ * .yp-svce__inner, .yp-svcp__inner and .yp-svca__inner, declared at the
+ * true end of this file. Nothing shares this rule any longer.
+ */
 
 .yp-page .yp-svcs__heading, .yp-page .yp-svcf__heading,
 .yp-page .yp-svce__heading, .yp-page .yp-svcp__heading,
@@ -3736,6 +3736,11 @@ body.yp-page {
 .yp-page .u-row--full .yp-ctabox__card,
 .yp-page .u-row--full .yp-ctadual__inner,
 .yp-page .u-row--full .yp-gallery__inner,
+.yp-page .u-row--full .yp-svcs__inner,
+.yp-page .u-row--full .yp-svcf__inner,
+.yp-page .u-row--full .yp-svce__inner,
+.yp-page .u-row--full .yp-svcp__inner,
+.yp-page .u-row--full .yp-svca__inner,
 .yp-page .u-row--full .yp-alt__inner,
 .yp-page .u-row--full .yp-steps__inner,
 .yp-page .u-row--full .yp-pricing__inner,
@@ -3778,6 +3783,24 @@ body.yp-page {
 .yp-page .yp-faq2__inner,
 .yp-page .yp-faqg__inner,
 .yp-page .yp-faqo__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+}
+
+/*
+ * The same new-wrapper treatment as .yp-gallery__inner, for the services
+ * family: heading (and sometimes an intro, once a footnote too) sitting
+ * outside its own grid/list/groups wrapper with no ancestor to give this
+ * option. Each checked individually: no pre-existing max-width or padding
+ * on the wrapper itself (services-featured has none of its own to
+ * conflict with; the other four's .__intro already carries its own
+ * max-width: 58ch, left-aligned, untouched by this).
+ */
+.yp-page .yp-svcs__inner,
+.yp-page .yp-svcf__inner,
+.yp-page .yp-svce__inner,
+.yp-page .yp-svcp__inner,
+.yp-page .yp-svca__inner {
   max-width: var(--container); margin: 0 auto;
   padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }

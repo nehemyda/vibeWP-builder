@@ -7,6 +7,10 @@ export type ServicesFeaturedProps = {
   featured?: { title: string; body: string; meta?: string; image?: SectionImage };
   actions?: Action[];
   others?: Array<{ title: string; body: string }>;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -51,6 +55,27 @@ export const ServicesFeatured: SectionDefinition<ServicesFeaturedProps> = {
       label: "Other services",
       hint: "Three or four, one line each",
       of: { title: { type: "text", label: "Service" }, body: { type: "text", label: "One line" } },
+    },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: the heading sits outside
+     * .yp-svcf__grid with no shared ancestor, so toGutenberg wraps them
+     * together in a NEW element (.yp-svcf__inner) — the same fix
+     * content-gallery needed.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The heading and services stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the heading and services.",
+      choices: ["contained", "full"],
+      default: "contained",
     },
   },
 
@@ -115,10 +140,19 @@ export const ServicesFeatured: SectionDefinition<ServicesFeaturedProps> = {
         .join(""),
     );
 
-    return group(
+    const rootClass = [
       "yp-svcf",
-      (p.heading ? heading(p.heading, 2, "yp-svcf__heading") : "") +
-        group("yp-svcf__grid", main + others),
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(
+      rootClass,
+      group(
+        "yp-svcf__inner",
+        (p.heading ? heading(p.heading, 2, "yp-svcf__heading") : "") + group("yp-svcf__grid", main + others),
+      ),
       "section",
     );
   },
@@ -126,11 +160,14 @@ export const ServicesFeatured: SectionDefinition<ServicesFeaturedProps> = {
   fromGutenberg(root) {
     const el = root.querySelector(".yp-svcf");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     const main = el.querySelector(".yp-svcf__main");
     const img = main ? parseImage(main, ".yp-svcf__frame") : null;
     const title = text(el.querySelector(".yp-svcf__title"));
 
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-svcf__heading")),
       ...(title || img
         ? {
