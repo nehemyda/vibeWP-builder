@@ -1643,12 +1643,6 @@ body.yp-page {
 { box-sizing: border-box; margin-block-start: 0; margin-block-end: 0; }
 
 /* Shared container + section heading scale. */
-.yp-page .yp-alt, .yp-page .yp-steps,
-.yp-page .yp-pricing, .yp-page .yp-compare, .yp-page .yp-faq2, .yp-page .yp-faqg,
-.yp-page .yp-faqo {
-  max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
-}
 .yp-page .yp-alt__heading, .yp-page .yp-steps__heading, .yp-page .yp-stats__heading,
 .yp-page .yp-check__heading, .yp-page .yp-gallery__heading, .yp-page .yp-pricing__heading,
 .yp-page .yp-promise__heading, .yp-page .yp-compare__heading, .yp-page .yp-faq2__heading,

@@ -2,7 +2,15 @@ import { group, heading, paragraph, details } from "@/lib/wp/blocks";
 import { text } from "./shared";
 import type { SectionDefinition } from "./types";
 
-export type FaqTwoColumnProps = { heading?: string; intro?: string; items?: Array<{ question: string; answer: string }> };
+export type FaqTwoColumnProps = {
+  heading?: string;
+  intro?: string;
+  items?: Array<{ question: string; answer: string }>;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
+};
 const T = text;
 
 /**
@@ -23,6 +31,27 @@ export const FaqTwoColumn: SectionDefinition<FaqTwoColumnProps> = {
     heading: { type: "text", label: "Section heading", maxChars: 60 },
     intro: { type: "text", label: "Intro line", maxChars: 150 },
     items: { type: "list", label: "Questions", hint: "Six to twelve", of: { question: { type: "text", label: "Question" }, answer: { type: "text", label: "Answer" } } },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: heading and intro sit
+     * outside .yp-faq2__cols with no shared ancestor, so toGutenberg wraps
+     * them together in a NEW element (.yp-faq2__inner) — the same fix
+     * content-gallery needed.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The heading and questions stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the heading and questions.",
+      choices: ["contained", "full"],
+      default: "contained",
+    },
   },
   aiPrompt: "Six to twelve real pre-purchase questions in the customer's voice, first person. Answer plainly and commit to something specific. Never invent a price, policy or guarantee — write answers the client can drop their own detail into.",
   sample: {
@@ -40,12 +69,22 @@ export const FaqTwoColumn: SectionDefinition<FaqTwoColumnProps> = {
   toGutenberg(p) {
     const rows = (p.items ?? []).filter((i) => i?.question).map((i) => details(i.question, i.answer ?? "", "yp-faq2__item")).join("");
     const head = [p.heading ? heading(p.heading, 2, "yp-faq2__heading") : "", p.intro ? paragraph(p.intro, "yp-faq2__intro") : ""].filter(Boolean).join("");
-    return group("yp-faq2", head + group("yp-faq2__cols", rows), "section");
+    const rootClass = [
+      "yp-faq2",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(rootClass, group("yp-faq2__inner", head + group("yp-faq2__cols", rows)), "section");
   },
   fromGutenberg(root) {
     const el = root.querySelector(".yp-faq2");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: T(el.querySelector(".yp-faq2__heading")),
       intro: T(el.querySelector(".yp-faq2__intro")),
       items: el.querySelectorAll(".yp-faq2__item").map((i) => ({ question: T(i.querySelector("summary")), answer: T(i.querySelector("p")) })).filter((i) => i.question),

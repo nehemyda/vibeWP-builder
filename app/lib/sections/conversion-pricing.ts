@@ -7,6 +7,10 @@ export type ConversionPricingProps = {
   intro?: string;
   tiers?: Array<{ name: string; price: string; note?: string; features?: string[]; featured?: string }>;
   footnote?: string;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -51,6 +55,27 @@ export const ConversionPricing: SectionDefinition<ConversionPricingProps> = {
       },
     },
     footnote: { type: "text", label: "Footnote", hint: "VAT, minimums, terms", maxChars: 140 },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: heading, intro and the
+     * footnote all sit outside .yp-pricing__grid with no shared ancestor,
+     * so toGutenberg wraps all three around the grid together in a NEW
+     * element (.yp-pricing__inner) — the same fix content-gallery needed.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The heading, tiers and footnote stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the heading, tiers and footnote.",
+      choices: ["contained", "full"],
+      default: "contained",
+    },
   },
 
   aiPrompt:
@@ -94,11 +119,22 @@ export const ConversionPricing: SectionDefinition<ConversionPricingProps> = {
       .filter(Boolean)
       .join("");
 
-    return group(
+    const rootClass = [
       "yp-pricing",
-      head +
-        group("yp-pricing__grid", tiers) +
-        (p.footnote ? paragraph(p.footnote, "yp-pricing__footnote") : ""),
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return group(
+      rootClass,
+      group(
+        "yp-pricing__inner",
+        head +
+          group("yp-pricing__grid", tiers) +
+          (p.footnote ? paragraph(p.footnote, "yp-pricing__footnote") : ""),
+      ),
       "section",
     );
   },
@@ -106,7 +142,10 @@ export const ConversionPricing: SectionDefinition<ConversionPricingProps> = {
   fromGutenberg(root) {
     const el = root.querySelector(".yp-pricing");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-pricing__heading")),
       intro: text(el.querySelector(".yp-pricing__intro")),
       tiers: el

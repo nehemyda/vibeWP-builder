@@ -1699,16 +1699,14 @@ body.yp-page {
  * still renders pixel-for-pixel identically by default.
  *
  * .yp-alt, .yp-steps, .yp-pricing, .yp-compare, .yp-faq2, .yp-faqg and
- * .yp-faqo remain: each has the identical "heading outside the wrapper"
- * shape and would need the same new-wrapper treatment, not yet done for
- * any of them.
+ * .yp-faqo shared this rule too, and have each since had the identical
+ * new-wrapper treatment content-gallery got — .yp-alt__inner,
+ * .yp-steps__inner, .yp-pricing__inner, .yp-compare__inner,
+ * .yp-faq2__inner, .yp-faqg__inner and .yp-faqo__inner, declared at the
+ * true end of this file alongside .yp-gallery__inner. Nothing shares this
+ * rule any longer, so it is gone rather than left with an empty selector
+ * list.
  */
-.yp-page .yp-alt, .yp-page .yp-steps,
-.yp-page .yp-pricing, .yp-page .yp-compare, .yp-page .yp-faq2, .yp-page .yp-faqg,
-.yp-page .yp-faqo {
-  max-width: var(--container); margin: 0 auto;
-  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
-}
 .yp-page .yp-alt__heading, .yp-page .yp-steps__heading, .yp-page .yp-stats__heading,
 .yp-page .yp-check__heading, .yp-page .yp-gallery__heading, .yp-page .yp-pricing__heading,
 .yp-page .yp-promise__heading, .yp-page .yp-compare__heading, .yp-page .yp-faq2__heading,
@@ -3738,6 +3736,13 @@ body.yp-page {
 .yp-page .u-row--full .yp-ctabox__card,
 .yp-page .u-row--full .yp-ctadual__inner,
 .yp-page .u-row--full .yp-gallery__inner,
+.yp-page .u-row--full .yp-alt__inner,
+.yp-page .u-row--full .yp-steps__inner,
+.yp-page .u-row--full .yp-pricing__inner,
+.yp-page .u-row--full .yp-compare__inner,
+.yp-page .u-row--full .yp-faq2__inner,
+.yp-page .u-row--full .yp-faqg__inner,
+.yp-page .u-row--full .yp-faqo__inner,
 .yp-page .u-row--full .yp-contact__grid {
   max-width: none !important;
 }
@@ -3753,6 +3758,26 @@ body.yp-page {
  * exactly what this file's token gate is built to catch.
  */
 .yp-page .yp-gallery__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+}
+
+/*
+ * The same new-wrapper treatment as .yp-gallery__inner, for the seven
+ * sections that shared its exact shape: heading (and sometimes an intro)
+ * sitting outside their own grid/list/table wrapper with no ancestor to
+ * give this option. Each was checked individually for the same things
+ * content-gallery was: no pre-existing max-width or padding on the
+ * wrapper itself, and no independent centering assumption that a shared
+ * width would break.
+ */
+.yp-page .yp-alt__inner,
+.yp-page .yp-steps__inner,
+.yp-page .yp-pricing__inner,
+.yp-page .yp-compare__inner,
+.yp-page .yp-faq2__inner,
+.yp-page .yp-faqg__inner,
+.yp-page .yp-faqo__inner {
   max-width: var(--container); margin: 0 auto;
   padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
