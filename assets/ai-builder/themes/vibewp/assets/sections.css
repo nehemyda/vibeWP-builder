@@ -456,18 +456,13 @@ body.yp-page {
  * moved onto .yp-contact__grid below — the same move applied to Split Hero
  * and Contact: Visit us, and for the identical reason its markup was
  * checked and found to match: the grid already wraps everything this
- * section renders. .yp-features, .yp-quotes and .yp-faq were never checked
- * for the same thing (their own headings sit OUTSIDE their grid/list
- * wrapper, so the same move would leave the heading unconstrained) and keep
- * exactly what they had.
+ * section renders. .yp-features, .yp-quotes and .yp-faq have now been
+ * checked too — their own headings sit OUTSIDE their grid/list wrapper, so
+ * each got a new .__inner wrapper instead, the same fix Work gallery
+ * needed; that rule is declared at the true end of this file, alongside
+ * the other new-wrapper sections.
  */
-.yp-page .yp-features,
-.yp-page .yp-quotes,
-.yp-page .yp-faq {
-  max-width: var(--container);
-  margin: 0 auto;
-  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
-}
+
 
 /* Same box-sizing and block-gap resets the hero needs, for the same reasons:
    WordPress stamps margin-block-start on re-saved blocks, and a bare host does
@@ -3748,7 +3743,10 @@ body.yp-page {
 .yp-page .u-row--full .yp-faq2__inner,
 .yp-page .u-row--full .yp-faqg__inner,
 .yp-page .u-row--full .yp-faqo__inner,
-.yp-page .u-row--full .yp-contact__grid {
+.yp-page .u-row--full .yp-contact__grid,
+.yp-page .u-row--full .yp-features__inner,
+.yp-page .u-row--full .yp-quotes__inner,
+.yp-page .u-row--full .yp-faq__inner {
   max-width: none !important;
 }
 
@@ -3827,4 +3825,20 @@ body.yp-page {
  */
 .yp-page .yp-hero-stacked.u-row--full {
   max-width: none !important;
+}
+
+/*
+ * The same new-wrapper treatment as .yp-gallery__inner, for the three
+ * sections that used to share one rule for exactly this: Services grid,
+ * Testimonials and FAQ. Their heading sat outside their own grid/list
+ * wrapper with no ancestor to give this option, the same shape as every
+ * other section in this block — checked individually: none of the three
+ * has any pre-existing max-width or padding on its own grid/list to
+ * conflict with the wrapper now carrying it instead.
+ */
+.yp-page .yp-features__inner,
+.yp-page .yp-quotes__inner,
+.yp-page .yp-faq__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }

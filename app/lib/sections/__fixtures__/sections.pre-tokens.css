@@ -428,14 +428,6 @@ body.yp-page {
    and mobile stays proportionate without per-section media queries.
    ============================================================ */
 
-.yp-page .yp-features,
-.yp-page .yp-quotes,
-.yp-page .yp-faq {
-  max-width: var(--container);
-  margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
-}
-
 /* Same box-sizing and block-gap resets the hero needs, for the same reasons:
    WordPress stamps margin-block-start on re-saved blocks, and a bare host does
    not set border-box. See the notes at the top of this file. */

@@ -6,6 +6,10 @@ export type FeaturesGridProps = {
   heading?: string;
   intro?: string;
   items?: Array<{ title: string; body: string }>;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 const text = (el: HTMLElement | null): string => (el ? el.textContent.trim() : "");
@@ -38,6 +42,27 @@ export const FeaturesGrid: SectionDefinition<FeaturesGridProps> = {
         title: { type: "text", label: "Service name" },
         body: { type: "text", label: "What it involves" },
       },
+    },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: heading and intro sit
+     * outside .yp-features__grid with no shared ancestor, so toGutenberg
+     * wraps them together in a NEW element (.yp-features__inner) — the
+     * same fix content-gallery needed.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The heading and grid stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the heading and grid.",
+      choices: ["contained", "full"],
+      default: "contained",
     },
   },
 
@@ -79,9 +104,16 @@ export const FeaturesGrid: SectionDefinition<FeaturesGridProps> = {
       .filter(Boolean)
       .join("");
 
-    return group(
+    const rootClass = [
       "yp-features",
-      head + group("yp-features__grid", items),
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(
+      rootClass,
+      group("yp-features__inner", head + group("yp-features__grid", items)),
       "section",
     );
   },
@@ -89,8 +121,11 @@ export const FeaturesGrid: SectionDefinition<FeaturesGridProps> = {
   fromGutenberg(root) {
     const el = root.querySelector(".yp-features");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
 
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-features__heading")),
       intro: text(el.querySelector(".yp-features__intro")),
       items: el
