@@ -113,6 +113,15 @@ export const sites = pgTable("sites", {
    * mode the thing someone opts into keeps the charge deliberate.
    */
   mode: siteModeEnum("mode").notNull().default("vibe"),
+  /**
+   * Where a Vibe site is served: <subdomain>.<VIBEWP_SITES_HOST>.
+   *
+   * Assigned at publish rather than at creation, so an abandoned draft never
+   * squats on the name a real business wants. Unique across the platform
+   * because it IS the address — two sites answering one host would serve
+   * whichever the query happened to return first.
+   */
+  vibeSubdomain: text("vibe_subdomain").unique(),
   plan: text("plan").notNull().default("starter"),
   /**
    * What this specific client is billed per month, overriding whatever the

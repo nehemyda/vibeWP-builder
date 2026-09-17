@@ -16,6 +16,8 @@ import type { ChromeNode } from "@/app/actions/ai-generate";
 import type { FormPreviewField } from "@/lib/wp/serialize";
 import { loadIntakeAction } from "@/app/actions/intake";
 import { getPlatformSettings } from "@/lib/platform-settings";
+import { vibeSiteUrl } from "@/lib/render/hosting";
+import { pageTitle } from "@/lib/render/page-document";
 import { formDefinitions } from "@/lib/db/schema";
 import { loadBusinessContext, contactFactsFor } from "@/lib/ai/business-context";
 import { BuilderApp } from "./BuilderApp";
@@ -173,13 +175,7 @@ export default async function BuilderPage({
       initialPages={allPages.map((p) => ({
         id: p.id,
         slug: p.slug,
-        title:
-          p.title ??
-          p.slug
-            .split("-")
-            .filter(Boolean)
-            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-            .join(" "),
+        title: pageTitle(p.slug, p.title),
         schema: (p.schemaJson as Record<string, unknown> | null) ?? null,
       }))}
       initialMessages={storedMessages.map((m) => ({
@@ -195,6 +191,7 @@ export default async function BuilderPage({
       backLabel={backLabel}
       siteName={site.name}
       mode={site.mode}
+      vibeUrl={site.status === "live" ? vibeSiteUrl(site.vibeSubdomain) : null}
       initialSchema={initialSchema}
       initialIntake={initialIntake}
       previewFacts={previewFacts}

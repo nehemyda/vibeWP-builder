@@ -29,6 +29,7 @@ import {
 } from "@/lib/wp/local-driver";
 import { logActivity } from "@/lib/activity";
 import { wordpressEntitlement } from "@/lib/billing";
+import { sitesHost, subdomainFrom, vibeSiteUrl } from "@/lib/render/hosting";
 
 /**
  * The name of whoever actually performed the action.
@@ -514,25 +515,103 @@ export async function openWordPressAdminAction(smbId: string): Promise<AdminLogi
 export type PublishResult = { ok: true; url: string } | { ok: false; error: string };
 
 /**
+ * Publishes a Vibe site by claiming the address it will answer on.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THE SUBDOMAIN IS CLAIMED HERE AND NOT AT CREATION
+ *
+ * A name handed out when a site row is created is a name held by every
+ * abandoned draft. Publishing is the first moment anyone has committed to the
+ * site actually existing, so it is the first moment worth spending a name on.
+ *
+ * Once claimed it is never reassigned by this function: the address has been
+ * given out, possibly printed on something, and a site that silently moves
+ * because its owner renamed the business is a site whose links all break.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+async function publishVibeSite(
+  site: typeof sites.$inferSelect,
+  userId: string,
+): Promise<PublishResult> {
+  if (!sitesHost()) {
+    return {
+      ok: false,
+      error: "Platform hosting isn't configured yet, so there's nowhere for this to go live.",
+    };
+  }
+
+  /* Something has to be served. A site whose pages are all empty would publish
+     to a blank screen, which reads as a broken site rather than a new one. */
+  const pages = await db.select().from(sitePages).where(eq(sitePages.siteId, site.id));
+  const hasContent = pages.some((p) => schemaToGutenberg(p.schemaJson).trim().length > 0);
+  if (!hasContent) {
+    return { ok: false, error: "There's no content to publish yet — build a page first." };
+  }
+
+  let subdomain = site.vibeSubdomain;
+  if (!subdomain) {
+    subdomain = await claimSubdomain(site);
+    if (!subdomain) {
+      return { ok: false, error: "Couldn't find an available address for this site." };
+    }
+  }
+
+  await db
+    .update(sites)
+    .set({ status: "live", vibeSubdomain: subdomain })
+    .where(eq(sites.id, site.id));
+
+  const url = vibeSiteUrl(subdomain) ?? "";
+  await logActivity({
+    actorUserId: userId,
+    actorName: await actorNameFor(userId),
+    action: "site.published",
+    targetType: "site",
+    targetId: site.id,
+    targetLabel: site.name,
+    metadata: { url, mode: "vibe" },
+  });
+
+  return { ok: true, url };
+}
+
+/**
+ * An available subdomain for this site, or null.
+ *
+ * Tries the business name first because that is the address its owner would
+ * expect, then numbered variants, then the SMB ID — which is unique by
+ * construction and is therefore the answer that cannot fail. Uniqueness is
+ * enforced by the column, so a losing race surfaces as an error here rather
+ * than as two sites on one host.
+ */
+async function claimSubdomain(site: typeof sites.$inferSelect): Promise<string | null> {
+  const base = subdomainFrom(site.name);
+  const candidates = base
+    ? [base, `${base}-2`, `${base}-3`, `${base}-4`, `${base}-5`]
+    : [];
+  if (site.smbId) candidates.push(site.smbId.toLowerCase());
+
+  for (const candidate of candidates) {
+    const taken = await db.query.sites.findFirst({
+      where: eq(sites.vibeSubdomain, candidate),
+    });
+    if (!taken) return candidate;
+  }
+  return null;
+}
+
+/**
  * Publish — flips the site from draft to live.
  *
  * For a WordPress site this deliberately requires an export first: marking a
- * site live when no WordPress exists behind it would be a lie.
- *
- * The same rule is why a Vibe site cannot be published YET. "Live" has to
- * mean a visitor can reach it, and platform hosting does not serve anything
- * until the public renderer lands. Refusing is the honest answer; flipping
- * the flag would put a Live badge on a site with no address.
+ * site live when no WordPress exists behind it would be a lie. A Vibe site has
+ * the same rule in a different shape — it needs an address and something to
+ * serve at it, which is what publishVibeSite establishes.
  */
 export async function publishSiteAction(smbId: string): Promise<PublishResult> {
   const { user, site } = await requireSiteAccess(smbId);
 
-  if (site.mode === "vibe") {
-    return {
-      ok: false,
-      error: "Vibe hosting isn't serving sites yet, so there's nowhere for this to go live.",
-    };
-  }
+  if (site.mode === "vibe") return publishVibeSite(site, user.id);
 
   const installation = await db.query.siteInstallations.findFirst({
     where: eq(siteInstallations.siteId, site.id),

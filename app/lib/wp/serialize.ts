@@ -120,14 +120,10 @@ export function sectionPreviewMarkup(nodeType: string, props: unknown): string {
    * in the very catalogue meant to sell them.
    */
   const showsAForm = markup.includes("yp-embed__mount");
-  return withPreviewPlaceholders(
-    markup,
-    undefined,
-    EXAMPLE_FACTS,
-    undefined,
-    undefined,
-    showsAForm ? EXAMPLE_FORM_FIELDS : undefined,
-  );
+  return withPreviewPlaceholders(markup, {
+    facts: EXAMPLE_FACTS,
+    formFields: showsAForm ? EXAMPLE_FORM_FIELDS : undefined,
+  });
 }
 
 /**
@@ -142,9 +138,22 @@ export function sectionPreviewMarkup(nodeType: string, props: unknown): string {
  * follows Settings and the menu follows whatever the client edits, and baking in
  * a placeholder would freeze both.
  */
-export function withPreviewPlaceholders(
-  html: string,
-  businessName?: string,
+/**
+ * What this markup is being rendered for.
+ *
+ * "canvas" — the builder iframe. No server and no JavaScript, so menu links
+ *            cannot navigate and a form cannot submit; both are drawn instead,
+ *            and the builder intercepts clicks to switch pages.
+ * "live"   — a page served to a visitor by this platform. The same
+ *            substitutions, except the three that only made sense inside the
+ *            iframe: links get real hrefs, the form mount is left for
+ *            withStaticForms to fill with a working form, and social links —
+ *            which we hold no URLs for — are dropped rather than faked.
+ */
+export type RenderTarget = "canvas" | "live";
+
+export type PlaceholderOptions = {
+  businessName?: string;
   /**
    * The site's real contact details, keyed as the theme's tokens are: phone,
    * email, address, hours.
@@ -154,9 +163,9 @@ export function withPreviewPlaceholders(
    * builder canvas would show a literal "{{phone}}" where the live site shows
    * the number — a preview that disagrees with the thing it previews.
    */
-  facts?: Record<string, string>,
+  facts?: Record<string, string>;
   /** The business logo as a data URL, so the canvas shows the real thing. */
-  logoUrl?: string,
+  logoUrl?: string;
   /**
    * The site's real pages, in menu order.
    *
@@ -168,7 +177,7 @@ export function withPreviewPlaceholders(
    * published pages, which is exactly this list — so passing it is what makes
    * the canvas agree with WordPress instead of guessing at it.
    */
-  pages?: { slug: string; title: string }[],
+  pages?: { slug: string; title: string }[];
   /**
    * The fields of the form attached to this site, so the canvas can draw the
    * client's ACTUAL questions.
@@ -177,18 +186,44 @@ export function withPreviewPlaceholders(
    * JavaScript, so the real form cannot render — but it told the client nothing
    * about the form they had built, and looked like a section that had failed.
    * Drawing the real labels turns "something goes here" into "this is your
-   * form".
+   * form". Ignored when target is "live", where the real form is rendered.
    */
-  formFields?: FormPreviewField[],
+  formFields?: FormPreviewField[];
   /** The attached form's embed token, so the canvas can link to the real thing. */
-  formToken?: string,
+  formToken?: string;
   /**
    * The form's saved styling, so the canvas shows the same background and
    * spacing the live page will. Without it the three views of one form —
    * canvas, standalone preview and WordPress — disagreed on how it looks.
    */
-  formStyle?: Record<string, string>,
+  formStyle?: Record<string, string>;
+  /** Defaults to "canvas", which is what every caller wanted before live pages existed. */
+  target?: RenderTarget;
+};
+
+/**
+ * Swaps WordPress's dynamic blocks for something renderable without WordPress.
+ *
+ * Takes an options object rather than nine positional arguments: the eighth
+ * was already being passed as a bare `{}` at one call site, and adding a
+ * render target to that list would have made the order impossible to read.
+ */
+export function withPreviewPlaceholders(
+  html: string,
+  opts: PlaceholderOptions = {},
 ): string {
+  const {
+    businessName,
+    facts,
+    logoUrl,
+    pages,
+    formFields,
+    formToken,
+    formStyle,
+    target = "canvas",
+  } = opts;
+  const live = target === "live";
+
   /*
    * The site title is a real value we hold, so the builder passes it and the
    * canvas shows the actual business name. "Your Business" is only the fallback
@@ -278,10 +313,20 @@ export function withPreviewPlaceholders(
       '<label style="grid-column:span 12"><span></span><i class="tall"></i></label>' +
       "<b>Send</b><em>Add a form in Leads &amp; forms to see it here</em></div>"
 
+  /*
+   * On a live page these are real links; in the canvas they cannot be.
+   *
+   * The canvas has no server behind it, so an href would navigate the iframe
+   * away from the builder — hence "#" plus the slug in a data attribute, which
+   * the builder reads to switch which page it is editing. A served page has
+   * somewhere to go, and a menu that does not navigate would be a broken site.
+   */
+  const href = (slug: string) => (slug === "home" ? "/" : `/${slug}`);
   const navLinks = (pages?.length ? pages : [{ slug: "home", title: "Home" }, { slug: "services", title: "Services" }, { slug: "about", title: "About" }, { slug: "contact", title: "Contact" }])
-    .map(
-      (p) =>
-        `<a class="yp-ph-nav__link" href="#" data-vibewp-slug="${escAttr(p.slug)}">${esc(p.title)}</a>`,
+    .map((p) =>
+      live
+        ? `<a class="yp-ph-nav__link" href="${escAttr(href(p.slug))}">${esc(p.title)}</a>`
+        : `<a class="yp-ph-nav__link" href="#" data-vibewp-slug="${escAttr(p.slug)}">${esc(p.title)}</a>`,
     )
     .join("");
 
@@ -350,13 +395,29 @@ export function withPreviewPlaceholders(
      * the real fields, which are defined in Leads & forms and can change
      * without this knowing.
      */
+    /*
+     * On a live page the mount is LEFT EXACTLY AS IT IS.
+     *
+     * withStaticForms fills it with the real, submitting form — the same one
+     * the exported WordPress site gets — and embed.js behind it handles the
+     * inline thank-you. Replacing it with the drawing here would serve a
+     * visitor a form that cannot be submitted, which is worse than no form.
+     */
     .replace(
       /<div class="yp-embed__mount"[^>]*><\/div>\s*<script[^>]*><\/script>/g,
-      `<div class="yp-embed__ph">${formPreview}</div>`,
+      (whole) => (live ? whole : `<div class="yp-embed__ph">${formPreview}</div>`),
     )
+    /*
+     * Dropped on a live page rather than faked.
+     *
+     * We hold no social URLs for a site, so the canvas shows two illustrative
+     * words to say where they would sit. Serving a visitor the literal text
+     * "Facebook Instagram", linking nowhere, would be a claim about the
+     * business that is not true. Nothing until there is something.
+     */
     .replace(
       /<!--\s*wp:social-links[^>]*?\/-->/g,
-      '<p class="yp-ph-social"><span>Facebook</span><span>Instagram</span></p>',
+      live ? "" : '<p class="yp-ph-social"><span>Facebook</span><span>Instagram</span></p>',
     )
     /*
      * The same substitution the theme's render_block filter performs, so a

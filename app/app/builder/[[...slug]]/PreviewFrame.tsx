@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-
-/** Only plain hex is allowed into the stylesheet. */
-const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+import { palettePresetCss } from "@/lib/render/page-document";
 
 /** Starting height, and what the frame collapses to between documents. */
 const MIN_HEIGHT = 520;
@@ -72,19 +70,9 @@ export function PreviewFrame({
    * sections.css is prefixed with it to win specificity against WordPress's
    * inline layout CSS. Without the class the stylesheet matches nothing.
    */
-  /*
-   * Emitted as the presets WordPress itself would emit, rather than as the
-   * theme's own --primary etc. Setting the preset means the whole cascade
-   * behaves exactly as it does on the live site, including any rule that
-   * reads a preset directly.
-   *
-   * Values are re-validated here because they are interpolated into a
-   * stylesheet: this is the last gate before the browser parses them.
-   */
-  const paletteCss = Object.entries(colors ?? {})
-    .filter(([slug, value]) => /^[a-z0-9-]+$/.test(slug) && HEX.test(value))
-    .map(([slug, value]) => `--wp--preset--color--${slug}: ${value};`)
-    .join("\n    ");
+  /* Shared with the live renderer, so the canvas and a served page cannot
+     disagree about a client's colours. See lib/render/page-document.ts. */
+  const paletteCss = palettePresetCss(colors);
 
   const doc = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">

@@ -20,6 +20,7 @@ import {
 } from "@/app/actions/pages";
 import { detectIntent } from "@/lib/page-intent";
 import type { SiteMode } from "@/lib/db/schema";
+import { composePageBody } from "@/lib/render/page-document";
 import {
   schemaToGutenberg,
   sectionToTemplatePart,
@@ -194,6 +195,7 @@ export function BuilderApp({
   backLabel,
   siteName,
   mode,
+  vibeUrl,
   initialSchema,
   initialChrome,
   initialIntake,
@@ -222,6 +224,8 @@ export function BuilderApp({
    * behind them are all meaningless for a site we host ourselves.
    */
   mode: SiteMode;
+  /** Where a published Vibe site is being served, or null if it isn't yet. */
+  vibeUrl: string | null;
   /** The stored schema for the page shown on load, so the canvas paints every section. */
   initialSchema: Record<string, unknown> | null;
   /** The site's header and footer, so the canvas frames the page as the live site does. */
@@ -1198,8 +1202,14 @@ export function BuilderApp({
             The whole menu is WordPress: view the install, open wp-admin,
             push to it. A Vibe site has none of those, and an "Export to
             WordPress" item that always refuses would be worse than no menu —
-            the canvas beside it already IS the preview.
+            the canvas beside it already IS the preview. What it does have,
+            once published, is an address, and that is worth one link.
           */}
+          {mode === "vibe" && vibeUrl && (
+            <a className={styles.btn} href={vibeUrl} target="_blank" rel="noreferrer">
+              View site ↗
+            </a>
+          )}
           {mode === "wordpress" && (
             <div className={styles.menuWrap} ref={siteMenuRef}>
               <button
@@ -1408,29 +1418,24 @@ export function BuilderApp({
                 <PreviewFrame
                   key={reloadKey}
                   html={withPreviewPlaceholders(
-                    // The same swap export performs when writing the header
-                    // template part, so the canvas shows the logo exactly where
-                    // the live site will.
-                    withSiteLogo(
-                      chrome.header
-                        ? sectionToTemplatePart(chrome.header.type, chrome.header.props)
-                        : "",
-                      Boolean(intake.data.logoUrl),
-                    ) +
-                      schemaToGutenberg(schema) +
-                      (chrome.footer
-                        ? sectionToTemplatePart(chrome.footer.type, chrome.footer.props)
-                        : ""),
-                    siteName,
-                    facts,
-                    intake.data.logoUrl,
-                    // The real pages, so the canvas menu lists what the site
-                    // actually has. The exported site's navigation falls back
-                    // to exactly this list.
-                    pages.map((p) => ({ slug: p.slug, title: p.title })),
-                    activeForm?.fields ?? [],
-                    activeFormToken,
-                    activeForm?.style ?? {},
+                    composePageBody({
+                      header: chrome.header,
+                      footer: chrome.footer,
+                      schema,
+                      hasLogo: Boolean(intake.data.logoUrl),
+                    }),
+                    {
+                      businessName: siteName,
+                      facts,
+                      logoUrl: intake.data.logoUrl,
+                      // The real pages, so the canvas menu lists what the site
+                      // actually has. The exported site's navigation falls back
+                      // to exactly this list.
+                      pages: pages.map((p) => ({ slug: p.slug, title: p.title })),
+                      formFields: activeForm?.fields ?? [],
+                      formToken: activeFormToken,
+                      formStyle: activeForm?.style ?? {},
+                    },
                   )}
                   // The palette the client chose, so the canvas is that site's
                   // colours rather than the theme's defaults.
