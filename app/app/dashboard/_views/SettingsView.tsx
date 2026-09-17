@@ -6,6 +6,7 @@ import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CopyableText } from "@/components/dashboard/CopyableText";
 import { BusinessDetailsFields } from "@/components/dashboard/BusinessDetailsFields";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
+import { DeliveryPanel } from "./DeliveryPanel";
 import { smbNav } from "../nav";
 import { updateSiteSettingsAction } from "@/app/actions/sites";
 import { upsertBusinessProfileAction } from "@/app/actions/business-profile";
@@ -184,6 +185,7 @@ export async function SettingsView({
           </button>
         </form>
       </div>
+      <DeliveryPanel site={site} settingsPath={paths.settingsPath} />
       {await smtpPanel(site.id, site.smbId ?? "")}
     </DashboardShell>
   );

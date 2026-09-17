@@ -31,7 +31,8 @@ import {
 } from "@/lib/wp/local-driver";
 import { logActivity } from "@/lib/activity";
 import { wordpressEntitlement } from "@/lib/billing";
-import { sitesHost, subdomainFrom, vibeSiteUrl } from "@/lib/render/hosting";
+import { sitesHost, vibeSiteUrl } from "@/lib/render/hosting";
+import { claimVibeSubdomain } from "@/lib/render/claim-subdomain";
 import { adoptLogo, adoptSchemaImages } from "@/lib/media/adopt";
 
 /**
@@ -528,6 +529,18 @@ export type AdminLoginResult = { ok: true; url: string } | { ok: false; error: s
 export async function openWordPressAdminAction(smbId: string): Promise<AdminLoginResult> {
   const { site } = await requireSiteAccess(smbId);
 
+  /*
+   * A Vibe site has no wp-admin to open, including one that used to.
+   *
+   * The builder hides this menu in Vibe mode, which is not the same thing as
+   * the action refusing: a downgraded site still has an install on disk, and
+   * minting a login link into it would hand someone the editor for a site we
+   * no longer serve from.
+   */
+  if (site.mode !== "wordpress") {
+    return { ok: false, error: "This is a Vibe site — there's no WordPress admin for it." };
+  }
+
   const installation = await db.query.siteInstallations.findFirst({
     where: eq(siteInstallations.siteId, site.id),
   });
@@ -619,7 +632,7 @@ async function publishVibeSite(
 
   let subdomain = site.vibeSubdomain;
   if (!subdomain) {
-    subdomain = await claimSubdomain(site);
+    subdomain = await claimVibeSubdomain(site);
     if (!subdomain) {
       return { ok: false, error: "Couldn't find an available address for this site." };
     }
@@ -644,30 +657,6 @@ async function publishVibeSite(
   return { ok: true, url };
 }
 
-/**
- * An available subdomain for this site, or null.
- *
- * Tries the business name first because that is the address its owner would
- * expect, then numbered variants, then the SMB ID — which is unique by
- * construction and is therefore the answer that cannot fail. Uniqueness is
- * enforced by the column, so a losing race surfaces as an error here rather
- * than as two sites on one host.
- */
-async function claimSubdomain(site: typeof sites.$inferSelect): Promise<string | null> {
-  const base = subdomainFrom(site.name);
-  const candidates = base
-    ? [base, `${base}-2`, `${base}-3`, `${base}-4`, `${base}-5`]
-    : [];
-  if (site.smbId) candidates.push(site.smbId.toLowerCase());
-
-  for (const candidate of candidates) {
-    const taken = await db.query.sites.findFirst({
-      where: eq(sites.vibeSubdomain, candidate),
-    });
-    if (!taken) return candidate;
-  }
-  return null;
-}
 
 /**
  * Publish — flips the site from draft to live.

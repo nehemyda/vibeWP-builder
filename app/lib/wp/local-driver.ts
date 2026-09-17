@@ -222,6 +222,21 @@ export async function isServerHealthy(port: number): Promise<boolean> {
  * handle to keep. lsof is asked for the listener only, so this cannot pick up
  * a browser's outbound connection to the same port.
  */
+/**
+ * Stops serving one site, without touching a byte of it.
+ *
+ * For a site leaving WordPress mode. The install, its database and its uploads
+ * all stay exactly where they are — this only ends the process answering on
+ * its port, because a downgraded site should not still be reachable at an
+ * address nothing points at any more.
+ *
+ * It cannot make that old URL REDIRECT anywhere: that would mean editing a
+ * client's own install, which is theirs. Silence is the honest answer.
+ */
+export async function stopSiteServing(port: number): Promise<void> {
+  if (port > 0) await killListener(port);
+}
+
 async function killListener(port: number): Promise<void> {
   try {
     const { stdout } = await run("/usr/sbin/lsof", [

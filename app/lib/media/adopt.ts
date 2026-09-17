@@ -21,7 +21,7 @@ import type { FieldSpec } from "@/lib/sections/types";
  */
 
 /** The shape sections store an image in — see SectionImage in lib/sections/shared.ts. */
-type ImageValue = { url?: string; alt?: string; [k: string]: unknown };
+type ImageValue = { url?: string; alt?: string; sourceUrl?: string; [k: string]: unknown };
 
 const MAX_BYTES = 8_000_000;
 
@@ -78,11 +78,32 @@ function isRemote(url: string | undefined): url is string {
 async function adoptImageValue(
   siteId: string,
   value: unknown,
+  useSourceFallback: boolean,
 ): Promise<{ changed: boolean; value: unknown }> {
   const img = value as ImageValue | undefined;
-  if (!img || typeof img !== "object" || !isRemote(img.url)) return { changed: false, value };
+  if (!img || typeof img !== "object") return { changed: false, value };
 
-  const url = await adoptUrl(siteId, img.url, typeof img.alt === "string" ? img.alt : undefined);
+  const alt = typeof img.alt === "string" ? img.alt : undefined;
+
+  /*
+   * The current address first, the original second.
+   *
+   * Coming back FROM WordPress, img.url points at that install's media
+   * library and is the better copy — the client may have replaced the
+   * photograph in wp-admin, and that is the one their site shows. But the
+   * install may already be stopped, and sourceUrl survives an export because
+   * writeImage merges rather than replaces. So: prefer what the site is
+   * actually showing, fall back to where it came from, and only then give up.
+   */
+  const candidates = [img.url, useSourceFallback ? img.sourceUrl : undefined]
+    .filter((u): u is string => isRemote(u));
+  if (candidates.length === 0) return { changed: false, value };
+
+  let url: string | null = null;
+  for (const candidate of candidates) {
+    url = await adoptUrl(siteId, candidate, alt);
+    if (url) break;
+  }
   if (!url) return { changed: false, value };
 
   /*
@@ -110,7 +131,15 @@ async function adoptImageValue(
 export async function adoptSchemaImages(
   siteId: string,
   schema: unknown,
+  /**
+   * Try the image's sourceUrl when its current address cannot be fetched.
+   *
+   * Off for publishing, where the current address IS the source. On for a
+   * downgrade, where it points at a WordPress that may already be stopped.
+   */
+  opts: { useSourceFallback?: boolean } = {},
 ): Promise<{ changed: boolean; schema: unknown }> {
+  const useSourceFallback = opts.useSourceFallback ?? false;
   const nodes = (schema as { nodes?: Array<Record<string, unknown>> })?.nodes;
   if (!Array.isArray(nodes)) return { changed: false, schema };
 
@@ -127,7 +156,7 @@ export async function adoptSchemaImages(
       const fields = section.fields as Record<string, FieldSpec>;
       for (const [fieldName, spec] of Object.entries(fields)) {
         if (spec.type === "image") {
-          const r = await adoptImageValue(siteId, next[fieldName]);
+          const r = await adoptImageValue(siteId, next[fieldName], useSourceFallback);
           if (r.changed) {
             next[fieldName] = r.value;
             changed = true;
@@ -149,7 +178,7 @@ export async function adoptSchemaImages(
             if (!item || typeof item !== "object") return item;
             const entry = { ...(item as Record<string, unknown>) };
             for (const key of imageKeys) {
-              const r = await adoptImageValue(siteId, entry[key]);
+              const r = await adoptImageValue(siteId, entry[key], useSourceFallback);
               if (r.changed) {
                 entry[key] = r.value;
                 changed = true;
