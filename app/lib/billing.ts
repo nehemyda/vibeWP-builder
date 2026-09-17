@@ -15,12 +15,56 @@ export type ResolvedPrice = {
 };
 
 /**
- * Plan values are stored inconsistently cased across sites/agencies
- * ("Scale" vs "starter"), while plans.key is always lowercase — so every
- * lookup goes through here.
+ * The canonical form of a stored plan value.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THIS EXISTS, AND WHY EVERY COMPARISON MUST USE IT
+ *
+ * `plans.key` is always lowercase. The stored `sites.plan` / `agencies.plan`
+ * columns were not: the column defaults wrote "starter" while every plan
+ * <select> in the app wrote the title-case literal "Starter", so the same
+ * plan existed under two spellings and a site's displayed plan depended on
+ * how it happened to be created.
+ *
+ * That is not cosmetic. `sectionsForPlan` compared `sections.allowedPlans`
+ * (which stores the lowercase key) against the raw column, so a section
+ * restricted to ["growth","scale"] was invisible to every site on Earth,
+ * including the Growth and Scale ones. The gate looked enforced and enforced
+ * nothing.
+ *
+ * The selectors now submit `plans.key` and a migration has lowercased the
+ * existing rows, so the data is canonical. This stays as the belt-and-braces
+ * for anything that arrives from an older form post or an unmigrated row —
+ * and as the one obvious place to route a new comparison through.
+ * ─────────────────────────────────────────────────────────────────────
  */
 export function planKeyOf(plan: string | null | undefined): string {
   return (plan ?? "").trim().toLowerCase();
+}
+
+/**
+ * A plan's display name.
+ *
+ * Stored plan values are KEYS ("starter"), not names ("Starter"), so anything
+ * showing one to a person has to resolve it. Pass the catalogue where the page
+ * already has it; without one this title-cases the key, which is both readable
+ * and exactly what the seeded plans are called.
+ */
+export function planLabel(
+  plan: string | null | undefined,
+  catalogue?: Pick<Plan, "key" | "name">[] | null,
+): string {
+  const key = planKeyOf(plan);
+  if (!key) return "—";
+
+  const named = catalogue?.find((p) => p.key === key)?.name;
+  if (named) return named;
+
+  return key
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(" ");
 }
 
 export function formatCents(cents: number): string {
@@ -68,6 +112,11 @@ export async function loadPricingContext(agencyId: string | null) {
     return planByKey.get(planKeyOf(plan))?.priceMonthlyCents ?? null;
   }
 
+  /** The catalogue name for a stored plan value, for anything shown to a person. */
+  function labelFor(plan: string | null | undefined): string {
+    return planLabel(plan, planRows);
+  }
+
   function resolve(site: {
     plan: string;
     customPriceMonthlyCents: number | null;
@@ -94,6 +143,7 @@ export async function loadPricingContext(agencyId: string | null) {
     planFor,
     agencyPriceFor,
     platformPriceFor,
+    labelFor,
     resolve,
   };
 }

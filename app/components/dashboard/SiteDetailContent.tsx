@@ -5,6 +5,7 @@ import { BusinessDetailsFields } from "@/components/dashboard/BusinessDetailsFie
 import { upsertBusinessProfileAction } from "@/app/actions/business-profile";
 import { updateSiteSettingsAction, deleteSiteAction } from "@/app/actions/sites";
 import { totalPages } from "@/lib/pagination";
+import { planLabel } from "@/lib/billing";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
 import type { sites, leads as leadsTable, businessProfiles } from "@/lib/db/schema";
 
@@ -62,7 +63,7 @@ export function SiteDetailContent({
         <div className={shell.statCard}>
           <div className={shell.label}>Plan</div>
           <div className={shell.value} style={{ fontSize: "1.3rem" }}>
-            {site.plan}
+            {planLabel(site.plan)}
           </div>
         </div>
         <div className={shell.statCard}>

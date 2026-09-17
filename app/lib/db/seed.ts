@@ -105,7 +105,7 @@ async function main() {
       .values({
         partnerId: await generatePartnerId(),
         name: "Northbound Digital",
-        plan: "Scale",
+        plan: "scale",
         ownerUserId: agencyOwnerId,
       })
       .returning();
@@ -190,7 +190,7 @@ async function main() {
           name: s.name,
           domain: s.domain,
           status: s.status,
-          plan: "Scale",
+          plan: "scale",
         })
         .returning();
       await db
@@ -221,7 +221,7 @@ async function main() {
         name: "PIPEPRO Plumbing",
         domain: "pipepro.com",
         status: "live",
-        plan: "Growth",
+        plan: "growth",
       })
       .returning();
     await db.insert(sitePages).values({

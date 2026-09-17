@@ -1,13 +1,15 @@
 import { notFound } from "next/navigation";
 import { eq, desc, sql, and, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { agencies, profiles, agencyMembers, sites, businessProfiles, activityLog } from "@/lib/db/schema";
+import { agencies, profiles, agencyMembers, sites, businessProfiles, activityLog, plans } from "@/lib/db/schema";
 import { requireRole } from "@/lib/auth/require-role";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { Pagination } from "@/components/dashboard/Pagination";
 import { CopyableText } from "@/components/dashboard/CopyableText";
 import { ConfirmSubmitButton } from "@/components/dashboard/ConfirmSubmitButton";
 import { BusinessDetailsFields } from "@/components/dashboard/BusinessDetailsFields";
+import { PlanSelect } from "@/components/dashboard/PlanSelect";
+import { planLabel } from "@/lib/billing";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { parsePage, pageOffset, totalPages, PAGE_SIZE } from "@/lib/pagination";
 import { startImpersonationAction } from "@/app/actions/impersonation";
@@ -102,6 +104,10 @@ export default async function AgencyDetailPage({
       .limit(15),
   ]);
 
+  /* Agencies store the plan KEY; the catalogue carries the name an admin
+     actually edits at /admin/billing. */
+  const planCatalogue = await db.select({ key: plans.key, name: plans.name }).from(plans);
+
   const statusPill = agencyStatusPill(agency.status);
   const redirectTo = `/admin/agencies/${agency.partnerId}`;
 
@@ -114,7 +120,7 @@ export default async function AgencyDetailPage({
       title={agency.name}
       subtitle={
         <>
-          Partner ID <span className={shell.idBadge}>{agency.partnerId ?? "—"}</span> · {agency.plan} plan ·{" "}
+          Partner ID <span className={shell.idBadge}>{agency.partnerId ?? "—"}</span> · {planLabel(agency.plan, planCatalogue)} plan ·{" "}
           <span className={`${shell.pill} ${shell[statusPill.cls] ?? ""}`}>{statusPill.label}</span>
         </>
       }
@@ -228,12 +234,7 @@ export default async function AgencyDetailPage({
               <label htmlFor="plan" style={labelStyle}>
                 Plan
               </label>
-              <select id="plan" name="plan" defaultValue={agency.plan} style={inputStyle}>
-                <option>Starter</option>
-                <option>Growth</option>
-                <option>Scale</option>
-                <option>Agency</option>
-              </select>
+              <PlanSelect defaultValue={agency.plan} style={inputStyle} />
             </div>
             <button type="submit" className={`${shell.btn} ${shell.btnPrimary}`} style={{ alignSelf: "flex-start" }}>
               Save

@@ -7,7 +7,7 @@ import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CopyableText } from "@/components/dashboard/CopyableText";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
 import { agencyNav } from "../../nav";
-import { loadPricingContext, formatCents, PRICE_SOURCE_LABEL } from "@/lib/billing";
+import { loadPricingContext, formatCents, planLabel, PRICE_SOURCE_LABEL } from "@/lib/billing";
 import {
   updateAgencyPlanPricesAction,
   updateSitePriceOverrideAction,
@@ -105,7 +105,7 @@ export default async function AgencyBillingPage({
         <div className={shell.statCard}>
           <div className={shell.label}>You pay VibeWP</div>
           <div className={shell.value}>{formatCents(platformCostCents)}</div>
-          <div className={shell.rowSub}>{agency.plan} plan</div>
+          <div className={shell.rowSub}>{pricing.labelFor(agency.plan)} plan</div>
         </div>
         <div className={shell.statCard}>
           <div className={shell.label}>Gross margin</div>
@@ -223,7 +223,7 @@ export default async function AgencyBillingPage({
                     </CopyableText>
                   </td>
                   <td className={shell.rowName}>{site.name}</td>
-                  <td>{price.plan?.name ?? site.plan}</td>
+                  <td>{price.plan?.name ?? planLabel(site.plan)}</td>
                   <td className={shell.rowName}>{formatCents(price.cents)}</td>
                   <td className={shell.rowSub}>{PRICE_SOURCE_LABEL[price.source]}</td>
                   {isOwner && (

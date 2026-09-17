@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
 import { resolveSitePaths } from "@/lib/site-paths";
+import { planLabel } from "@/lib/billing";
 import type { ChromeNode } from "@/app/actions/ai-generate";
 import type { FormPreviewField } from "@/lib/wp/serialize";
 import { loadIntakeAction } from "@/app/actions/intake";
@@ -207,7 +208,7 @@ export default async function BuilderPage({
         siteName: site.name,
         smbId: site.smbId ?? "",
         partnerId: urlPartnerId,
-        plan: site.plan ?? null,
+        plan: site.plan ? planLabel(site.plan) : null,
         status: site.status ?? null,
         wpUrl: installation?.status === "ready" ? (installation.url ?? null) : null,
         domain: site.domain ?? null,

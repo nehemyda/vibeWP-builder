@@ -4,6 +4,7 @@ import { profiles } from "@/lib/db/schema";
 import { requireRole } from "@/lib/auth/require-role";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { BusinessDetailsFields } from "@/components/dashboard/BusinessDetailsFields";
+import { PlanSelect } from "@/components/dashboard/PlanSelect";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
 import { ADMIN_NAV } from "../../nav";
 import { createAgencyAction } from "@/app/actions/admin";
@@ -66,10 +67,7 @@ export default async function NewAgencyPage({
             >
               Plan
             </label>
-            <select
-              id="plan"
-              name="plan"
-              defaultValue="Starter"
+            <PlanSelect
               style={{
                 width: "100%",
                 padding: "0.7rem 0.9rem",
@@ -77,11 +75,7 @@ export default async function NewAgencyPage({
                 border: "1px solid var(--line)",
                 fontSize: "0.9rem",
               }}
-            >
-              <option>Starter</option>
-              <option>Growth</option>
-              <option>Scale</option>
-            </select>
+            />
           </div>
 
           <div style={{ border: "1px solid var(--line)", borderRadius: 12, padding: "1rem" }}>

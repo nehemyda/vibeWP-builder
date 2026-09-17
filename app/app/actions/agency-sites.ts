@@ -7,6 +7,7 @@ import { generateSmbId } from "@/lib/ids";
 import { requireAgency } from "@/lib/auth/require-agency";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/activity";
+import { planKeyOf } from "@/lib/billing";
 
 function str(formData: FormData, key: string): string | null {
   const v = String(formData.get(key) ?? "").trim();
@@ -27,7 +28,7 @@ export async function createAgencySiteAction(formData: FormData) {
 
   const name = String(formData.get("name") ?? "").trim();
   const domain = String(formData.get("domain") ?? "").trim();
-  const plan = String(formData.get("plan") ?? agency.plan);
+  const plan = planKeyOf(String(formData.get("plan") ?? "")) || planKeyOf(agency.plan);
   const ownerFullName = String(formData.get("ownerFullName") ?? "").trim();
   const ownerEmail = String(formData.get("ownerEmail") ?? "").trim();
 

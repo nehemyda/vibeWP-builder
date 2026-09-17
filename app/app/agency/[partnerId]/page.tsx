@@ -2,10 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { eq, sql, and, gte, isNull, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { agencyMembers, sites, businessProfiles } from "@/lib/db/schema";
+import { agencyMembers, sites, businessProfiles, plans } from "@/lib/db/schema";
 import { requireAgency } from "@/lib/auth/require-agency";
 import { startImpersonationAction } from "@/app/actions/impersonation";
 import { daysAgo } from "@/lib/time";
+import { planKeyOf, planLabel } from "@/lib/billing";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CopyableText } from "@/components/dashboard/CopyableText";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
@@ -84,6 +85,12 @@ export default async function AgencyDashboardPage({
   const seatCount = teamCount[0]?.count ?? 0;
   const basePath = `/agency/${agency.partnerId}`;
 
+  /* `agencies.plan` stores the plan KEY, so showing it to a person means
+     resolving it against the catalogue. See planLabel() in lib/billing.ts. */
+  const planName = (await db.query.plans.findFirst({
+    where: eq(plans.key, planKeyOf(agency.plan)),
+  }))?.name ?? planLabel(agency.plan);
+
   /*
    * Thumbnails from the logo we already hold.
    *
@@ -123,7 +130,7 @@ export default async function AgencyDashboardPage({
             <span className={shell.idBadge}>{agency.partnerId ?? "—"}</span>
           </CopyableText>{" "}
           ·{" "}
-          {seatCount + 1} team member{seatCount === 0 ? "" : "s"} on the {agency.plan} plan
+          {seatCount + 1} team member{seatCount === 0 ? "" : "s"} on the {planName} plan
         </>
       }
       topActions={
@@ -150,7 +157,7 @@ export default async function AgencyDashboardPage({
         </div>
         <div className={shell.statCard}>
           <div className={shell.label}>Plan</div>
-          <div className={styles.planValue}>{agency.plan}</div>
+          <div className={styles.planValue}>{planName}</div>
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { sql, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { agencies, sites, profiles } from "@/lib/db/schema";
+import { agencies, sites, profiles, plans } from "@/lib/db/schema";
 import { requireRole } from "@/lib/auth/require-role";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { Pagination } from "@/components/dashboard/Pagination";
@@ -10,6 +10,7 @@ import { AdminSearch } from "@/components/dashboard/AdminSearch";
 import { parsePage, pageOffset, totalPages, PAGE_SIZE } from "@/lib/pagination";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
 import { ADMIN_NAV } from "../nav";
+import { planLabel } from "@/lib/billing";
 
 function agencyStatusPill(status: string) {
   if (status === "active") return null;
@@ -54,6 +55,10 @@ export default async function AdminAgenciesPage({
     .where(isNull(sites.deletedAt))
     .groupBy(sites.agencyId);
   const siteCountMap = new Map(siteCounts.map((r) => [r.agencyId, r.count]));
+
+  /* Agencies store the plan KEY; the catalogue carries the name an admin
+     actually edits at /admin/billing. */
+  const planCatalogue = await db.select({ key: plans.key, name: plans.name }).from(plans);
 
   return (
     <DashboardShell
@@ -118,7 +123,7 @@ export default async function AdminAgenciesPage({
                         "—"
                       )}
                     </td>
-                    <td>{a.plan}</td>
+                    <td>{planLabel(a.plan, planCatalogue)}</td>
                     <td>{siteCountMap.get(a.id) ?? 0}</td>
                     <td>
                       <Link className={`${shell.btn} ${shell.btnSmall}`} href={`/admin/agencies/${a.partnerId}`}>

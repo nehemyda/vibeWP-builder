@@ -3,6 +3,7 @@ import { requireAgency } from "@/lib/auth/require-agency";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { BusinessDetailsFields } from "@/components/dashboard/BusinessDetailsFields";
 import { createAgencySiteAction } from "@/app/actions/agency-sites";
+import { PlanSelect } from "@/components/dashboard/PlanSelect";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
 import { agencyNav } from "../../../nav";
 
@@ -73,11 +74,7 @@ export default async function AgencyNewSitePage({
               <label htmlFor="plan" style={labelStyle}>
                 Plan
               </label>
-              <select id="plan" name="plan" defaultValue={agency.plan} style={inputStyle}>
-                <option>Starter</option>
-                <option>Growth</option>
-                <option>Scale</option>
-              </select>
+              <PlanSelect defaultValue={agency.plan} style={inputStyle} />
             </div>
           </div>
 

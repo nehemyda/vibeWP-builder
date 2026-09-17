@@ -8,6 +8,7 @@ import { generateSmbId } from "@/lib/ids";
 import { requirePermission } from "@/lib/auth/require-permission";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/activity";
+import { planKeyOf } from "@/lib/billing";
 
 function str(formData: FormData, key: string): string | null {
   const v = String(formData.get(key) ?? "").trim();
@@ -20,7 +21,8 @@ export async function createSiteAction(formData: FormData) {
 
   const name = String(formData.get("name") ?? "").trim();
   const domain = String(formData.get("domain") ?? "").trim();
-  const plan = String(formData.get("plan") ?? "Starter");
+  // Canonical key, not whatever a stale form post happens to submit.
+  const plan = planKeyOf(String(formData.get("plan") ?? "")) || "starter";
   const agencyId = String(formData.get("agencyId") ?? "").trim();
   const ownerFullName = String(formData.get("ownerFullName") ?? "").trim();
   const ownerEmail = String(formData.get("ownerEmail") ?? "").trim();

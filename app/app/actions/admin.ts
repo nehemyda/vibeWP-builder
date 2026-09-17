@@ -8,6 +8,7 @@ import { generatePartnerId } from "@/lib/ids";
 import { requirePermission } from "@/lib/auth/require-permission";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/activity";
+import { planKeyOf } from "@/lib/billing";
 
 function str(formData: FormData, key: string): string | null {
   const v = String(formData.get(key) ?? "").trim();
@@ -19,7 +20,7 @@ export async function createAgencyAction(formData: FormData) {
   const { profile: actor } = await requirePermission("agencies.manage");
 
   const name = String(formData.get("name") ?? "").trim();
-  const plan = String(formData.get("plan") ?? "starter");
+  const plan = planKeyOf(String(formData.get("plan") ?? "")) || "starter";
   const ownerFullName = String(formData.get("ownerFullName") ?? "").trim();
   const ownerEmail = String(formData.get("ownerEmail") ?? "").trim();
   const existingOwnerUserId = String(formData.get("ownerUserId") ?? "").trim();
@@ -87,7 +88,7 @@ export async function updateAgencyAction(formData: FormData) {
   const agencyId = String(formData.get("agencyId") ?? "");
   const partnerId = String(formData.get("partnerId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
-  const plan = String(formData.get("plan") ?? "starter");
+  const plan = planKeyOf(String(formData.get("plan") ?? "")) || "starter";
   if (!agencyId || !name) redirect(`/admin/agencies/${partnerId}`);
 
   await db.update(agencies).set({ name, plan }).where(eq(agencies.id, agencyId));

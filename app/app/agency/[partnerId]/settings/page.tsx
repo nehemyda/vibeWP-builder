@@ -10,6 +10,7 @@ import { CopyableText } from "@/components/dashboard/CopyableText";
 import { BusinessDetailsFields } from "@/components/dashboard/BusinessDetailsFields";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
 import { agencyNav } from "../../nav";
+import { planKeyOf, planLabel } from "@/lib/billing";
 import { updateAgencyNameAction } from "@/app/actions/agency";
 import { upsertBusinessProfileAction } from "@/app/actions/business-profile";
 
@@ -58,7 +59,7 @@ export default async function AgencySettingsPage({
   }
 
   const [planDetails, businessProfile] = await Promise.all([
-    db.query.plans.findFirst({ where: eq(plans.name, agency.plan) }),
+    db.query.plans.findFirst({ where: eq(plans.key, planKeyOf(agency.plan)) }),
     db.query.businessProfiles.findFirst({
       where: and(eq(businessProfiles.ownerType, "agency"), eq(businessProfiles.ownerId, agency.id)),
     }),
@@ -126,7 +127,9 @@ export default async function AgencySettingsPage({
         <div className={shell.panel} style={{ padding: "1.4rem" }}>
           <h2 style={{ margin: "0 0 1rem", fontSize: "1rem" }}>Plan &amp; billing</h2>
           <div className={shell.fieldLabel}>Current plan</div>
-          <p style={{ margin: "0.2rem 0 0.9rem", fontSize: "1.1rem", fontWeight: 700 }}>{agency.plan}</p>
+          <p style={{ margin: "0.2rem 0 0.9rem", fontSize: "1.1rem", fontWeight: 700 }}>
+            {planDetails?.name ?? planLabel(agency.plan)}
+          </p>
           {planDetails ? (
             <>
               <div className={shell.fieldLabel}>Price</div>

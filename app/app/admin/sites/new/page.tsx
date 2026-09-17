@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { BusinessDetailsFields } from "@/components/dashboard/BusinessDetailsFields";
 import { createSiteAction } from "@/app/actions/admin-sites";
+import { PlanSelect } from "@/components/dashboard/PlanSelect";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
 import { ADMIN_NAV } from "../../nav";
 
@@ -68,11 +69,7 @@ export default async function NewSitePage({
               <label htmlFor="plan" style={labelStyle}>
                 Plan
               </label>
-              <select id="plan" name="plan" defaultValue="Starter" style={inputStyle}>
-                <option>Starter</option>
-                <option>Growth</option>
-                <option>Scale</option>
-              </select>
+              <PlanSelect style={inputStyle} />
             </div>
           </div>
 

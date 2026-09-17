@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { sections } from "@/lib/db/schema";
+import { planKeyOf } from "@/lib/billing";
 import { SECTIONS, getSectionByKey } from "./index";
 import type { SectionDefinition } from "./types";
 
@@ -124,11 +125,23 @@ export async function reconcileSections(): Promise<number> {
   return missing.length;
 }
 
-/** Sections a given plan may use, for the builder's insert menu. */
+/**
+ * Sections a given plan may use, for the builder's insert menu.
+ *
+ * Both sides are normalized. `allowedPlans` stores the lowercase `plans.key`,
+ * but the plan arrives from `sites.plan`, which every plan <select> used to
+ * fill with the title-case literal "Starter" — so this compared "Growth"
+ * against "growth" and restricting a section to any plan at all hid it from
+ * every site, Growth and Scale included. The gate read as enforced and
+ * enforced nothing. See planKeyOf() in lib/billing.ts.
+ */
 export async function sectionsForPlan(plan: string): Promise<ResolvedSection[]> {
   const { resolved } = await listSections();
+  const key = planKeyOf(plan);
   return resolved.filter(
-    (s) => s.isActive && (s.allowedPlans.length === 0 || s.allowedPlans.includes(plan)),
+    (s) =>
+      s.isActive &&
+      (s.allowedPlans.length === 0 || s.allowedPlans.some((p) => planKeyOf(p) === key)),
   );
 }
 

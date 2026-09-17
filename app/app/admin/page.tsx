@@ -1,6 +1,6 @@
 import { sql, and, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { agencies, sites } from "@/lib/db/schema";
+import { agencies, sites, plans } from "@/lib/db/schema";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/require-role";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
@@ -8,6 +8,7 @@ import { AdminSearch } from "@/components/dashboard/AdminSearch";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
 import styles from "./admin.module.css";
 import { ADMIN_NAV } from "./nav";
+import { planLabel } from "@/lib/billing";
 
 export default async function AdminDashboardPage() {
   const { profile } = await requireRole(["super_admin"]);
@@ -30,6 +31,10 @@ export default async function AdminDashboardPage() {
   const siteCountMap = new Map(
     siteCountsByAgency.map((r) => [r.agencyId, r.count]),
   );
+
+  /* Agencies store the plan KEY; the catalogue carries the name an admin
+     actually edits at /admin/billing. */
+  const planCatalogue = await db.select({ key: plans.key, name: plans.name }).from(plans);
 
   return (
     <DashboardShell
@@ -99,7 +104,7 @@ export default async function AdminDashboardPage() {
                         joined {a.createdAt.toLocaleDateString()}
                       </div>
                     </td>
-                    <td>{a.plan}</td>
+                    <td>{planLabel(a.plan, planCatalogue)}</td>
                     <td>{siteCountMap.get(a.id) ?? 0}</td>
                     <td>
                       <span className={`${shell.pill} ${shell.pillLive}`}>Active</span>

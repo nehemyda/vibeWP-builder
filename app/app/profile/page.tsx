@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
 import { profiles, agencies, agencyMembers, sites, siteMembers } from "@/lib/db/schema";
 import { resolveSitePaths } from "@/lib/site-paths";
+import { planLabel } from "@/lib/billing";
 import { DashboardShell, type NavGroup } from "@/components/dashboard/DashboardShell";
 import { CopyableText } from "@/components/dashboard/CopyableText";
 import { updateOwnProfileAction } from "@/app/actions/profile";
@@ -96,7 +97,7 @@ export default async function ProfilePage({
           }
         />
         <DetailRow label="Agency" value={<CopyableText value={agency.name}>{agency.name}</CopyableText>} />
-        <DetailRow label="Plan" value={agency.plan} />
+        <DetailRow label="Plan" value={planLabel(agency.plan)} />
         <DetailRow label="Status" value={AGENCY_STATUS_LABEL[agency.status] ?? agency.status} />
         <DetailRow label="Agency joined" value={agency.createdAt.toLocaleDateString()} />
       </>
@@ -133,7 +134,7 @@ export default async function ProfilePage({
         />
         <DetailRow label="Site" value={<CopyableText value={site.name}>{site.name}</CopyableText>} />
         <DetailRow label="Domain" value={site.domain ?? "not yet published"} />
-        <DetailRow label="Plan" value={site.plan} />
+        <DetailRow label="Plan" value={planLabel(site.plan)} />
         <DetailRow label="Status" value={site.status === "live" ? "Live" : site.status === "trial" ? "Trial" : "Draft"} />
         <DetailRow label="Site created" value={site.createdAt.toLocaleDateString()} />
       </>
