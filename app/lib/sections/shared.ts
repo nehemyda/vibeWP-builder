@@ -20,6 +20,23 @@ export type SectionImage = {
 
 export const text = (el: HTMLElement | null): string => (el ? el.textContent.trim() : "");
 
+/**
+ * A list field's entries, or none when the prop isn't a list.
+ *
+ * Props reaching toGutenberg are not always the shape the field declares. The
+ * fact-writer once put the string "{{hours}}" into `hours` on the two sections
+ * that declare it as a table of rows, and `(p.hours ?? []).filter` threw —
+ * which during generation silently dropped both sections, and from chat was
+ * persisted and then threw on every later serialize of that page.
+ *
+ * The writer is type-aware now (applyContactFacts), but pages saved before
+ * that fix still carry the bad value, and a section is the wrong place to take
+ * a page down. Rendering no rows is the recoverable failure.
+ */
+export function rows<T>(value: T[] | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
 /** Reads core/button blocks back, recovering the variant from its class. */
 export function parseActions(scope: HTMLElement): Action[] {
   const out: Action[] = [];

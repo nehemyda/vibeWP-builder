@@ -13,6 +13,7 @@ import {
   photoQueryFor,
   describeBusiness,
   contactFactsFor,
+  applyContactFacts,
 } from "@/lib/ai/business-context";
 import { generateHeroContentWithGemini } from "@/lib/ai/gemini";
 import { searchPhoto } from "@/lib/images/pexels";
@@ -142,7 +143,11 @@ export async function generatePageAction(opts: {
       continue;
     }
 
-    const props = withFacts(photo ? withPhoto(raw, section, photo) : raw, section, facts);
+    const props = applyContactFacts(
+      photo ? withPhoto(raw, section, photo) : raw,
+      section.definition.fields,
+      facts,
+    );
 
     if (!usable(props, section)) {
       rejected.push(section.key);
@@ -177,7 +182,7 @@ export async function generatePageAction(opts: {
     const hasFields = Object.keys(section.definition.fields).length > 0;
     const raw = generated[section.key] ?? (hasFields ? null : {});
     if (!raw) continue;
-    const props = withFacts(raw, section, facts);
+    const props = applyContactFacts(raw, section.definition.fields, facts);
     if (!usable(props, section)) continue;
 
     const node: ChromeNode = { id: `n_${section.key}`, type: section.nodeType, props };
@@ -315,52 +320,6 @@ function withPhoto(
       ...(photo.photographerUrl ? { photographerUrl: photo.photographerUrl } : {}),
     },
   };
-}
-
-/**
- * Writes known contact details over the generated ones.
- *
- * Only touches fields the section actually declares, so a hero is unaffected
- * and a contact section gets the real number. A fact we hold is never worse
- * than a line the model wrote about it.
- */
-/*
- * Fields the WordPress theme can resolve at render time, and the token each
- * one becomes. Anything not listed here is written as a literal value.
- */
-const TOKENISED_FACTS: Record<string, string> = {
-  phone: "{{phone}}",
-  email: "{{email}}",
-  address: "{{address}}",
-  hours: "{{hours}}",
-};
-
-function withFacts(
-  props: Record<string, unknown>,
-  section: PlannedSection["section"],
-  facts: Record<string, string>,
-): Record<string, unknown> {
-  const out = { ...props };
-  for (const field of Object.keys(facts)) {
-    if (!(field in section.definition.fields)) continue;
-    /*
-     * A TOKEN, not the value.
-     *
-     * Writing "01225 447 812" into the page freezes it there: change the number
-     * later and it has to be changed on the contact section, the footer, and
-     * every other place it appears, on every page. The token is resolved by the
-     * theme from a single option, so one edit in Settings → Business details
-     * updates the whole site — which is the entire reason the WordPress side
-     * has an options screen at all.
-     *
-     * Same mechanism as {{year}}, and the same trade: the token is visible as
-     * literal text if this content is ever moved to a theme that cannot resolve
-     * it. The builder preview substitutes them so the canvas still shows the
-     * real details.
-     */
-    out[field] = TOKENISED_FACTS[field] ?? facts[field];
-  }
-  return out;
 }
 
 /**

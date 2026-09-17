@@ -1,5 +1,5 @@
 import { group, siteTitle, paragraph, paragraphLink, contactHref, heading } from "@/lib/wp/blocks";
-import { text , copyrightLine, parseCopyrightName } from "./shared";
+import { text , copyrightLine, parseCopyrightName, rows } from "./shared";
 import type { SectionDefinition } from "./types";
 
 export type FooterContactProps = { phone?: string; email?: string; address?: string; hours?: Array<{ day: string; time: string }>; copyright?: string };
@@ -41,7 +41,7 @@ export const FooterContact: SectionDefinition<FooterContactProps> = {
         paragraph(label, "yp-ftrk__label") +
         (kind === "text" ? paragraph(v as string, "yp-ftrk__value") : paragraphLink(v as string, contactHref(kind, v as string), "yp-ftrk__value")))).join("");
 
-    const hours = (p.hours ?? []).filter((h) => h?.day).map((h) =>
+    const hours = rows(p.hours).filter((h) => h?.day).map((h) =>
       group("yp-ftrk__day", paragraph(h.day, "yp-ftrk__day-name") + paragraph(h.time ?? "", "yp-ftrk__day-time"))).join("");
 
     return group("yp-ftrk", group("yp-ftrk__inner",

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { sites, businessProfiles } from "@/lib/db/schema";
 import { parseHours, parseServices, formatHours, type OpeningHours } from "@/lib/business/hours";
+import type { FieldSpec } from "@/lib/sections/types";
 
 /**
  * What the AI is told about the business whose site it is writing.
@@ -166,6 +167,119 @@ export function contactFactsFor(ctx: BusinessContext): Record<string, string> {
   if (ctx.hours) facts.hours = formatHours(ctx.hours).join("\n");
 
   return facts;
+}
+
+/*
+ * Fields the WordPress theme can resolve at render time, and the token each
+ * one becomes. Anything not listed here is written as a literal value.
+ */
+const TOKENISED_FACTS: Record<string, string> = {
+  phone: "{{phone}}",
+  email: "{{email}}",
+  address: "{{address}}",
+  hours: "{{hours}}",
+};
+
+/**
+ * Writes known contact details over the generated ones.
+ *
+ * Only touches fields the section actually declares, so a hero is unaffected
+ * and a contact section gets the real number. A fact we hold is never worse
+ * than a line the model wrote about it.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THIS IS TYPE-AWARE, AND WHY IT LIVES IN ONE PLACE
+ *
+ * The three callers used to do this inline, and all three checked only that
+ * the section declared the field — never what TYPE it declared. Two sections
+ * declare `hours` as a LIST of {day, time} rows, so the string "{{hours}}"
+ * landed where an array belonged and toGutenberg threw on
+ * `(p.hours ?? []).filter`. During generation that throw was swallowed by
+ * usable(), so contact-hours and footer-contact were silently dropped from
+ * every page of every business that had opening hours recorded; from chat,
+ * which had no such guard, the broken props were persisted and the page threw
+ * on serialize afterwards.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export function applyContactFacts(
+  props: Record<string, unknown>,
+  fields: Record<string, FieldSpec>,
+  facts: Record<string, string>,
+): Record<string, unknown> {
+  const out = { ...props };
+
+  for (const [field, value] of Object.entries(facts)) {
+    const spec = fields[field];
+    if (!spec) continue;
+
+    if (spec.type === "text" || spec.type === "richtext") {
+      /*
+       * A TOKEN, not the value.
+       *
+       * Writing "01225 447 812" into the page freezes it there: change the
+       * number later and it has to be changed on the contact section, the
+       * footer, and every other place it appears, on every page. The token is
+       * resolved by the theme from a single option, so one edit in Settings →
+       * Business details updates the whole site — which is the entire reason
+       * the WordPress side has an options screen at all.
+       *
+       * Same mechanism as {{year}}, and the same trade: the token is visible
+       * as literal text if this content is ever moved to a theme that cannot
+       * resolve it. The builder preview substitutes them so the canvas still
+       * shows the real details.
+       */
+      out[field] = TOKENISED_FACTS[field] ?? value;
+      continue;
+    }
+
+    if (spec.type === "list") {
+      const rows = factRows(value, spec);
+      if (rows) out[field] = rows;
+      continue;
+    }
+
+    /*
+     * Any other type — image, link, or one of the option types — has no
+     * sensible shape for a contact string, so the generated value stands.
+     * Skipping is the safe half of the fix: a section we don't understand
+     * keeps working rather than being dropped.
+     */
+  }
+
+  return out;
+}
+
+/**
+ * A multi-line fact rendered as list rows, e.g. the opening-hours table.
+ *
+ * Tokens are plain string substitution in the emitted markup, so a table has
+ * no token form — these rows carry the real values and do NOT follow a later
+ * edit in Settings the way {{hours}} does. That is still the better trade:
+ * frozen-but-true beats the week the model invented, and a business changing
+ * its opening hours is rarer than a page being generated with the wrong ones.
+ *
+ * Returns null when the entry shape isn't a label/value pair, leaving the
+ * generated rows in place.
+ */
+function factRows(value: string, spec: FieldSpec): Record<string, string>[] | null {
+  const entry = Object.entries(spec.of ?? {});
+  if (entry.length !== 2 || entry.some(([, f]) => f.type !== "text")) return null;
+  const [labelKey, valueKey] = entry.map(([k]) => k);
+
+  const rows = value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      // The first ": " only — formatHours writes "Saturday: 9am – 4:30pm",
+      // and the time itself contains colons.
+      const at = line.indexOf(": ");
+      return at === -1
+        ? { [labelKey]: line, [valueKey]: "" }
+        : { [labelKey]: line.slice(0, at), [valueKey]: line.slice(at + 2) };
+    });
+
+  return rows.length ? rows : null;
 }
 
 /**

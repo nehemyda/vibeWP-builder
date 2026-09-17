@@ -1,5 +1,5 @@
 import { group, heading, paragraph, paragraphLink, contactHref } from "@/lib/wp/blocks";
-import { text } from "./shared";
+import { text, rows } from "./shared";
 import type { SectionDefinition } from "./types";
 
 export type ContactHoursProps = {
@@ -105,7 +105,7 @@ export const ContactHours: SectionDefinition<ContactHoursProps> = {
         .join(""),
     );
 
-    const rows = (p.hours ?? [])
+    const days = rows(p.hours)
       .filter((h) => h?.day)
       .map((h) =>
         group(
@@ -118,7 +118,7 @@ export const ContactHours: SectionDefinition<ContactHoursProps> = {
 
     const panel = group(
       "yp-contact-hours__panel",
-      (p.hoursHeading ? heading(p.hoursHeading, 3, "yp-contact-hours__panel-heading") : "") + rows,
+      (p.hoursHeading ? heading(p.hoursHeading, 3, "yp-contact-hours__panel-heading") : "") + days,
     );
 
     return group("yp-contact-hours", group("yp-contact-hours__grid", copy + panel), "section");

@@ -2,6 +2,8 @@ import { parse, type HTMLElement } from "node-html-parser";
 import { SECTIONS } from "@/lib/sections";
 import { sectionPreviewMarkup } from "@/lib/wp/serialize";
 import { readThemeCss, findCollapsingAutoFitGrids } from "@/lib/sections/css-audit";
+import { contactFactsFor, applyContactFacts } from "@/lib/ai/business-context";
+import { defaultHours } from "@/lib/business/hours";
 
 /**
  * The whole-registry check. Run with `npx tsx lib/sections/verify.ts [keyPrefix]`.
@@ -29,6 +31,31 @@ const collapsing = findCollapsingAutoFitGrids(css);
 console.log("== collapsing auto-fit grids ==");
 if (collapsing.length) collapsing.forEach((c) => fail(c));
 else console.log("  ok — none");
+
+/*
+ * Every fact the writer can produce, with values shaped as the real ones are:
+ * `hours` is the multi-line string formatHours() returns, which is what makes
+ * the list-versus-text distinction bite.
+ */
+const SAMPLE_FACTS = contactFactsFor({
+  businessName: "Verify Ltd",
+  categories: null,
+  tags: null,
+  city: "Bath",
+  state: null,
+  country: null,
+  phone: "01225 000 000",
+  email: "hello@example.com",
+  street: "12 Market Street",
+  postcode: "BA1 1AA",
+  website: null,
+  about: null,
+  services: [],
+  seoKeywords: null,
+  hours: defaultHours(),
+  logoUrl: null,
+});
+const FACT_FIELDS = Object.keys(SAMPLE_FACTS);
 
 /* Default to every section: a change to one section's CSS can break another's
  * class coverage, and the footer grid bug proved a whole-registry sweep is the
@@ -120,10 +147,44 @@ for (const s of targets) {
   const floor = isTemplatePart ? 10 : 40;
   if (previewText.length < floor) fail(`${s.key}: preview nearly empty (${previewText.length} chars)`);
 
+  /*
+   * 8. A contact fact cannot take the section down.
+   *
+   * The three fact-writers checked only that a section declared `hours`, not
+   * what type it declared, so the string "{{hours}}" was written into the two
+   * sections that declare it as a table of rows. toGutenberg threw on
+   * `(p.hours ?? []).filter`; in generation usable() swallowed the throw and
+   * contact-hours and footer-contact were dropped from every page of every
+   * business with hours on record, and from chat the props were persisted and
+   * the page threw on serialize from then on.
+   *
+   * Two assertions, because the fix has two halves. The section must survive a
+   * stray token (pages saved before the fix still carry one), and the writer
+   * must not produce one in the first place.
+   */
+  for (const field of FACT_FIELDS) {
+    if (!(field in s.fields)) continue;
+
+    try {
+      s.toGutenberg({ ...(s.sample as Record<string, unknown>), [field]: `{{${field}}}` } as never);
+    } catch (err) {
+      fail(`${s.key}: toGutenberg threw on ${field}="{{${field}}}" — ${(err as Error).message}`);
+    }
+
+    const written = applyContactFacts(s.sample as Record<string, unknown>, s.fields, SAMPLE_FACTS);
+    try {
+      s.toGutenberg(written as never);
+    } catch (err) {
+      fail(`${s.key}: toGutenberg threw on written facts — ${(err as Error).message}`);
+    }
+    if (s.fields[field].type === "list" && typeof written[field] === "string")
+      fail(`${s.key}: ${field} is a list field but the fact-writer wrote a string`);
+  }
+
   console.log(`  ${s.key.padEnd(20)} ${html.length} bytes, ${emitted.size} classes, preview ${previewText.length} chars`);
 }
 
-// 8. registry hygiene across ALL sections
+// 9. registry hygiene across ALL sections
 const keys = new Set<string>(), nodes = new Set<string>(), roots = new Set<string>();
 for (const s of SECTIONS) {
   if (keys.has(s.key)) fail(`duplicate key ${s.key}`); keys.add(s.key);
