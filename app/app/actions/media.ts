@@ -1,11 +1,10 @@
 "use server";
 
-import { createHash } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { mediaAssets } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { putSiteMedia } from "@/lib/media/store";
 import { canEditSite } from "@/app/actions/sites";
 
 /**
@@ -34,8 +33,6 @@ import { canEditSite } from "@/app/actions/sites";
  * tables yet, so this is the tenant boundary, not a second line of defence.
  * ─────────────────────────────────────────────────────────────────────
  */
-
-const BUCKET = "site-media";
 
 /** 10 MB. A photograph larger than this is one nobody meant to upload. */
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -142,63 +139,28 @@ export async function uploadMediaAction(form: FormData): Promise<UploadResult> {
   if (!actual) return { ok: false, error: "That doesn't look like an image file." };
   if (!ALLOWED.has(actual)) return { ok: false, error: "That image format isn't supported." };
 
-  const checksum = createHash("sha256").update(bytes).digest("hex");
-
-  /*
-   * The same picture uploaded twice is the most ordinary thing a client does,
-   * usually by dragging the same file in again. Returning the existing asset
-   * is kinder than either an error or a second copy — and the unique index
-   * would refuse the insert anyway.
-   */
-  const existing = await db.query.mediaAssets.findFirst({
-    where: and(
-      eq(mediaAssets.siteId, siteId),
-      eq(mediaAssets.checksum, checksum),
-      isNull(mediaAssets.deletedAt),
-    ),
-  });
-  if (existing) return { ok: true, asset: shape(existing), duplicate: true };
-
   const ext = ALLOWED.get(actual)!;
-  // A random segment, so one site's library cannot be walked from a URL.
-  const path = `${siteId}/${checksum.slice(0, 16)}.${ext}`;
-
-  const admin = createAdminClient();
-  const { error: putError } = await admin.storage
-    .from(BUCKET)
-    .upload(path, bytes, { contentType: actual, upsert: true });
-  if (putError) return { ok: false, error: `That upload didn't finish: ${putError.message}` };
-
-  const {
-    data: { publicUrl },
-  } = admin.storage.from(BUCKET).getPublicUrl(path);
-
   const size = readSize(bytes, actual);
 
-  const [row] = await db
-    .insert(mediaAssets)
-    .values({
-      siteId,
-      storagePath: path,
-      url: publicUrl,
-      filename: safeName(file.name, ext),
-      mimeType: actual,
-      byteSize: bytes.byteLength,
-      width: size?.width,
-      height: size?.height,
-      /*
-       * No alt yet, deliberately. Inventing one from the filename would put
-       * "IMG_4821" into a screen reader; the gallery asks for it instead.
-       */
-      alt: null,
-      title: null,
-      source: "upload",
-      checksum,
-      createdBy: userId,
-    })
-    .returning();
+  /*
+   * The storage core, shared with the publish path — see lib/media/store.ts.
+   * The checks above belong to a BROWSER upload; what a stored image is does
+   * not, and two places deciding that is how a bucket ends up with two
+   * conventions in it.
+   */
+  const put = await putSiteMedia({
+    siteId,
+    bytes,
+    contentType: actual,
+    filename: safeName(file.name, ext),
+    source: "upload",
+    width: size?.width,
+    height: size?.height,
+    createdBy: userId,
+  });
+  if (!put.ok) return put;
 
-  return { ok: true, asset: shape(row), duplicate: false };
+  return { ok: true, asset: shape(put.asset), duplicate: put.duplicate };
 }
 
 /**

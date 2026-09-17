@@ -1,152 +1,138 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { and, eq, isNull } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { mediaAssets } from "@/lib/db/schema";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
- * Where a Vibe site's images live.
+ * Putting bytes into the site's media library.
  *
  * ─────────────────────────────────────────────────────────────────────
- * WHY A SITE NEEDS ITS OWN COPY AT ALL
+ * WHY THIS IS NOT INSIDE app/actions/media.ts
  *
- * Generated content stores the Pexels CDN URL it was found at, and the canvas
- * loads it straight from there. That is fine for a preview and wrong for a
- * published website: every visitor to every client site would be fetching
- * photographs from a third party we do not control, under their terms, with
- * their availability. Export already solved this for WordPress by sideloading
- * into the media library — "an exported site has to be genuinely the client's
- * — portable" — and a Vibe site deserves the same answer.
+ * That module is "use server", and every function in it opens with
+ * canEditSite — correctly, because it is reached from a browser and is the
+ * tenant boundary. Publishing reaches the library too, from a server action
+ * that has ALREADY established access, and it holds bytes rather than a
+ * FormData from a file input.
  *
- * WHY AN INTERFACE WITH ONE IMPLEMENTATION
- *
- * Exactly the shape site_installations.driver established: "a hosted driver
- * can replace it later without anything above this file changing." Local disk
- * is right for now — the WordPress driver already writes whole installs to
- * ~/vibewp-sites, so this adds no constraint that is not already there. When
- * egress makes object storage worth it, that is a second implementation of
- * this interface, not a rewrite of every caller.
- *
- * WHY CONTENT-ADDRESSED
- *
- * The id is a hash of the bytes, so storing the same photograph twice is a
- * no-op and re-publishing is idempotent. It also makes every URL immutable,
- * which is what lets the route cache them forever — the alternative is a
- * random id plus a dedupe table plus a cache-busting scheme, to arrive at the
- * same place.
+ * Passing the upload through an action would mean either faking a FormData or
+ * checking the same permission twice; writing the bucket call a second time in
+ * the publish path would mean two places deciding what a stored image is. So
+ * the storage core lives here, the action wraps it with the checks a browser
+ * upload needs, and the publish path calls it directly.
  * ─────────────────────────────────────────────────────────────────────
  */
 
-export type StoredMedia = {
-  /** Content hash plus extension, e.g. "3f2a…c1.webp". Unique per byte-string. */
-  file: string;
-  /** Path this is served at, relative to whichever host is serving the site. */
-  url: string;
+export const BUCKET = "site-media";
+
+/**
+ * What may be stored. A declared type is a claim; callers that receive one
+ * from outside must sniff the bytes before reaching this.
+ */
+export const ALLOWED = new Map<string, string>([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+  ["image/avif", "avif"],
+  ["image/gif", "gif"],
+]);
+
+export type StoredAsset = typeof mediaAssets.$inferSelect;
+
+export type PutResult =
+  | { ok: true; asset: StoredAsset; duplicate: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Stores one image and records it, or returns the copy already held.
+ *
+ * Deduped on a checksum of the bytes, because the same picture arriving twice
+ * is the most ordinary thing that happens here — a client dragging the same
+ * file in again, or a re-publish walking the same page. Returning the existing
+ * asset is kinder than an error and honest about there being one file.
+ */
+export async function putSiteMedia(opts: {
+  siteId: string;
+  bytes: Buffer;
+  /** Must already be verified against the bytes when it came from outside. */
   contentType: string;
-  bytes: number;
-};
+  filename: string;
+  /** How it got here: "upload", "stock", "wordpress". Drives the gallery filter. */
+  source: string;
+  alt?: string | null;
+  width?: number;
+  height?: number;
+  createdBy?: string | null;
+}): Promise<PutResult> {
+  const { siteId, bytes, contentType, filename, source, alt, width, height, createdBy } = opts;
 
-export interface MediaStore {
-  put(opts: { siteId: string; data: Buffer; contentType: string }): Promise<StoredMedia>;
-  /** Null when nothing is stored under that name. */
-  read(siteId: string, file: string): Promise<{ data: Buffer; contentType: string } | null>;
-  has(siteId: string, file: string): Promise<boolean>;
-  remove(siteId: string, file: string): Promise<void>;
+  const ext = ALLOWED.get(contentType);
+  if (!ext) return { ok: false, error: "That image format isn't supported." };
+  if (bytes.byteLength === 0) return { ok: false, error: "That file is empty." };
+
+  const checksum = createHash("sha256").update(bytes).digest("hex");
+
+  const existing = await db.query.mediaAssets.findFirst({
+    where: and(
+      eq(mediaAssets.siteId, siteId),
+      eq(mediaAssets.checksum, checksum),
+      isNull(mediaAssets.deletedAt),
+    ),
+  });
+  if (existing) return { ok: true, asset: existing, duplicate: true };
+
+  // A random segment, so one site's library cannot be walked from a URL.
+  const path = `${siteId}/${checksum.slice(0, 16)}.${ext}`;
+
+  const admin = createAdminClient();
+  const { error: putError } = await admin.storage
+    .from(BUCKET)
+    .upload(path, bytes, { contentType, upsert: true });
+  if (putError) return { ok: false, error: `That upload didn't finish: ${putError.message}` };
+
+  const {
+    data: { publicUrl },
+  } = admin.storage.from(BUCKET).getPublicUrl(path);
+
+  const [row] = await db
+    .insert(mediaAssets)
+    .values({
+      siteId,
+      storagePath: path,
+      url: publicUrl,
+      filename,
+      mimeType: contentType,
+      byteSize: bytes.byteLength,
+      width,
+      height,
+      alt: alt ?? null,
+      title: null,
+      source,
+      checksum,
+      createdBy: createdBy ?? null,
+    })
+    .returning();
+
+  return { ok: true, asset: row, duplicate: false };
 }
 
 /**
- * Only formats a browser renders as an image, and that we are willing to
- * serve. SVG is deliberately absent: it can carry script, and this is served
- * from a host a client's visitors trust.
- */
-const EXTENSION: Record<string, string> = {
-  "image/webp": "webp",
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/gif": "gif",
-  "image/avif": "avif",
-};
-
-export function isServableImage(contentType: string): boolean {
-  return contentType.split(";")[0].trim().toLowerCase() in EXTENSION;
-}
-
-/** The content type a stored filename implies. Null if it is not one of ours. */
-export function contentTypeOf(file: string): string | null {
-  const ext = file.split(".").pop()?.toLowerCase();
-  const found = Object.entries(EXTENSION).find(([, e]) => e === ext);
-  return found ? found[0] : null;
-}
-
-/** A stored filename is a 32-char hex hash and a known extension. Nothing else. */
-export const MEDIA_FILE = /^[0-9a-f]{32}\.(?:webp|jpg|png|gif|avif)$/;
-
-/**
- * The root of the local store.
+ * The asset already held for these exact bytes, if any.
  *
- * Alongside the WordPress installs rather than inside the app: both are
- * client data that outlives a deploy, and putting either under the project
- * directory would mean a rebuild could delete a client's photographs.
+ * Read-only, for the renderer: serving a page must not write to a client's
+ * library as a side effect of somebody looking at it.
  */
-function mediaRoot(): string {
-  return (
-    process.env.VIBEWP_MEDIA_ROOT ??
-    join(process.env.VIBEWP_SITES_ROOT ?? join(homedir(), "vibewp-sites"), "_media")
-  );
-}
-
-function siteDir(siteId: string): string {
-  /* siteId reaches this from a URL segment. Validated rather than trusted:
-     a path separator here would be a directory traversal. */
-  if (!/^[0-9a-f-]{36}$/i.test(siteId)) throw new Error("Invalid site id for media path.");
-  return join(mediaRoot(), siteId);
-}
-
-export const localMediaStore: MediaStore = {
-  async put({ siteId, data, contentType }) {
-    const type = contentType.split(";")[0].trim().toLowerCase();
-    const ext = EXTENSION[type];
-    if (!ext) throw new Error(`Refusing to store ${contentType}.`);
-
-    const file = `${createHash("sha256").update(data).digest("hex").slice(0, 32)}.${ext}`;
-    const dir = siteDir(siteId);
-    await mkdir(dir, { recursive: true });
-
-    /* Content-addressed, so an existing file with this name already holds
-       exactly these bytes and rewriting it would be pure churn. */
-    const path = join(dir, file);
-    const already = await stat(path).catch(() => null);
-    if (!already) await writeFile(path, data);
-
-    return { file, url: mediaUrl(siteId, file), contentType: type, bytes: data.length };
-  },
-
-  async read(siteId, file) {
-    if (!MEDIA_FILE.test(file)) return null;
-    const type = contentTypeOf(file);
-    if (!type) return null;
-    const data = await readFile(join(siteDir(siteId), file)).catch(() => null);
-    return data ? { data, contentType: type } : null;
-  },
-
-  async has(siteId, file) {
-    if (!MEDIA_FILE.test(file)) return false;
-    return Boolean(await stat(join(siteDir(siteId), file)).catch(() => null));
-  },
-
-  async remove(siteId, file) {
-    if (!MEDIA_FILE.test(file)) return;
-    await rm(join(siteDir(siteId), file), { force: true });
-  },
-};
-
-/** Where a stored file is served. Relative, so it works on any host serving the site. */
-export function mediaUrl(siteId: string, file: string): string {
-  return `/media/${siteId}/${file}`;
-}
-
-/** The name a byte-string will be stored under, without storing it. */
-export function mediaFileFor(data: Buffer, contentType: string): string | null {
-  const ext = EXTENSION[contentType.split(";")[0].trim().toLowerCase()];
-  if (!ext) return null;
-  return `${createHash("sha256").update(data).digest("hex").slice(0, 32)}.${ext}`;
+export async function findSiteMediaByBytes(
+  siteId: string,
+  bytes: Buffer,
+): Promise<StoredAsset | undefined> {
+  const checksum = createHash("sha256").update(bytes).digest("hex");
+  return db.query.mediaAssets.findFirst({
+    where: and(
+      eq(mediaAssets.siteId, siteId),
+      eq(mediaAssets.checksum, checksum),
+      isNull(mediaAssets.deletedAt),
+    ),
+  });
 }

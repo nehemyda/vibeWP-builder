@@ -6,12 +6,12 @@ import { routeForHost } from "@/lib/render/hosting";
  * Paths that must keep meaning the same on every host.
  *
  * A Vibe site is served by THIS app through a rewrite, so its pages reference
- * /api/theme/sections.css, /media/... and /embed.js relatively and expect them
- * to answer. Rewriting those into the site renderer would ask it for a page called
+ * /api/theme/sections.css and /embed.js relatively and expect them to answer.
+ * Images are absolute, on the media bucket's own host, so they need no help. Rewriting those into the site renderer would ask it for a page called
  * "embed.js" — a 404, an unstyled site and a dead form. _next is the same
  * problem for the framework's own assets.
  */
-const SHARED_PREFIXES = ["/_next/", "/api/", "/media/", "/embed.js", "/favicon.ico", "/forms/"];
+const SHARED_PREFIXES = ["/_next/", "/api/", "/embed.js", "/favicon.ico", "/forms/"];
 
 export async function proxy(request: NextRequest) {
   /*

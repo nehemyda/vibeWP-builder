@@ -1,6 +1,5 @@
 import { getSectionByNodeType } from "@/lib/sections";
-import { isServableImage, localMediaStore, mediaFileFor, mediaUrl } from "./store";
-import type { MediaStore } from "./store";
+import { ALLOWED, findSiteMediaByBytes, putSiteMedia } from "./store";
 import type { FieldSpec } from "@/lib/sections/types";
 
 /**
@@ -33,41 +32,57 @@ const MAX_BYTES = 8_000_000;
  * alone". A hero pointing at Pexels is worse than one pointing at our own
  * disk, and far better than a publish that fails over a photograph.
  */
-async function adoptUrl(
-  store: MediaStore,
-  siteId: string,
-  url: string,
-): Promise<string | null> {
+async function adoptUrl(siteId: string, url: string, alt?: string): Promise<string | null> {
   try {
     const res = await fetch(url, { redirect: "follow" });
     if (!res.ok) return null;
 
-    const contentType = res.headers.get("content-type") ?? "";
-    if (!isServableImage(contentType)) return null;
+    const contentType = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    if (!ALLOWED.has(contentType)) return null;
 
-    const data = Buffer.from(await res.arrayBuffer());
-    if (data.length === 0 || data.length > MAX_BYTES) return null;
+    const bytes = Buffer.from(await res.arrayBuffer());
+    if (bytes.length === 0 || bytes.length > MAX_BYTES) return null;
 
-    return (await store.put({ siteId, data, contentType })).url;
+    /*
+     * Recorded as "stock", which is what it is. The column has always allowed
+     * it and nothing had ever written it — the gallery can filter on it, and a
+     * credit belongs to a stock photograph and not to a client's own upload.
+     *
+     * The alt travels with it: the section already has one written for this
+     * picture, and the library asking for it again would be asking twice.
+     */
+    const stored = await putSiteMedia({
+      siteId,
+      bytes,
+      contentType,
+      filename: `stock.${ALLOWED.get(contentType)}`,
+      source: "stock",
+      alt: alt?.trim() || null,
+    });
+    return stored.ok ? stored.asset.url : null;
   } catch {
     return null;
   }
 }
 
-/** Already ours, or a data URL — either way there is nothing to fetch. */
+/**
+ * Worth fetching: a remote address that is not already the site's own library.
+ *
+ * Matched on the bucket path rather than the host, because the public URL's
+ * origin is Supabase's and varies by project — the path does not.
+ */
 function isRemote(url: string | undefined): url is string {
-  return typeof url === "string" && /^https?:\/\//i.test(url) && !url.startsWith("/media/");
+  return typeof url === "string" && /^https?:\/\//i.test(url) && !url.includes("/site-media/");
 }
 
 async function adoptImageValue(
-  store: MediaStore,
   siteId: string,
   value: unknown,
 ): Promise<{ changed: boolean; value: unknown }> {
   const img = value as ImageValue | undefined;
   if (!img || typeof img !== "object" || !isRemote(img.url)) return { changed: false, value };
 
-  const url = await adoptUrl(store, siteId, img.url);
+  const url = await adoptUrl(siteId, img.url, typeof img.alt === "string" ? img.alt : undefined);
   if (!url) return { changed: false, value };
 
   /*
@@ -95,7 +110,6 @@ async function adoptImageValue(
 export async function adoptSchemaImages(
   siteId: string,
   schema: unknown,
-  store: MediaStore = localMediaStore,
 ): Promise<{ changed: boolean; schema: unknown }> {
   const nodes = (schema as { nodes?: Array<Record<string, unknown>> })?.nodes;
   if (!Array.isArray(nodes)) return { changed: false, schema };
@@ -113,7 +127,7 @@ export async function adoptSchemaImages(
       const fields = section.fields as Record<string, FieldSpec>;
       for (const [fieldName, spec] of Object.entries(fields)) {
         if (spec.type === "image") {
-          const r = await adoptImageValue(store, siteId, next[fieldName]);
+          const r = await adoptImageValue(siteId, next[fieldName]);
           if (r.changed) {
             next[fieldName] = r.value;
             changed = true;
@@ -135,7 +149,7 @@ export async function adoptSchemaImages(
             if (!item || typeof item !== "object") return item;
             const entry = { ...(item as Record<string, unknown>) };
             for (const key of imageKeys) {
-              const r = await adoptImageValue(store, siteId, entry[key]);
+              const r = await adoptImageValue(siteId, entry[key]);
               if (r.changed) {
                 entry[key] = r.value;
                 changed = true;
@@ -154,10 +168,10 @@ export async function adoptSchemaImages(
 }
 
 /** The decoded bytes of a stored logo data URL, or null if it is not one. */
-function decodeLogo(dataUrl: string): { data: Buffer; contentType: string } | null {
+function decodeLogo(dataUrl: string): { bytes: Buffer; contentType: string } | null {
   const m = dataUrl.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/);
   if (!m) return null;
-  return { contentType: m[1], data: Buffer.from(m[2], "base64") };
+  return { contentType: m[1], bytes: Buffer.from(m[2], "base64") };
 }
 
 /**
@@ -182,17 +196,22 @@ function decodeLogo(dataUrl: string): { data: Buffer; contentType: string } | nu
 export async function adoptLogo(
   siteId: string,
   dataUrl: string | null | undefined,
-  store: MediaStore = localMediaStore,
 ): Promise<string | null> {
   if (!dataUrl) return null;
   const decoded = decodeLogo(dataUrl);
   if (!decoded) return null;
 
-  try {
-    return (await store.put({ siteId, ...decoded })).url;
-  } catch {
-    return null;
-  }
+  const stored = await putSiteMedia({
+    siteId,
+    bytes: decoded.bytes,
+    contentType: decoded.contentType,
+    filename: `logo.${ALLOWED.get(decoded.contentType) ?? "png"}`,
+    /* The client did upload this — in intake, before a library existed to
+       put it in. */
+    source: "upload",
+    alt: null,
+  });
+  return stored.ok ? stored.asset.url : null;
 }
 
 /**
@@ -200,20 +219,16 @@ export async function adoptLogo(
  *
  * Used when rendering, which must not write. Falls back to null so the caller
  * can serve the data URL, which is always correct if larger: a logo changed
- * since the last publish has no file yet, and a broken image would be worse
+ * since the last publish has no asset yet, and a broken image would be worse
  * than a heavy one.
  */
 export async function storedLogoUrl(
   siteId: string,
   dataUrl: string | null | undefined,
-  store: MediaStore = localMediaStore,
 ): Promise<string | null> {
   if (!dataUrl) return null;
   const decoded = decodeLogo(dataUrl);
   if (!decoded) return null;
 
-  const file = mediaFileFor(decoded.data, decoded.contentType);
-  if (!file) return null;
-
-  return (await store.has(siteId, file)) ? mediaUrl(siteId, file) : null;
+  return (await findSiteMediaByBytes(siteId, decoded.bytes))?.url ?? null;
 }

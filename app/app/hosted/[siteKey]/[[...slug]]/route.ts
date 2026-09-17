@@ -126,7 +126,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ siteKey: st
     return new Response(
       sitemapXml(
         home,
-        pages.map((p) => p.slug),
+        pages.filter((p) => !p.noIndex).map((p) => p.slug),
       ),
       { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "no-store" } },
     );
@@ -190,13 +190,29 @@ export async function GET(request: Request, ctx: { params: Promise<{ siteKey: st
   const canonical = home ? (wanted === "home" ? `${home}/` : `${home}/${wanted}`) : null;
   const viaHost = request.headers.get(VIA_HOST);
 
+  /*
+   * The page's OWN meta tags win, then a sensible derivation.
+   *
+   * site_pages.meta_title and friends are what the SEO panel writes and what
+   * export sends to WordPress as post meta. A Vibe page has to read the same
+   * fields or the identical page would describe itself one way on our hosting
+   * and another way after an upgrade — and the client would have edited the
+   * ones that stopped applying.
+   */
   const title =
-    page.title?.trim() && wanted !== "home" ? `${page.title.trim()} — ${site.name}` : site.name;
-  const description = profile?.aboutText?.trim()?.slice(0, 300) || null;
+    page.metaTitle?.trim() ||
+    (page.title?.trim() && wanted !== "home" ? `${page.title.trim()} — ${site.name}` : site.name);
+  const description =
+    page.metaDescription?.trim() || profile?.aboutText?.trim()?.slice(0, 300) || null;
 
-  /* Absolute, because a crawler building a link preview has no page to resolve
-     a relative URL against. */
-  const absoluteLogo = storedLogo && home ? `${home}${storedLogo}` : null;
+  /* An explicit canonical overrides the address we would have chosen — that is
+     the entire point of the field. */
+  const pageCanonical = page.canonicalUrl?.trim() || canonical;
+
+  /* Already absolute: the media bucket serves on its own host, which is also
+     why a crawler building a link preview can fetch it. The stored data URL
+     cannot be fetched, so it is not offered as one. */
+  const absoluteLogo = storedLogo;
 
   /* Structured data describes the BUSINESS, so it belongs on the page that
      represents it rather than on all of them. */
@@ -218,7 +234,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ siteKey: st
       : null;
 
   const head = [
-    socialMetaTags({ title, description, canonical, siteName: site.name, imageUrl: absoluteLogo }),
+    socialMetaTags({ title, description, canonical: pageCanonical, siteName: site.name, imageUrl: absoluteLogo }),
     jsonLd ? `<script type="application/ld+json">${jsonLd}</script>` : "",
   ]
     .filter(Boolean)
@@ -231,15 +247,15 @@ export async function GET(request: Request, ctx: { params: Promise<{ siteKey: st
     title,
     description,
     colors: resolveBrandColors(site.brandPaletteKey, site.brandColors),
-    canonical,
-    noindex: !viaHost,
+    canonical: pageCanonical,
+    noindex: !viaHost || page.noIndex,
     head,
   });
 
   return new Response(document, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      ...(viaHost ? {} : { "X-Robots-Tag": "noindex" }),
+      ...(viaHost && !page.noIndex ? {} : { "X-Robots-Tag": "noindex" }),
       /*
        * Not cached yet. A published page changes the moment its owner edits it
        * in the builder, and there is no invalidation path — serving a stale
