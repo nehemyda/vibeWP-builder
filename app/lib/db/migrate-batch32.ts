@@ -1,7 +1,7 @@
 /**
  * Raw-SQL migration: the address a Vibe site is served at.
  * Safe to re-run.
- * Run with: npx tsx lib/db/migrate-batch28.ts
+ * Run with: npx tsx lib/db/migrate-batch32.ts
  *
  * Nullable and unassigned. A subdomain is claimed at publish, not at
  * creation — backfilling every draft would hand out the good names to sites

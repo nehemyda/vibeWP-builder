@@ -21,13 +21,38 @@ import {
 import { detectIntent } from "@/lib/page-intent";
 import type { SiteMode } from "@/lib/db/schema";
 import { composePageBody } from "@/lib/render/page-document";
+import { getSectionByKey, getSectionByNodeType } from "@/lib/sections";
+import {
+  applyCanvasOpAction,
+  applyCanvasPasteAction,
+  type CanvasOp,
+  type CanvasPasteOp,
+  type EditResult,
+} from "@/app/actions/edit";
+import { readClip, writeClip, type Clip } from "@/lib/design/clipboard";
+import { setSectionImageAction } from "@/app/actions/edit";
+import { MediaPanel } from "./MediaPanel";
+import { SiteDashboard, type DashboardTab } from "./SiteDashboard";
+import { SeoPanel } from "./SeoPanel";
+import { ImagesTab } from "./ImagesTab";
+import { SCREENS, fieldFor as hideField } from "@/lib/design/part-visibility";
+import { widthFieldFor } from "@/lib/design/part-size";
+import { PART_ORDER_FIELD } from "@/lib/design/part-order";
 import {
   schemaToGutenberg,
   sectionToTemplatePart,
   withPreviewPlaceholders,
   withSiteLogo,
 } from "@/lib/wp/serialize";
-import { PreviewFrame } from "./PreviewFrame";
+import { PreviewFrame, type CanvasSelection, type SectionBox } from "./PreviewFrame";
+import { CanvasOverlay } from "./CanvasOverlay";
+import { Composer, WorkingCover } from "./Composer";
+import { DesignPanel, type CatalogueEntry } from "./DesignPanel";
+import { StylePanel } from "./StylePanel";
+import { saveDesignTokensAction } from "@/app/actions/design";
+import { sanitiseTokens, type DesignTokens } from "@/lib/design/tokens";
+import { SECTION_STYLE_OPTIONS, sectionOwnOptions } from "@/lib/design/section-style";
+import { ELEMENT_ROLES } from "@/lib/design/element-style";
 import { WordPressLockNotice } from "./WordPressLockNotice";
 import { SiteDetailsDrawer, type SiteDetails } from "./SiteDetailsDrawer";
 import type { WpEditLock } from "@/lib/wp/local-driver";
@@ -184,9 +209,12 @@ const ReloadIcon = () => (
 );
 
 export function BuilderApp({
+  catalogue,
+  initialDesignTokens,
   siteId,
   smbId,
   initialPages,
+  initialPanel,
   initialMessages,
   initialWpUrl,
   initialHistory,
@@ -205,9 +233,21 @@ export function BuilderApp({
   prompt,
   autostart,
 }: {
+  /**
+   * The designs this site may use, resolved on the server.
+   *
+   * Policy only — which sections are switched on, what the admin renamed them
+   * to, which plans may use them. The structure comes from the registry, which
+   * the client already imports for the canvas.
+   */
+  catalogue: CatalogueEntry[];
+  /** The site's hand-set design values, or {} when it is all as designed. */
+  initialDesignTokens: DesignTokens;
   siteId: string;
   smbId: string;
   initialPages: PageSummary[];
+  /** ?panel=, read by the server so hydration cannot disagree about it. */
+  initialPanel?: string;
   initialMessages: StoredMessage[];
   initialWpUrl: string | null;
   /** Undo/redo depth for the page shown on load, so the buttons are correct immediately. */
@@ -321,6 +361,119 @@ export function BuilderApp({
    * failed to load, none of which a prop change clears.
    */
   const [reloadKey, setReloadKey] = useState(0);
+
+  /* ---- canvas selection ---- */
+  /**
+   * The page's nodes, typed.
+   *
+   * `schema` is held as a loose record because it arrives as a server prop and
+   * is written back as jsonb; the canvas needs to read a node's type and props,
+   * so the narrowing happens once here rather than at each use.
+   */
+  const nodes = (schema?.nodes ?? []) as Array<{
+    type?: string;
+    props?: Record<string, unknown>;
+  }>;
+
+  const [selection, setSelection] = useState<CanvasSelection | null>(null);
+  const [boxes, setBoxes] = useState<SectionBox[]>([]);
+  const [designFor, setDesignFor] = useState<CanvasSelection | null>(null);
+  /*
+   * The design each section had when its panel was opened, so "back to how it
+   * was" survives trying five in a row. Session-only and per section: the
+   * durable route back is the revision history, which every swap writes to.
+   */
+  const [swapOrigin, setSwapOrigin] = useState<Record<string, string>>({});
+  /*
+   * What the canvas is doing right now, or null.
+   *
+   * A sentence rather than a boolean because the cover repeats it: a swap that
+   * has to write new copy takes about five seconds, and a page that simply sits
+   * there for five seconds after a click reads as a click that did not land.
+   */
+  const [canvasBusy, setCanvasBusy] = useState<string | null>(null);
+
+  /* ---- hand-set design values ---- */
+  const [designTokens, setDesignTokens] = useState<DesignTokens>(initialDesignTokens);
+  /*
+   * Which section is being EDITED, as opposed to merely selected.
+   *
+   * Selecting a section used to make every string in it typeable at once, so
+   * there was no way to just point at one: clicking to move or duplicate a
+   * section dropped a caret into whatever word was under the cursor. Editing
+   * is a mode now, entered from the section bar, and nothing is editable
+   * until it is on.
+   */
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  /*
+   * Which photograph the library is filling. Null with the panel open means
+   * it was opened on its own, to upload and tidy up rather than to choose.
+   */
+  const [mediaTarget, setMediaTarget] = useState<{
+    index: number;
+    path: string;
+    label: string;
+  } | null>(null);
+  const [mediaOpen, setMediaOpen] = useState(false);
+  /*
+   * Which parts the selected section actually rendered, reported by the
+   * canvas. Read from the page rather than from a registry of which section
+   * owns an eyebrow: the markup is the truth about what is there, and a
+   * second description of it would drift the first time a design changed.
+   */
+  const [renderedParts, setRenderedParts] = useState<string[]>([]);
+  /*
+   * The dashboard tab, or null when it is closed.
+   *
+   * Seeded from the SERVER's reading of ?panel=, so it survives a reload and
+   * can be opened by link. Read from window.location instead and the server
+   * renders no active tab while the client renders one, which fails hydration
+   * on the top bar's classes.
+   */
+  const [dashTab, setDashTab] = useState<DashboardTab | null>(() =>
+    initialPanel === "style" || initialPanel === "images" || initialPanel === "seo"
+      ? initialPanel
+      : null,
+  );
+
+  /*
+   * Kept in the URL without a navigation. replaceState rather than the router,
+   * because a route change would re-render the tree and rebuild the canvas —
+   * the dashboard's whole promise is that the page underneath is untouched.
+   */
+  /*
+   * Committing the site's design tokens.
+   *
+   * Shared, because the same sliders now appear in two places — the dashboard
+   * and the section panel's site-wide view — and two copies of "save then
+   * trust what came back" is one copy too many.
+   */
+  const commitTokens = (next: DesignTokens) => {
+    setDesignTokens(next);
+    void saveDesignTokensAction({ siteId, tokens: next }).then((result) => {
+      // The server sanitises, so what it returns is the truth about what was
+      // stored — including a value it refused.
+      if (result.ok) setDesignTokens(result.tokens);
+    });
+  };
+
+  const openDash = (tab: DashboardTab | null) => {
+    setDashTab(tab);
+    /*
+     * No typeof window guard: this only ever runs from a click, and a needless
+     * one here would suggest the render-time version of the same branch is
+     * acceptable. It is not — that is what broke hydration.
+     */
+    const url = new URL(window.location.href);
+    if (tab) url.searchParams.set("panel", tab);
+    else url.searchParams.delete("panel");
+    window.history.replaceState(null, "", url);
+  };
+  const [styleOpen, setStyleOpen] = useState(false);
+  /** Which section the style panel is showing, or null for the whole site. */
+  const [styleFor, setStyleFor] = useState<CanvasSelection | null>(null);
+  /** Whether chat was open before the style panel took its place. */
+  const chatWasOpen = useRef(true);
   /** Seeded from the server so an already-exported site shows its links on load. */
   const [wpUrl, setWpUrl] = useState<string | null>(initialWpUrl);
   const [pages, setPages] = useState<PageSummary[]>(initialPages);
@@ -570,6 +723,26 @@ export function BuilderApp({
     } finally {
       setStepping(false);
     }
+  }
+
+  /**
+   * Re-reads the pages from the server and repaints everything that follows.
+   *
+   * The tail of every successful write, extracted because a second caller
+   * arrived: the Images tab can now take a photograph off a page, and the
+   * dashboard sits OVER the canvas — so without this the client removes a
+   * picture, closes the dashboard, and the section still shows it. The canvas
+   * had no route back from a change made outside it.
+   *
+   * It re-reads rather than patching local state for the same reason paintFrom
+   * exists: the server is what the export will use, so the canvas should be
+   * showing what the server holds and not a guess at it.
+   */
+  async function repaintFromServer(slug: string) {
+    const refreshed = await listPagesAction(siteId);
+    setPages(refreshed);
+    paintFrom(refreshed, slug);
+    await refreshHistory(slug);
   }
 
   /**
@@ -901,6 +1074,171 @@ export function BuilderApp({
    * produced the same six sections and reported success — work claimed but not
    * done. If the instruction cannot be carried out, this now says so instead.
    */
+  /* ── the canvas as an editor ──────────────────────────────────────── */
+
+  /** The registry key of whatever is selected — the design in place now. */
+  function keyOfSelection(sel: CanvasSelection): string | undefined {
+    if (sel.kind === "chrome") {
+      const node = sel.slot === "header" ? chrome.header : chrome.footer;
+      return node ? getSectionByNodeType(node.type)?.key : undefined;
+    }
+    return getSectionByNodeType(nodes[sel.index]?.type)?.key;
+  }
+
+  function labelOfSelection(sel: CanvasSelection): string {
+    const key = keyOfSelection(sel);
+    const name = key ? getSectionByKey(key)?.name : undefined;
+    if (name) return name;
+    return sel.kind === "chrome" ? (sel.slot === "header" ? "Header" : "Footer") : "Section";
+  }
+
+  /** The props the selected thing holds now, which is what a swap carries. */
+  function propsOfSelection(sel: CanvasSelection): Record<string, unknown> {
+    if (sel.kind === "chrome") {
+      const node = sel.slot === "header" ? chrome.header : chrome.footer;
+      return (node?.props ?? {}) as Record<string, unknown>;
+    }
+    return nodes[sel.index]?.props ?? {};
+  }
+
+  /**
+   * One structured change from the canvas.
+   *
+   * The reply lands in the transcript like any other edit. A change made by
+   * clicking is still a change to the site, and a client who then asks chat
+   * "what did you just do" should find it there — and the history buttons and
+   * "undo" read the same revision either way.
+   */
+
+  /*
+   * Copying is the one action here that changes nothing on the server, so it
+   * cannot report itself through the transcript the way every other click
+   * does — a line in the history saying "Copied the hero" would claim an edit
+   * that never happened. It gets a passing note instead.
+   */
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 2400);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  const runCanvasPaste = (op: CanvasPasteOp, spoken: string) =>
+    runCanvasEdit(spoken, () => applyCanvasPasteAction({ siteId, slug: activeSlug, op }));
+
+  const runCanvasOp = (op: CanvasOp, spoken: string) =>
+    runCanvasEdit(spoken, () => applyCanvasOpAction({ siteId, slug: activeSlug, op }));
+
+  /*
+   * Everything a click changes goes through here.
+   *
+   * The action varies — an op, a paste, a picture — but what happens around
+   * it must not: the busy cover, the line in the transcript, re-reading the
+   * pages and repainting, and the history refresh. Passing the action in
+   * rather than branching on its kind is what keeps a new kind of edit from
+   * quietly acquiring three of those four.
+   */
+  async function runCanvasEdit(spoken: string, run: () => Promise<EditResult>) {
+    setCanvasBusy(spoken);
+    const aiId = nextId();
+    setMessages((prev) => [...prev, { id: aiId, role: "ai", text: `${spoken}…`, steps: [] }]);
+
+    let result;
+    try {
+      result = await run();
+    } catch {
+      const failed = "I couldn't reach the builder. Nothing was changed.";
+      setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: failed } : m)));
+      remember("ai", failed);
+      setCanvasBusy(null);
+      return;
+    }
+
+    // Chrome lives on the site, not the page, so nothing below carries it.
+    if (result.ok && "chrome" in result && result.chrome) {
+      setChrome(result.chrome as typeof chrome);
+    }
+    if (result.ok) await repaintFromServer(activeSlug);
+
+    setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: result.message } : m)));
+    remember("ai", result.message);
+    setCanvasBusy(null);
+  }
+
+  /*
+   * Chat steps aside while styling, and comes back afterwards.
+   *
+   * Styling is a looking task — you want the widest canvas you can get and
+   * your eye on the page, not on a transcript. The assistant is one click
+   * away on its launcher throughout, so nothing is lost; what it stops is a
+   * three-column squeeze with the canvas as the narrowest of them.
+   */
+  /**
+   * The three panels share the right-hand edge, so opening one closes the
+   * others.
+   *
+   * Routed through functions rather than each caller setting its own flag:
+   * making the PANELS exclusive was not enough, because the Ask AI launcher
+   * set chatOpen directly and happily opened chat beside a panel that was
+   * already there. Two columns on one edge halve the canvas, which is the
+   * thing being looked at.
+   */
+  function openChat() {
+    setStyleOpen(false);
+    setStyleFor(null);
+    setDesignFor(null);
+    setChatOpen(true);
+  }
+
+  function openStylePanel() {
+    chatWasOpen.current = chatOpen;
+    setChatOpen(false);
+    // One panel at a time on that edge, or two would stack and halve the
+    // canvas. They answer different questions and are never both wanted.
+    setDesignFor(null);
+    setStyleOpen(true);
+  }
+
+  function closeStylePanel() {
+    setStyleOpen(false);
+    setStyleFor(null);
+    setEditingIndex(null);
+    // Back to whatever it was, rather than assuming it was open — a client who
+    // had deliberately collapsed chat should not find it reopened for them.
+    setChatOpen(chatWasOpen.current);
+  }
+
+  function openDesignPanel(sel: CanvasSelection) {
+    // Same edge, so the style panel gives way — see openStylePanel.
+    setStyleOpen(false);
+    setStyleFor(null);
+    const key = keyOfSelection(sel);
+    const id = sel.kind === "chrome" ? sel.slot : `n${sel.index}`;
+    // Remembered once per section, on the first open, so it is the design they
+    // started from rather than the one they tried a moment ago.
+    if (key) setSwapOrigin((prev) => (id in prev ? prev : { ...prev, [id]: key }));
+    setDesignFor(sel);
+    // The panel takes the chat pane's slot, so chat steps aside for it.
+    setChatOpen(false);
+  }
+
+  function pickDesign(sel: CanvasSelection, design: string) {
+    const name = getSectionByKey(design)?.name ?? "that design";
+    if (sel.kind === "chrome") {
+      void runCanvasOp(
+        { kind: "swap_chrome", slot: sel.slot, section: design },
+        `Changing your ${sel.slot} to the ${name}`,
+      );
+      return;
+    }
+    const ref = nodes[sel.index]?.type;
+    if (!ref) return;
+    void runCanvasOp(
+      { kind: "swap_section", section: ref, design },
+      `Changing the ${labelOfSelection(sel)} to the ${name}`,
+    );
+  }
+
   async function runEdit(text: string) {
     setGenerating(true);
     setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
@@ -950,12 +1288,7 @@ export function BuilderApp({
       return;
     }
 
-    if (result.ok) {
-      const refreshed = await listPagesAction(siteId);
-      setPages(refreshed);
-      paintFrom(refreshed, activeSlug);
-      await refreshHistory(activeSlug);
-    }
+    if (result.ok) await repaintFromServer(activeSlug);
 
     setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, text: result.message } : m)));
     remember("ai", result.message);
@@ -1127,6 +1460,45 @@ export function BuilderApp({
             title="Business name, contact details, services and colours"
           >
             Business details
+          </button>
+
+          {/*
+            Beside Business details, because they are the same kind of thing:
+            what the site IS, and what it LOOKS like. Both belong next to the
+            page being edited rather than in a settings screen the client has
+            to leave the builder for.
+          */}
+          <button
+            type="button"
+            className={`${styles.detailsBtn} ${dashTab === "style" ? styles.detailsBtnOn : ""}`}
+            onClick={() => openDash(dashTab === "style" ? null : "style")}
+            title="Heading size, spacing, corners and page width"
+            aria-pressed={dashTab === "style"}
+          >
+            Style
+          </button>
+          {/*
+            The library, openable on its own so images can be uploaded before
+            there is anywhere to put them — which is the usual order: a client
+            gathers their photographs first and places them afterwards.
+          */}
+          <button
+            type="button"
+            className={`${styles.detailsBtn} ${dashTab === "images" ? styles.detailsBtnOn : ""}`}
+            onClick={() => openDash(dashTab === "images" ? null : "images")}
+            title="Your uploaded images"
+            aria-pressed={dashTab === "images"}
+          >
+            Images
+          </button>
+          <button
+            type="button"
+            className={`${styles.detailsBtn} ${dashTab === "seo" ? styles.detailsBtnOn : ""}`}
+            onClick={() => openDash(dashTab === "seo" ? null : "seo")}
+            title="Page titles and descriptions for search engines"
+            aria-pressed={dashTab === "seo"}
+          >
+            SEO
           </button>
         </div>
 
@@ -1369,19 +1741,13 @@ export function BuilderApp({
               ),
             )}
           </div>
-          <div className={styles.chatInput}>
-            <form onSubmit={onSendMessage}>
-              <input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="Ask VibeWP to change something…"
-                disabled={generating}
-              />
-              <button type="submit" disabled={generating || !draft.trim()}>
-                Send
-              </button>
-            </form>
-          </div>
+          <Composer
+            draft={draft}
+            onDraft={setDraft}
+            onSubmit={onSendMessage}
+            busy={generating}
+            scope={pages.find((p) => p.slug === activeSlug)?.title ?? activeSlug}
+          />
         </div>
 
         <div
@@ -1423,6 +1789,9 @@ export function BuilderApp({
                       footer: chrome.footer,
                       schema,
                       hasLogo: Boolean(intake.data.logoUrl),
+                      // The canvas is an editor now: a click has to trace back
+                      // to a node. Off for a served page and for export.
+                      markNodes: true,
                     }),
                     {
                       businessName: siteName,
@@ -1440,6 +1809,7 @@ export function BuilderApp({
                   // The palette the client chose, so the canvas is that site's
                   // colours rather than the theme's defaults.
                   colors={intake.data.colors}
+                  designTokens={designTokens}
                   /*
                    * Clicking the canvas menu edits that page, which is the
                    * nearest honest equivalent to what the link does on the live
@@ -1450,6 +1820,182 @@ export function BuilderApp({
                   onNavigate={(slug) => {
                     if (pages.some((p) => p.slug === slug)) switchToPage(slug);
                   }}
+                  selection={selection}
+                  onSelect={(sel) => {
+                    setSelection(sel);
+                    /*
+                     * Leaving a section leaves its edit mode.
+                     *
+                     * Without this the mode outlives the visit: come back to a
+                     * section edited earlier and it would be typeable again
+                     * without anyone pressing Edit — which is most of the
+                     * behaviour the mode was added to remove. Indices also
+                     * shift when sections are moved or duplicated, so a
+                     * remembered one can end up naming a different section
+                     * altogether.
+                     */
+                    if (sel?.kind !== "node" || sel.index !== editingIndex) {
+                      setEditingIndex(null);
+                    }
+                    /*
+                     * Selecting a section opens the style panel on its own —
+                     * it used to only appear once Edit was clicked, which is
+                     * one click more than "select a section, see its style
+                     * controls" implies. Edit still exists for making text
+                     * typeable; it no longer has to be entered just to see
+                     * what a section's own settings are.
+                     *
+                     * openStylePanel() is safe to call every time a node is
+                     * selected — it collapses chat and clears the design
+                     * panel on that same edge, which is one panel too many
+                     * regardless of how this one opened.
+                     */
+                    if (sel?.kind === "node") {
+                      setStyleFor(sel);
+                      if (!styleOpen) openStylePanel();
+                    } else if (styleOpen) {
+                      // Deselecting (clicking the canvas background, a
+                      // different kind of target) closes it rather than
+                      // leaving it pointed at a section no longer outlined.
+                      closeStylePanel();
+                    }
+                    // Clicking a different section while the panel is open
+                    // retargets it, rather than leaving it pointed at the
+                    // section that is no longer outlined.
+                    if (sel && designFor) openDesignPanel(sel);
+                    if (!sel) setDesignFor(null);
+                  }}
+                  onGeometry={setBoxes}
+                  /*
+                   * Only the SELECTED section's props: the frame makes text
+                   * editable in that section alone, so handing it the whole
+                   * page would be work it throws away on every click.
+                   */
+                  /*
+                   * undefined unless this section is in edit mode, which is
+                   * the whole gate: PreviewFrame makes nothing editable
+                   * without props to match text against.
+                   */
+                  editableProps={
+                    selection?.kind === "node" && editingIndex === selection.index
+                      ? nodes[selection.index]?.props
+                      : undefined
+                  }
+                  onParts={setRenderedParts}
+                  onPartAction={(action, part, parts) => {
+                    if (selection?.kind !== "node") return;
+                    const ref = nodes[selection.index]?.type;
+                    if (!ref) return;
+                    const label = labelOfSelection(selection);
+
+                    if (action === "replace") {
+                      // The photo's own path, found the way the picker finds it.
+                      setMediaTarget({ index: selection.index, path: "image", label });
+                      setMediaOpen(true);
+                      return;
+                    }
+
+                    /*
+                     * A drag brings the whole new order with it — the canvas
+                     * worked it out from where the pointer let go, and the
+                     * server should not have to reconstruct that from a
+                     * direction.
+                     */
+                    if (action.startsWith("order:")) {
+                      void runCanvasOp(
+                        { kind: "move_part", section: ref, order: action.slice("order:".length) },
+                        `Rearranging the ${label}`,
+                      );
+                      return;
+                    }
+
+                    if (action === "up" || action === "down") {
+                      const from = parts.indexOf(part);
+                      const to = from + (action === "up" ? -1 : 1);
+                      if (from < 0 || to < 0 || to >= parts.length) return;
+                      const next = [...parts];
+                      next.splice(to, 0, next.splice(from, 1)[0]);
+                      void runCanvasOp(
+                        { kind: "move_part", section: ref, order: next.join(",") },
+                        `Rearranging the ${label}`,
+                      );
+                      return;
+                    }
+
+                    if (action === "delete") {
+                      void runCanvasOp(
+                        { kind: "remove_part", section: ref, part },
+                        `Removing part of the ${label}`,
+                      );
+                      return;
+                    }
+
+                    /*
+                     * "-open" actions are submenu toggles handled in the
+                     * canvas and never reach here; the belt-and-braces check
+                     * is because dispatching a width of "open" would be a
+                     * refusal the client could not interpret.
+                     */
+                    if (action.startsWith("width-") && !action.endsWith("-open")) {
+                      void runCanvasOp(
+                        {
+                          kind: "set_option",
+                          section: ref,
+                          option: widthFieldFor(part),
+                          value: action.slice("width-".length),
+                        },
+                        `Resizing part of the ${label}`,
+                      );
+                      return;
+                    }
+
+                    if (action.startsWith("hide-")) {
+                      const which = action.slice("hide-".length);
+                      const props = nodes[selection.index]?.props as
+                        | Record<string, unknown>
+                        | undefined;
+                      const screens = which === "all" ? SCREENS : SCREENS.filter((s) => s.key === which);
+                      /*
+                       * "All screen sizes" is a toggle, not a set: if every
+                       * one is already ticked it unhides, which is the only
+                       * way back from a part hidden everywhere.
+                       */
+                      const allOn = SCREENS.every((s) => props?.[hideField(part, s.key)] === true);
+                      const value =
+                        which === "all"
+                          ? !allOn
+                          : props?.[hideField(part, which)] !== true;
+                      for (const screen of screens) {
+                        void runCanvasOp(
+                          {
+                            kind: "set_option",
+                            section: ref,
+                            option: hideField(part, screen.key),
+                            value: String(value),
+                          },
+                          `${value ? "Hiding" : "Showing"} part of the ${label}`,
+                        );
+                      }
+                    }
+                  }}
+                  onPickImage={(path) => {
+                    if (selection?.kind !== "node") return;
+                    setMediaTarget({
+                      index: selection.index,
+                      path,
+                      label: labelOfSelection(selection),
+                    });
+                    setMediaOpen(true);
+                  }}
+                  onEditText={(path, value) => {
+                    if (selection?.kind !== "node") return;
+                    const ref = nodes[selection.index]?.type;
+                    if (!ref) return;
+                    void runCanvasOp(
+                      { kind: "set_text", section: ref, path, value },
+                      `Saving your edit to the ${labelOfSelection(selection)}`,
+                    );
+                  }}
                 />
               ) : (
                 <div className={styles.emptyCanvas}>
@@ -1458,15 +2004,305 @@ export function BuilderApp({
                     : "Nothing built yet — describe your business in the chat to get started."}
                 </div>
               )}
+
+              {schema && (
+                <CanvasOverlay
+                  boxes={boxes}
+                  selection={selection}
+                  labelFor={labelOfSelection}
+                  busy={Boolean(canvasBusy) || generating}
+                  onChangeDesign={openDesignPanel}
+                  editing={selection?.kind === "node" && editingIndex === selection.index}
+                  onEdit={(sel) => {
+                    if (sel.kind !== "node") return;
+                    if (editingIndex === sel.index) {
+                      /*
+                       * Done leaves TEXT editing. The section is still
+                       * selected — selecting it is what opens the style panel
+                       * now, not entering edit mode — so the panel stays
+                       * exactly as it was rather than closing under a click
+                       * that never touched the selection.
+                       */
+                      setEditingIndex(null);
+                      return;
+                    }
+                    setEditingIndex(sel.index);
+                    // Already open from selecting this section; harmless to
+                    // repeat, and correct on the rare path that reaches Edit
+                    // without a selection event having fired first.
+                    setStyleFor(sel);
+                    openStylePanel();
+                  }}
+                  onMove={(sel, direction) => {
+                    if (sel.kind !== "node") return;
+                    const to = sel.index + direction;
+                    const mine = nodes[sel.index]?.type;
+                    const neighbour = nodes[to]?.type;
+                    if (!mine || !neighbour) return;
+                    /*
+                     * Named by the NEIGHBOUR rather than by an index, because
+                     * that is what move_section takes: it places a section
+                     * before or after another one, so "up" is "before the one
+                     * above" and "down" is "after the one below".
+                     */
+                    void runCanvasOp(
+                      direction < 0
+                        ? { kind: "move_section", section: mine, before: neighbour }
+                        : { kind: "move_section", section: mine, after: neighbour },
+                      `Moving the ${labelOfSelection(sel)} ${direction < 0 ? "up" : "down"}`,
+                    );
+                    setSelection({ kind: "node", index: to });
+                  }}
+                  onRemove={(sel) => {
+                    if (sel.kind !== "node") return;
+                    const mine = nodes[sel.index]?.type;
+                    if (!mine) return;
+                    void runCanvasOp(
+                      { kind: "remove_section", section: mine },
+                      `Removing the ${labelOfSelection(sel)}`,
+                    );
+                    setSelection(null);
+                    setDesignFor(null);
+                  }}
+                  getClip={() => readClip(siteId)}
+                  onDuplicate={(sel) => {
+                    if (sel.kind !== "node") return;
+                    void runCanvasOp(
+                      { kind: "duplicate_section", index: sel.index },
+                      `Duplicating the ${labelOfSelection(sel)}`,
+                    );
+                  }}
+                  onCopy={(sel, what) => {
+                    if (sel.kind !== "node") return;
+                    /*
+                     * Copying touches nothing on the server. It records where
+                     * the section is; paste is what reads it, and reads it
+                     * then rather than now — so a section edited between the
+                     * two pastes as it stands, not as it was.
+                     */
+                    const next: Clip = {
+                      siteId,
+                      slug: activeSlug,
+                      index: sel.index,
+                      label: labelOfSelection(sel),
+                      kind: what,
+                    };
+                    writeClip(next);
+                    setToast(
+                      what === "style"
+                        ? `Copied the ${next.label}'s style`
+                        : `Copied the ${next.label}`,
+                    );
+                  }}
+                  onPaste={(sel, what) => {
+                    const clip = readClip(siteId);
+                    if (sel.kind !== "node" || !clip) return;
+                    void runCanvasPaste(
+                      what === "style"
+                        ? {
+                            kind: "paste_style",
+                            fromSlug: clip.slug,
+                            fromIndex: clip.index,
+                            index: sel.index,
+                          }
+                        : {
+                            kind: "paste_section",
+                            fromSlug: clip.slug,
+                            fromIndex: clip.index,
+                            afterIndex: sel.index,
+                          },
+                      what === "style"
+                        ? `Pasting the style onto the ${labelOfSelection(sel)}`
+                        : `Pasting the ${clip.label}`,
+                    );
+                  }}
+                />
+              )}
             </div>
           </div>
         </div>
 
+        {/*
+          A cover over the whole workspace while a canvas change is in flight.
+          Two jobs: it says what is happening, and it stops a second click
+          landing on a page that is about to be replaced underneath it —
+          pressing another design mid-swap would send a second operation built
+          from a schema that no longer matches the one on screen.
+
+          Scoped to canvas changes. A chat edit takes just as long, but its
+          progress is already in the transcript, and covering the panel would
+          stop the client reading the reply they are waiting for.
+        */}
+        {canvasBusy && <WorkingCover label={canvasBusy} />}
+
+        {/* aria-live so the confirmation reaches a screen reader too. */}
+        {toast && (
+          <div className={styles.copyToast} role="status" aria-live="polite">
+            {toast}
+          </div>
+        )}
+
+        {dashTab && (
+          <SiteDashboard
+            tab={dashTab}
+            onTab={openDash}
+            onClose={() => openDash(null)}
+            siteName={siteName}
+          >
+            {dashTab === "style" && (
+              <StylePanel
+                bare
+                tokens={designTokens}
+                scope={siteName}
+                busy={Boolean(canvasBusy)}
+                onPreview={setDesignTokens}
+                onCommit={commitTokens}
+                onClose={() => openDash(null)}
+              />
+            )}
+            {dashTab === "images" && (
+              <ImagesTab
+                siteId={siteId}
+                busy={Boolean(canvasBusy)}
+                /*
+                  Taking a picture off a page changes the page, and this panel
+                  covers the canvas. Without this the section behind it keeps
+                  the photograph until something else happens to reload.
+                */
+                onPagesChanged={() => repaintFromServer(activeSlug)}
+              />
+            )}
+            {dashTab === "seo" && <SeoPanel siteId={siteId} />}
+          </SiteDashboard>
+        )}
+
+        {mediaOpen && (
+          <MediaPanel
+            siteId={siteId}
+            busy={Boolean(canvasBusy)}
+            target={mediaTarget ? { label: mediaTarget.label, path: mediaTarget.path } : null}
+            onClose={() => {
+              setMediaOpen(false);
+              setMediaTarget(null);
+            }}
+            onChoose={(asset) => {
+              const t = mediaTarget;
+              const ref = t ? nodes[t.index]?.type : undefined;
+              if (!t || !ref) return;
+              setMediaOpen(false);
+              setMediaTarget(null);
+              void runCanvasEdit(`Changing a picture in the ${t.label}`, () =>
+                setSectionImageAction({
+                  siteId,
+                  slug: activeSlug,
+                  section: ref,
+                  path: t.path,
+                  assetId: asset.id,
+                }),
+              );
+            }}
+          />
+        )}
+
+        {styleOpen && (
+          <StylePanel
+            tokens={designTokens}
+            scope={siteName}
+            section={
+              styleFor && styleFor.kind === "node" && nodes[styleFor.index]
+                ? (() => {
+                    /*
+                     * This section's own options, on top of the shared ones —
+                     * background and width on a hero, say. Read from the
+                     * registry entry for whatever type is actually selected,
+                     * so a new field a section declares for itself appears
+                     * here with no change to this file.
+                     */
+                    const ownOptions = sectionOwnOptions(
+                      getSectionByNodeType(nodes[styleFor.index]?.type)?.fields,
+                    );
+                    return {
+                      name: labelOfSelection(styleFor),
+                      role: styleFor.role,
+                      onClearRole: () => setStyleFor({ kind: "node", index: styleFor.index }),
+                      options: [...SECTION_STYLE_OPTIONS, ...ownOptions],
+                      values: Object.fromEntries(
+                        [
+                          ...SECTION_STYLE_OPTIONS,
+                          ...ownOptions,
+                          ...ELEMENT_ROLES.flatMap((r) => r.options),
+                        ].map((o) => [
+                          o.field,
+                          String(nodes[styleFor.index]?.props?.[o.field] ?? o.spec.default ?? "default"),
+                        ]),
+                      ),
+                      /*
+                       * Dispatched as set_option, the operation that already
+                       * exists — so it is validated against the field's
+                       * choices, written with a revision, and undoable, with
+                       * no new code and no second path to keep in step with
+                       * chat.
+                       */
+                      onChange: (field: string, value: string) => {
+                        const ref = nodes[styleFor.index]?.type;
+                        if (!ref) return;
+                        void runCanvasOp(
+                          { kind: "set_option", section: ref, option: field, value },
+                          `Restyling the ${labelOfSelection(styleFor)}`,
+                        );
+                      },
+                    };
+                  })()
+                : undefined
+            }
+            busy={Boolean(canvasBusy)}
+            /*
+             * Preview writes state only, so the canvas tracks the slider
+             * without a round trip per pixel; commit persists on release.
+             */
+            onPreview={setDesignTokens}
+            onCommit={commitTokens}
+            onClose={closeStylePanel}
+          />
+        )}
+
+        {designFor && keyOfSelection(designFor) && (
+          <DesignPanel
+            selection={designFor}
+            currentKey={keyOfSelection(designFor)!}
+            currentProps={propsOfSelection(designFor)}
+            catalogue={catalogue}
+            originKey={swapOrigin[designFor.kind === "chrome" ? designFor.slot : `n${designFor.index}`]}
+            busy={Boolean(canvasBusy) || generating}
+            context={{
+              siteName,
+              facts,
+              logoUrl: intake.data.logoUrl,
+              pages: pages.map((p) => ({ slug: p.slug, title: p.title })),
+              formFields: activeForm?.fields ?? [],
+              formToken: activeFormToken,
+              formStyle: activeForm?.style ?? {},
+              colors: intake.data.colors,
+            }}
+            onPick={(design) => pickDesign(designFor, design)}
+            onClose={() => {
+              // Chat comes back, because it stepped aside for the panel.
+              openChat();
+            }}
+          />
+        )}
+
+        {/*
+          The launcher stays reachable while a panel is open, and swaps: it is
+          how someone styling a section asks a question about it without first
+          working out that they have to close something. openChat clears the
+          panels, so pressing it can no longer put two columns on one edge.
+        */}
         {!chatOpen && (
           <button
             type="button"
             className={styles.chatFab}
-            onClick={() => setChatOpen(true)}
+            onClick={openChat}
             aria-label="Open assistant"
           >
             <span className={styles.chatFabIcon}>

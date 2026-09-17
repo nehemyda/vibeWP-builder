@@ -14,10 +14,11 @@
  * app had never imported.
  */
 
-export const esc = (s: unknown): string =>
-  String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+import { esc, escAttr } from "./escape";
+import { plainText, renderRichText } from "./richtext";
 
-export const escAttr = (s: unknown): string => esc(s).replace(/"/g, "&quot;");
+/** Re-exported: these lived here for a long time and are imported widely. */
+export { esc, escAttr };
 
 export type ButtonVariant = "primary" | "outline" | "ghost";
 
@@ -45,19 +46,19 @@ export function paragraph(text: string, className?: string): string {
   const attrs = className ? ` {"className":"${className}"}` : "";
   const cls = className ? ` class="${className}"` : "";
   return `<!-- wp:paragraph${attrs} -->
-<p${cls}>${esc(text)}</p>
+<p${cls}>${renderRichText(text)}</p>
 <!-- /wp:paragraph -->`;
 }
 
 export function heading(text: string, level: 1 | 2 | 3 | 4 | 5 | 6, className: string): string {
   return `<!-- wp:heading {"level":${level},"className":"${className}"} -->
-<h${level} class="wp-block-heading ${className}">${esc(text)}</h${level}>
+<h${level} class="wp-block-heading ${className}">${renderRichText(text)}</h${level}>
 <!-- /wp:heading -->`;
 }
 
 export function list(items: string[], className: string): string {
   const inner = items
-    .map((i) => `<!-- wp:list-item --><li>${esc(i)}</li><!-- /wp:list-item -->`)
+    .map((i) => `<!-- wp:list-item --><li>${renderRichText(i)}</li><!-- /wp:list-item -->`)
     .join("");
   return `<!-- wp:list {"className":"${className}"} -->
 <ul class="wp-block-list ${className}">${inner}</ul>
@@ -76,7 +77,12 @@ export function list(items: string[], className: string): string {
  */
 export function requireAlt(...candidates: Array<string | null | undefined>): string {
   for (const candidate of candidates) {
-    const trimmed = candidate?.trim();
+    /*
+     * plainText, because the usual fallback is the section's heading and a
+     * heading may now carry emphasis. Alt text is read aloud; markup in it is
+     * read aloud too.
+     */
+    const trimmed = plainText(candidate).trim();
     if (trimmed) return trimmed;
   }
   return "Photograph of this business";
@@ -100,6 +106,19 @@ export function image(
     lightbox?: boolean;
     /** Set for images inside a gallery — how core groups them. */
     inGallery?: boolean;
+    /**
+     * The image's title, as core's own block attribute.
+     *
+     * core/image declares `title` with source "attribute" on the img, so it
+     * is read back from the markup rather than stored in the block comment —
+     * which is why it is emitted on the element only, and why it round-trips
+     * without any parser of ours having to know about it as a special case.
+     *
+     * It renders as a tooltip. Not a substitute for alt, and never a place to
+     * repeat it: a screen reader may announce both, and hearing the same
+     * sentence twice is worse than hearing it once.
+     */
+    title?: string;
   },
   /** Rendered as the block's own figcaption, which is where core keeps it. */
   caption?: string,
@@ -134,9 +153,10 @@ export function image(
   const dataId = meta?.inGallery && meta?.id ? ` data-id="${meta.id}"` : "";
   const width = meta?.width ? ` width="${meta.width}"` : "";
   const height = meta?.height ? ` height="${meta.height}"` : "";
+  const title = meta?.title?.trim() ? ` title="${escAttr(meta.title.trim())}"` : "";
 
   return `<!-- wp:image ${JSON.stringify(attrs)} -->
-<figure class="${figureClass}"><img src="${escAttr(src)}" alt="${escAttr(safeAlt)}"${imgClass}${dataId}${width}${height}/>${
+<figure class="${figureClass}"><img src="${escAttr(src)}" alt="${escAttr(safeAlt)}"${title}${imgClass}${dataId}${width}${height}/>${
     caption ? `<figcaption class="wp-element-caption">${esc(caption)}</figcaption>` : ""
   }</figure>
 <!-- /wp:image -->`;

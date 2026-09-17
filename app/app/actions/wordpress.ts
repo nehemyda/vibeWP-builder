@@ -1,11 +1,13 @@
 "use server";
 
 
+import { imagePaths, writeImage } from "@/lib/design/image-map";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { sites, sitePages, siteInstallations, profiles, businessProfiles } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
 import { requireAlt } from "@/lib/wp/blocks";
+import { sanitiseTokens } from "@/lib/design/tokens";
 import { withStaticForms } from "@/lib/forms/inject";
 import { schemaToGutenberg, sectionToTemplatePart, withSiteLogo } from "@/lib/wp/serialize";
 import { resolveBrandColors } from "@/lib/brand/palettes";
@@ -54,36 +56,55 @@ async function actorNameFor(userId: string): Promise<string> {
  * Pexels is worse than one pointing at local media, but far better than an
  * export that fails outright over a photo.
  */
-async function sideloadSchemaImages(schema: unknown, installPath: string): Promise<unknown> {
+async function sideloadSchemaImages(
+  schema: unknown,
+  installPath: string,
+  /** Null before the install has a URL; then nothing is local yet anyway. */
+  siteUrl: string | null,
+): Promise<unknown> {
   const nodes = (schema as { nodes?: Array<{ props?: Record<string, unknown> }> })?.nodes;
   if (!Array.isArray(nodes)) return schema;
 
   const rewritten = await Promise.all(
     nodes.map(async (node) => {
-      const img = node?.props?.image as { url?: string; alt?: string } | undefined;
-      if (!img?.url || !/^https?:\/\//i.test(img.url)) return node;
+      /*
+       * Every photograph in the node, not just props.image.
+       *
+       * Galleries keep theirs at items.N.image, alternating content at
+       * rows.N.image, the featured service at featured.image. Walking only
+       * props.image left nine placements across four section families
+       * pointing at Pexels on the client's own live site.
+       */
+      let props = node?.props;
+      if (!props) return node;
 
-      // Alt is resolved before the sideload, not after, because WordPress
-      // needs it for the attachment's own alt meta and its filename.
-      const alt = requireAlt(img.alt, node.props?.heading as string | undefined);
+      for (const { path, image } of imagePaths(props)) {
+        if (!/^https?:\/\//i.test(image.url)) continue;
+        /*
+         * Already in this install's media library. Sideloading it again would
+         * make a duplicate attachment on every publish.
+         */
+        if (siteUrl && image.url.startsWith(siteUrl)) continue;
 
-      const local = await sideloadImage({ installPath, url: img.url, alt });
-      if (!local) return node;
+        // Alt is resolved before the sideload, not after, because WordPress
+        // needs it for the attachment's own alt meta and its filename.
+        const alt = requireAlt(image.alt, props.heading as string | undefined);
+        const local = await sideloadImage({ installPath, url: image.url, alt });
+        // A sideload that fails leaves the original URL: a hero pointing at
+        // Pexels is worse than one pointing at local media, and far better
+        // than an export that fails outright over a photo.
+        if (!local) continue;
 
-      return {
-        ...node,
-        props: {
-          ...node.props,
-          image: {
-            ...img,
-            url: local.url,
-            alt,
-            id: local.id,
-            width: local.width ?? undefined,
-            height: local.height ?? undefined,
-          },
-        },
-      };
+        props = writeImage(props, path, {
+          url: local.url,
+          alt,
+          id: local.id,
+          width: local.width ?? undefined,
+          height: local.height ?? undefined,
+        });
+      }
+
+      return { ...node, props };
     }),
   );
 
@@ -355,7 +376,7 @@ export async function exportToWordPressAction(
     }
 
     /*
-     * Brand colours into theme.json.
+     * Brand colours AND the client's design values into theme.json.
      *
      * After syncTheme for the same reason as the template parts: it replaces
      * the theme directory wholesale. One write restyles every section, because
@@ -365,6 +386,9 @@ export async function exportToWordPressAction(
       await writeThemePalette({
         installPath: installation.installPath,
         colors: resolveBrandColors(site.brandPaletteKey, site.brandColors),
+        // Sanitised again on the way out: a value stored when a range was
+        // wider must not reach a published stylesheet now that it is narrower.
+        tokens: sanitiseTokens(site.designTokens),
       });
     } catch (err) {
       // Non-fatal: the theme's own defaults are a working palette.
@@ -408,7 +432,11 @@ export async function exportToWordPressAction(
     let frontPageUrl = "";
     for (const page of exportable) {
       const isHome = page.slug === "home";
-      const schema = await sideloadSchemaImages(page.schemaJson, installation.installPath);
+      const schema = await sideloadSchemaImages(
+        page.schemaJson,
+        installation.installPath,
+        installation.url,
+      );
       /*
        * Fill every form mount with a working, script-free form.
        *
@@ -425,6 +453,17 @@ export async function exportToWordPressAction(
         title: isHome ? site.name : (page.title ?? page.slug),
         blockMarkup: markup,
         asFrontPage: isHome,
+        /*
+         * The page's meta tags, as post meta the theme renders. Sent on every
+         * export including when empty, so clearing a description in VibeWP
+         * clears it on the live site rather than leaving the old one behind.
+         */
+        meta: {
+          title: page.metaTitle,
+          description: page.metaDescription,
+          noIndex: page.noIndex,
+          canonical: page.canonicalUrl,
+        },
       });
       if (isHome || !frontPageUrl) frontPageUrl = pushed.url;
 

@@ -1,7 +1,7 @@
 /**
  * Raw-SQL migration: per-site delivery mode, and which plans sell WordPress.
  * Safe to re-run.
- * Run with: npx tsx lib/db/migrate-batch27.ts
+ * Run with: npx tsx lib/db/migrate-batch31.ts
  *
  * WHY EXISTING SITES ARE NOT LEFT ON THE DEFAULT
  *

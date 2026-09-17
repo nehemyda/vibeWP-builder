@@ -6,6 +6,10 @@ export type ServicesShowcaseProps = {
   heading?: string;
   intro?: string;
   items?: Array<{ title: string; body: string; meta?: string; image?: SectionImage }>;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -41,6 +45,27 @@ export const ServicesShowcase: SectionDefinition<ServicesShowcaseProps> = {
         meta: { type: "text", label: "Aside", hint: "From-price or lead time" },
         image: { type: "image", label: "Photo" },
       },
+    },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: heading and intro sit
+     * outside .yp-svcs__grid with no shared ancestor, so toGutenberg wraps
+     * them together in a NEW element (.yp-svcs__inner) — the same fix
+     * content-gallery needed.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The heading and cards stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the heading and cards.",
+      choices: ["contained", "full"],
+      default: "contained",
     },
   },
 
@@ -83,6 +108,7 @@ export const ServicesShowcase: SectionDefinition<ServicesShowcaseProps> = {
           (i.image?.url
             ? image(i.image.url, requireAlt(i.image.alt, i.title), "yp-svcs__frame", {
                 id: i.image.id,
+                title: i.image.title,
                 width: i.image.width,
                 height: i.image.height,
               })
@@ -108,13 +134,23 @@ export const ServicesShowcase: SectionDefinition<ServicesShowcaseProps> = {
       .filter(Boolean)
       .join("");
 
-    return group("yp-svcs", head + group("yp-svcs__grid", cards), "section");
+    const rootClass = [
+      "yp-svcs",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(rootClass, group("yp-svcs__inner", head + group("yp-svcs__grid", cards)), "section");
   },
 
   fromGutenberg(root) {
     const el = root.querySelector(".yp-svcs");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-svcs__heading")),
       intro: text(el.querySelector(".yp-svcs__intro")),
       items: el

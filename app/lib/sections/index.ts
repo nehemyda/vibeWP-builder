@@ -1,4 +1,8 @@
 import type { SectionDefinition } from "./types";
+import { SECTION_STYLE_FIELDS } from "@/lib/design/section-style";
+import { ELEMENT_STYLE_FIELDS } from "@/lib/design/element-style";
+import { PART_VISIBILITY_OPTIONS } from "@/lib/design/part-visibility";
+import { PART_SIZE_OPTIONS } from "@/lib/design/part-size";
 import { HeaderSimple } from "./header-simple";
 import { HeaderCentered } from "./header-centered";
 import { HeaderCta } from "./header-cta";
@@ -143,7 +147,7 @@ export { CtaStrip } from "./cta-strip";
  * gives page generation a sensible sequence to work from.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a registry is heterogeneous by nature; each definition is strongly typed at its own declaration site.
-export const SECTIONS: Array<SectionDefinition<any>> = [
+const DEFINED: Array<SectionDefinition<any>> = [
   FormBand,
   FormPhoto,
   FormDetails,
@@ -211,6 +215,34 @@ export const SECTIONS: Array<SectionDefinition<any>> = [
   FooterSocial,
   FooterSimple,
 ];
+
+/**
+ * Every page section carries the shared style settings.
+ *
+ * Merged here rather than written into 62 files, because a multiplier means
+ * the same thing in every design — and because a setting declared in `fields`
+ * is one that set_option validates, carry-props carries, chat can reach and
+ * the admin form renders, all with no further code. A section's OWN field of
+ * the same name wins, so a design that has a real opinion about its spacing
+ * keeps it.
+ *
+ * Page sections only. A header is a template part shared site-wide, and the
+ * spacing of a page section is not a thing it has.
+ */
+export const SECTIONS = DEFINED.map((section) =>
+  (section.placement ?? "page") !== "page"
+    ? section
+    : {
+        ...section,
+        fields: {
+          ...SECTION_STYLE_FIELDS,
+          ...ELEMENT_STYLE_FIELDS,
+          ...PART_VISIBILITY_OPTIONS,
+          ...PART_SIZE_OPTIONS,
+          ...section.fields,
+        },
+      },
+);
 
 /** Keyed by the node type stored in page schemas, e.g. "HeroSplit". */
 export const SECTIONS_BY_NODE_TYPE = new Map(SECTIONS.map((s) => [s.nodeType, s]));

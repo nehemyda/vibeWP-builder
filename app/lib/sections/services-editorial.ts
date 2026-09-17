@@ -6,6 +6,10 @@ export type ServicesEditorialProps = {
   heading?: string;
   intro?: string;
   items?: Array<{ title: string; body: string; meta?: string }>;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -40,6 +44,27 @@ export const ServicesEditorial: SectionDefinition<ServicesEditorialProps> = {
         body: { type: "text", label: "What it involves" },
         meta: { type: "text", label: "Aside", hint: "Lead time, from-price, or who it suits" },
       },
+    },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: heading and intro sit
+     * outside .yp-svce__list with no shared ancestor, so toGutenberg wraps
+     * them together in a NEW element (.yp-svce__inner) — the same fix
+     * content-gallery needed.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The heading and rows stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the heading and rows.",
+      choices: ["contained", "full"],
+      default: "contained",
     },
   },
 
@@ -83,13 +108,23 @@ export const ServicesEditorial: SectionDefinition<ServicesEditorialProps> = {
       .filter(Boolean)
       .join("");
 
-    return group("yp-svce", head + group("yp-svce__list", rows), "section");
+    const rootClass = [
+      "yp-svce",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(rootClass, group("yp-svce__inner", head + group("yp-svce__list", rows)), "section");
   },
 
   fromGutenberg(root) {
     const el = root.querySelector(".yp-svce");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-svce__heading")),
       intro: text(el.querySelector(".yp-svce__intro")),
       items: el

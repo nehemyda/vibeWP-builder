@@ -2,7 +2,18 @@ import { group, heading, paragraph, details, buttons, paragraphLink, contactHref
 import { text, parseActions, type Action } from "./shared";
 import type { SectionDefinition } from "./types";
 
-export type FaqWithHelpProps = { heading?: string; items?: Array<{ question: string; answer: string }>; helpHeading?: string; helpBody?: string; phone?: string; actions?: Action[] };
+export type FaqWithHelpProps = {
+  heading?: string;
+  items?: Array<{ question: string; answer: string }>;
+  helpHeading?: string;
+  helpBody?: string;
+  phone?: string;
+  actions?: Action[];
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
+};
 
 /**
  * Accordions with a "still stuck?" panel beside them.
@@ -26,6 +37,26 @@ export const FaqWithHelp: SectionDefinition<FaqWithHelpProps> = {
     helpBody: { type: "text", label: "Panel copy", maxChars: 140 },
     phone: { type: "text", label: "Phone" },
     actions: { type: "list", label: "Panel buttons", of: { label: { type: "text", label: "Label" }, href: { type: "link", label: "Links to" } } },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Works here for the identical structural reason:
+     * .yp-faqh__grid already wraps everything under the root with nothing
+     * else emitted alongside it.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The questions and panel stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the questions and panel.",
+      choices: ["contained", "full"],
+      default: "contained",
+    },
   },
   aiPrompt: "Four to six questions. The panel copy should make ringing feel easy, not like a last resort — say who answers and when. Leave the phone empty unless a real number was supplied.",
   sample: {
@@ -50,12 +81,22 @@ export const FaqWithHelp: SectionDefinition<FaqWithHelpProps> = {
       p.phone ? paragraphLink(p.phone, contactHref("phone", p.phone), "yp-faqh__phone") : "",
       p.actions?.length ? buttons(p.actions, "yp-faqh__actions") : "",
     ].filter(Boolean).join(""));
-    return group("yp-faqh", group("yp-faqh__grid", left + panel), "section");
+    const rootClass = [
+      "yp-faqh",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(rootClass, group("yp-faqh__grid", left + panel), "section");
   },
   fromGutenberg(root) {
     const el = root.querySelector(".yp-faqh");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-faqh__heading")),
       items: el.querySelectorAll(".yp-faqh__item").map((i) => ({ question: text(i.querySelector("summary")), answer: text(i.querySelector("p")) })).filter((i) => i.question),
       helpHeading: text(el.querySelector(".yp-faqh__panel-heading")),

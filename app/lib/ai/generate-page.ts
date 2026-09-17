@@ -154,12 +154,26 @@ function describeFields(fields: Record<string, FieldSpec>): string {
     // be answered in words rather than left alone.
     .filter(([, spec]) => !isOptionField(spec))
     .map(([name, spec]) => {
-      const limit = spec.maxChars ? ` ≤${spec.maxChars} chars` : "";
       const hint = spec.hint ? ` (${spec.hint})` : "";
-      if (spec.type === "list" && spec.of) {
-        return `${name}: list of { ${Object.keys(spec.of).join(", ")} }${hint}`;
-      }
-      return `${name}: ${spec.type}${limit}${hint}`;
+      return `${name}: ${describeSpec(spec)}${hint}`;
     })
     .join("; ");
+}
+
+/**
+ * One field's shape, nested lists included.
+ *
+ * `of` used to forbid nesting, so a price group's rows were declared `text`
+ * and described to the model as a string — while the sample beside it showed
+ * an array. Now that they can be declared truthfully, this has to say so, or
+ * the model is told two different things in the same prompt.
+ */
+function describeSpec(spec: FieldSpec): string {
+  const limit = spec.maxChars ? ` ≤${spec.maxChars} chars` : "";
+  if (spec.type !== "list") return `${spec.type}${limit}`;
+  if (!spec.of) return "list of short lines";
+  const inner = Object.entries(spec.of)
+    .map(([key, sub]) => (sub.type === "list" ? `${key}: ${describeSpec(sub)}` : key))
+    .join(", ");
+  return `list of { ${inner} }`;
 }

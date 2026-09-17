@@ -1,5 +1,27 @@
 import { getSectionByKey, getSectionByNodeType } from "./index";
 import { isOptionField } from "./types";
+import { readImage, writeImage, type ImageValue } from "@/lib/design/image-map";
+import { SECTION_PARTS } from "@/lib/design/part-visibility";
+import { PART_ORDER_FIELD } from "@/lib/design/part-order";
+
+const PART_KEYS = new Set(SECTION_PARTS.map((p) => p.key));
+
+/**
+ * The props a part is rendered from.
+ *
+ * Only the ones a section actually declares are cleared, so this can list
+ * every name a part goes by across the registry without inventing fields on
+ * sections that have none of them.
+ */
+const PART_FIELDS: Record<string, string[]> = {
+  eyebrow: ["eyebrow", "kicker", "label"],
+  heading: ["heading", "title"],
+  intro: ["intro", "lede", "standfirst"],
+  body: ["body", "text", "description"],
+  actions: ["actions", "buttons", "cta"],
+  media: ["image", "photo"],
+};
+import { readPath, writePath } from "@/lib/design/text-map";
 
 /**
  * Structural edits to a page, as data.
@@ -95,6 +117,78 @@ export type EditOp =
       width?: string;
       required?: string;
     }
+  /**
+   * Replaces one page section's DESIGN, keeping its content.
+   *
+   * The gap the other operations left. Asked for a different-looking hero, the
+   * planner could only rewrite the copy of the one already there
+   * (rewrite_section), change a setting it happens to have (set_option), or
+   * throw it away and generate a new one (remove + add) — which loses whatever
+   * the client edited by hand. None of those is "same words, different
+   * layout", which is what someone means when they say the section looks wrong.
+   *
+   * Note this INVERTS swap_chrome's policy. A header swap deliberately
+   * discards its copy, because a header that has no button has nowhere to put
+   * one and the words belonged to the design that wrote them. Here carrying
+   * the content across is the entire point, which is why lib/sections/carry-props.ts
+   * exists and why it is the largest part of this feature.
+   */
+  | {
+      kind: "swap_section";
+      /** The section on the page, by node type, key, name or its own heading. */
+      section: string;
+      /** Registry key of the design to use instead, e.g. "hero-centered". */
+      design: string;
+    }
+  /**
+   * Rewrites one piece of copy, in place, from the canvas.
+   *
+   * Separate from rewrite_section because nothing is being written FOR the
+   * client — they typed it. No model, no generation, no interpretation: a path
+   * and a string. That is also why the path is validated against the stored
+   * props rather than trusted, since it arrives from a browser and the element
+   * it came from was identified by matching text.
+   */
+  | { kind: "set_text"; section: string; path: string; value: string }
+  /*
+   * Copying sections about.
+   *
+   * ADDRESSED BY INDEX, unlike every op above, and deliberately so. Every
+   * other op names its target ("the FAQ", "Visit Our Bakery") because a
+   * sentence is how the planner refers to things. These three come from a
+   * click, and the first thing duplicating does is put two sections with the
+   * same name on one page — so a name stops identifying anything. An index
+   * from a click is exact and cannot become ambiguous later.
+   *
+   * `node` is resolved by the ACTION, never sent by the browser: for a paste
+   * from another page the action reads that page itself, under the same
+   * ownership check as any other write. A client that could post its own
+   * props could post anything.
+   */
+  /*
+   * One photograph, by the path that names it.
+   *
+   * PER PLACEMENT. The same file can be used in three sections, and a client
+   * who clicks a picture and says "change this" means that one. `image` is
+   * resolved by the ACTION from an asset id in the site's own library — the
+   * browser sends which picture, never a URL, so a page cannot be made to
+   * serve an image from anywhere we did not put it.
+   */
+  | { kind: "set_image"; section: string; path: string; image: ImageValue }
+  /*
+   * Moving one part of a section up or down its stack, and removing one.
+   *
+   * `order` is the WHOLE new order rather than a delta, because the canvas
+   * knows what it is looking at and the server should not have to guess which
+   * parts exist. remove_part clears the fields the part is built from, which
+   * is what makes it a real deletion rather than a hidden one — and what
+   * makes it undoable, since the revision holds the words.
+   */
+  | { kind: "move_part"; section: string; order: string }
+  | { kind: "remove_part"; section: string; part: string }
+  | { kind: "duplicate_section"; index: number }
+  | { kind: "paste_section"; node: SchemaNode; afterIndex: number | null }
+  | { kind: "paste_style"; index: number; style: Record<string, string> }
   | { kind: "rewrite_section"; section: string; instruction: string }
   | { kind: "regenerate_page" }
   | { kind: "unsupported"; reason: string };
@@ -115,7 +209,7 @@ export type PageSchema = { schemaVersion?: string; nodes?: SchemaNode[] };
  * it SAYS; requiring them to know it is called `Testimonials` is requiring them
  * to know our internals.
  */
-function indexOfSection(nodes: SchemaNode[], ref: string | undefined): number {
+export function indexOfSection(nodes: SchemaNode[], ref: string | undefined): number {
   if (!ref) return -1;
   // Quotes are stripped because the instruction usually carried them and the
   // model tends to hand them back.
@@ -162,6 +256,25 @@ export type ApplyResult =
  * shape. The caller generates the copy, because that needs a model and this
  * has to stay pure.
  */
+/**
+ * A copy of a node with an id of its own.
+ *
+ * Reuses add_section's shape so a duplicated section is indistinguishable
+ * from one added fresh, and counts existing ids rather than trusting
+ * nodes.length — two duplicates in a row would otherwise collide.
+ */
+function freshNode(source: SchemaNode, nodes: SchemaNode[]): SchemaNode {
+  const def = getSectionByNodeType(source.type);
+  const stem = `n_${def?.key ?? source.type ?? "section"}`;
+  let n = nodes.length;
+  const taken = new Set(nodes.map((x) => x.id).filter(Boolean));
+  while (taken.has(`${stem}_${n}`)) n += 1;
+  return {
+    ...structuredClone(source),
+    id: `${stem}_${n}`,
+  };
+}
+
 export function applyOp(
   schema: PageSchema,
   op: EditOp,
@@ -212,6 +325,222 @@ export function applyOp(
         ok: true,
         schema: { ...schema, schemaVersion: schema.schemaVersion ?? "1.0", nodes },
         describe: `Added the ${section.name} ${where}.`,
+      };
+    }
+
+    case "swap_section": {
+      const at = indexOfSection(nodes, op.section);
+      if (at < 0) return { ok: false, error: `There's no ${label(op.section)} on this page.` };
+
+      const design = getSectionByKey(op.design) ?? getSectionByNodeType(op.design);
+      if (!design) return { ok: false, error: `There's no "${op.design}" design.` };
+      if (design.placement && design.placement !== "page") {
+        return {
+          ok: false,
+          error: `The ${design.name} belongs in the site's header or footer, not on the page.`,
+        };
+      }
+
+      const previous = getSectionByNodeType(nodes[at].type);
+      if (nodes[at].type === design.nodeType) {
+        return { ok: false, error: `That section is already the ${design.name.toLowerCase()}.` };
+      }
+
+      /*
+       * A new id, because it encodes the design and this is a different one.
+       * Nothing correlates nodes across saves — revisions snapshot the whole
+       * schema — so keeping the old id would only preserve a name that lies.
+       */
+      nodes[at] = { id: `n_${design.key}_${at}`, type: design.nodeType, props: newProps ?? {} };
+
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe: `Changed the ${previous?.name ?? "section"} to the ${design.name}.`,
+      };
+    }
+
+    case "set_text": {
+      const at = indexOfSection(nodes, op.section);
+      if (at < 0) return { ok: false, error: `There's no ${label(op.section)} on this page.` };
+
+      const props = (nodes[at].props ?? {}) as Record<string, unknown>;
+      const current = readPath(props, op.path);
+      /*
+       * The path has to name a string that is already there.
+       *
+       * It was derived by matching rendered text against the props, so a
+       * duplicate phrase or a stale canvas could hand back a path that no
+       * longer means what it did. Refusing anything that is not currently a
+       * string is what keeps that a failed edit rather than a new field
+       * invented in someone's page schema.
+       */
+      if (typeof current !== "string") {
+        return { ok: false, error: "That text can't be edited here." };
+      }
+      if (op.value.trim() === current.trim()) {
+        return { ok: false, error: "That text is unchanged." };
+      }
+
+      nodes[at] = { ...nodes[at], props: writePath(props, op.path, op.value) };
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe: `Edited the ${getSectionByNodeType(nodes[at].type)?.name ?? "section"}.`,
+      };
+    }
+
+    /*
+     * Copy, duplicate and paste.
+     *
+     * The three share one rule about IDS: a copied node must never keep the
+     * original's. Node ids address a section, so two nodes wearing the same id
+     * would make every later op ambiguous — which is the very problem
+     * index-addressing these ops was meant to avoid.
+     */
+    case "set_image": {
+      const at = indexOfSection(nodes, op.section);
+      if (at < 0) return { ok: false, error: `There's no ${label(op.section)} on this page.` };
+      const props = (nodes[at].props ?? {}) as Record<string, unknown>;
+      /*
+       * The path has to name a photograph that is really there. The canvas
+       * finds paths by matching what it rendered, so a stale one means the
+       * section changed underneath — better refused than written as a prop
+       * no renderer reads.
+       */
+      if (!readImage(props, op.path)) {
+        return { ok: false, error: "That picture isn't part of this section any more." };
+      }
+      nodes[at] = { ...nodes[at], props: writeImage(props, op.path, op.image) };
+      const def = getSectionByNodeType(nodes[at].type);
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe: `Changed a picture in the ${def?.name ?? op.section}.`,
+      };
+    }
+
+    case "move_part": {
+      const at = indexOfSection(nodes, op.section);
+      if (at < 0) return { ok: false, error: `There's no ${label(op.section)} on this page.` };
+      const order = op.order.split(",").map((x) => x.trim()).filter(Boolean);
+      if (order.length < 2) return { ok: false, error: "There's nothing to reorder there." };
+      const unknown = order.filter((k) => !PART_KEYS.has(k));
+      if (unknown.length) return { ok: false, error: `I don't know a part called "${unknown[0]}".` };
+
+      nodes[at] = {
+        ...nodes[at],
+        props: { ...(nodes[at].props ?? {}), [PART_ORDER_FIELD]: order.join(",") },
+      };
+      const def = getSectionByNodeType(nodes[at].type);
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe: `Reordered the ${def?.name ?? op.section}.`,
+      };
+    }
+
+    case "remove_part": {
+      const at = indexOfSection(nodes, op.section);
+      if (at < 0) return { ok: false, error: `There's no ${label(op.section)} on this page.` };
+      const def = getSectionByNodeType(nodes[at].type);
+      if (!def) return { ok: false, error: "That section can't be changed." };
+      if (!PART_KEYS.has(op.part)) return { ok: false, error: `I don't know a part called "${op.part}".` };
+
+      const props = { ...(nodes[at].props ?? {}) } as Record<string, unknown>;
+      /*
+       * A part is deleted by emptying the fields it is rendered from — every
+       * section already omits a part whose field is empty, so nothing needs to
+       * learn about deletion. Which fields those are is decided by what the
+       * section DECLARES, not by a table mapping parts to field names: a
+       * table would be a second description of each section, free to drift.
+       */
+      const emptied = PART_FIELDS[op.part]?.filter((f) => f in def.fields && props[f] !== undefined) ?? [];
+      if (emptied.length === 0) {
+        return { ok: false, error: "That part isn't something this section has." };
+      }
+      for (const field of emptied) {
+        props[field] = Array.isArray(props[field]) ? [] : "";
+      }
+      nodes[at] = { ...nodes[at], props };
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe: `Removed the ${op.part} from the ${def.name}.`,
+      };
+    }
+
+    case "duplicate_section": {
+      const at = op.index;
+      if (at < 0 || at >= nodes.length) return { ok: false, error: "That section isn't on this page." };
+      const source = nodes[at];
+      const def = getSectionByNodeType(source.type);
+      if (def?.placement && def.placement !== "page") {
+        return { ok: false, error: `The ${def.name} belongs to the site's header or footer.` };
+      }
+      nodes.splice(at + 1, 0, freshNode(source, nodes));
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe: `Duplicated the ${def?.name ?? source.type}.`,
+      };
+    }
+
+    case "paste_section": {
+      const def = getSectionByNodeType(op.node.type);
+      if (!def) return { ok: false, error: "That section can't be pasted here." };
+      if (def.placement && def.placement !== "page") {
+        return { ok: false, error: `The ${def.name} belongs to the site's header or footer.` };
+      }
+      // null means "at the end" — pasting with nothing selected.
+      const at = op.afterIndex === null ? nodes.length : Math.min(op.afterIndex + 1, nodes.length);
+      nodes.splice(at, 0, freshNode(op.node, nodes));
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe: `Pasted the ${def.name}.`,
+      };
+    }
+
+    case "paste_style": {
+      const at = op.index;
+      if (at < 0 || at >= nodes.length) return { ok: false, error: "That section isn't on this page." };
+      const target = nodes[at];
+      const def = getSectionByNodeType(target.type);
+      if (!def) return { ok: false, error: "That section can't be styled." };
+
+      /*
+       * Only settings the TARGET declares, and only values it allows.
+       *
+       * A style copied from one design is a set of choices, and the design it
+       * lands on may not offer all of them — the same reasoning carry-props
+       * uses for a swap. Anything the target cannot express is dropped rather
+       * than written as a prop no renderer reads.
+       */
+      const applied: Record<string, unknown> = {};
+      const skipped: string[] = [];
+      for (const [key, value] of Object.entries(op.style)) {
+        const field = def.fields[key];
+        if (!field || !isOptionField(field)) {
+          skipped.push(key);
+          continue;
+        }
+        if (field.choices && !field.choices.includes(value)) {
+          skipped.push(key);
+          continue;
+        }
+        applied[key] = value;
+      }
+      if (Object.keys(applied).length === 0) {
+        return { ok: false, error: `The ${def.name} doesn't share any of those settings.` };
+      }
+      nodes[at] = { ...target, props: { ...(target.props ?? {}), ...applied } };
+      return {
+        ok: true,
+        schema: { ...schema, nodes },
+        describe:
+          `Applied the copied style to the ${def.name}` +
+          (skipped.length ? `, minus ${skipped.length} setting${skipped.length > 1 ? "s" : ""} it doesn't have.` : "."),
       };
     }
 

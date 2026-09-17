@@ -49,7 +49,9 @@ import { isOptionField, type FieldSpec, type SectionDefinition } from "./types";
  */
 
 type Props = Record<string, unknown>;
-type AnySection = SectionDefinition<any>;
+/* The same concrete parameterisation resolve.ts uses for a heterogeneous
+   registry, rather than `any`. */
+type AnySection = SectionDefinition<Record<string, unknown>>;
 
 export type CarryResult = {
   /** What carries. Ready to hand to the target's toGutenberg. */
@@ -488,6 +490,22 @@ function wrapSingleKey(strings: unknown, key: string): Props[] | undefined {
  * Without this every carried image would be reported as discarded, because an
  * alt attribute is not body copy and a href is not a sentence.
  */
+/**
+ * Fields describing the section's OWN STRUCTURE rather than its content.
+ *
+ * Neither content nor a setting, and so a third category. partOrder names
+ * the parts of one design in one arrangement — carry it into a design built
+ * from different parts and it means nothing, which is the same reason a
+ * layout choice is not carried either. But unlike a setting it is also not
+ * something to default: the target's natural order is what "unset" already
+ * means.
+ *
+ * Dropped silently, because there is nothing to tell the client. Reported as
+ * lost, the swap gate rightly complained that "heading,body,actions" had gone
+ * missing — words no one wrote and no one will miss.
+ */
+export const STRUCTURAL_FIELDS = new Set(["partOrder"]);
+
 const ATTRIBUTE_ONLY = new Set([
   "url",
   "alt",
@@ -500,9 +518,26 @@ const ATTRIBUTE_ONLY = new Set([
   "formToken",
 ]);
 
-/** Every string in a value that a reader should be able to see. */
-function visibleStrings(value: unknown, key?: string): string[] {
+/**
+ * Every string in a value that a reader should be able to see.
+ *
+ * Exported because the gate needs exactly this judgement; its own copy of it
+ * diverged the moment carry-props learned that an image's strings are not
+ * copy, and reported 107 false failures.
+ */
+export function visibleStrings(value: unknown, key?: string): string[] {
   if (key && ATTRIBUTE_ONLY.has(key)) return [];
+  /*
+   * NOTHING inside an image is body copy.
+   *
+   * The declared keys are all attributes, but a stored image also carries
+   * whatever the photo lookup put there — a real hero on a client's site holds
+   * `photographer: "Kate Filatova"` and `photographerUrl`, neither of which
+   * renders. Listing keys one by one missed both, so the removal test read the
+   * photograph as content that had vanished and threw it away on every swap.
+   * Samples never showed it: they have no credit metadata.
+   */
+  if (describe(value).kind === "image") return [];
   if (typeof value === "string") return value.trim().length > 3 ? [value.trim()] : [];
   if (Array.isArray(value)) return value.flatMap((v) => visibleStrings(v, key));
   if (isRecord(value)) return Object.entries(value).flatMap(([k, v]) => visibleStrings(v, k));
@@ -562,6 +597,8 @@ export function carryProps(from: AnySection, fromProps: Props, to: AnySection): 
      * setting; otherwise the target's own default, because a layout choice made
      * for one design says nothing about another.
      */
+    if (STRUCTURAL_FIELDS.has(field)) continue;
+
     if (isOptionField(spec)) {
       const mine = source[field];
       if (mine !== undefined && sameKind(describe(mine), describe(targetSample[field]))) {
@@ -643,7 +680,7 @@ export function carryProps(from: AnySection, fromProps: Props, to: AnySection): 
     if (used.has(key) || explained.has(key)) continue;
     if (describe(value).kind === "nil") continue;
     const spec = from.fields[key];
-    if (spec && isOptionField(spec)) continue;
+    if (STRUCTURAL_FIELDS.has(key) || (spec && isOptionField(spec))) continue;
     dropped.add(key);
   }
 
@@ -834,7 +871,7 @@ function findGhosts(to: AnySection, props: Props): string[] {
      * content that vanished.
      */
     const spec = to.fields[field];
-    if (spec && isOptionField(spec)) continue;
+    if (STRUCTURAL_FIELDS.has(field) || (spec && isOptionField(spec))) continue;
 
     /*
      * Does removing it change anything at all?

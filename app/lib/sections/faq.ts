@@ -5,6 +5,10 @@ import type { SectionDefinition } from "./types";
 export type FaqProps = {
   heading?: string;
   items?: Array<{ question: string; answer: string }>;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 const text = (el: HTMLElement | null): string => (el ? el.textContent.trim() : "");
@@ -36,6 +40,27 @@ export const Faq: SectionDefinition<FaqProps> = {
         question: { type: "text", label: "Question" },
         answer: { type: "text", label: "Answer" },
       },
+    },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: the heading sits outside
+     * .yp-faq__list with no shared ancestor, so toGutenberg wraps them
+     * together in a NEW element (.yp-faq__inner) — the same fix
+     * content-gallery needed.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The heading and questions stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the heading and questions.",
+      choices: ["contained", "full"],
+      default: "contained",
     },
   },
 
@@ -72,9 +97,16 @@ export const Faq: SectionDefinition<FaqProps> = {
       .map((i) => details(i.question, i.answer ?? "", "yp-faq__item"))
       .join("");
 
-    return group(
+    const rootClass = [
       "yp-faq",
-      (p.heading ? heading(p.heading, 2, "yp-faq__heading") : "") + group("yp-faq__list", rows),
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(
+      rootClass,
+      group("yp-faq__inner", (p.heading ? heading(p.heading, 2, "yp-faq__heading") : "") + group("yp-faq__list", rows)),
       "section",
     );
   },
@@ -82,8 +114,11 @@ export const Faq: SectionDefinition<FaqProps> = {
   fromGutenberg(root) {
     const el = root.querySelector(".yp-faq");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
 
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-faq__heading")),
       items: el
         .querySelectorAll(".yp-faq__item")

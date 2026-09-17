@@ -13,7 +13,7 @@ import {
   photoQueryFor,
   describeBusiness,
   contactFactsFor,
-  applyContactFacts,
+  pinContactFacts,
 } from "@/lib/ai/business-context";
 import { generateHeroContentWithGemini } from "@/lib/ai/gemini";
 import { searchPhoto } from "@/lib/images/pexels";
@@ -143,7 +143,7 @@ export async function generatePageAction(opts: {
       continue;
     }
 
-    const props = applyContactFacts(
+    const props = pinContactFacts(
       photo ? withPhoto(raw, section, photo) : raw,
       section.definition.fields,
       facts,
@@ -182,7 +182,7 @@ export async function generatePageAction(opts: {
     const hasFields = Object.keys(section.definition.fields).length > 0;
     const raw = generated[section.key] ?? (hasFields ? null : {});
     if (!raw) continue;
-    const props = applyContactFacts(raw, section.definition.fields, facts);
+    const props = pinContactFacts(raw, section.definition.fields, facts);
     if (!usable(props, section)) continue;
 
     const node: ChromeNode = { id: `n_${section.key}`, type: section.nodeType, props };
@@ -321,6 +321,7 @@ function withPhoto(
     },
   };
 }
+
 
 /**
  * Whether generated props are fit to publish.

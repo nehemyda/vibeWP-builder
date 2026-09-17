@@ -176,6 +176,45 @@
   outline-offset: 1px;
 }
 
+/*
+ * The show/hide toggle on a password field.
+ *
+ * The input keeps its own full-width rule above; this only adds room on the
+ * right so typed text never runs under the icon, and positions the button
+ * inside that space rather than beside it — a second column would need the
+ * field and the label above it to agree on a narrower width for no reason.
+ */
+.passwordWrap { position: relative; }
+.passwordWrap input { padding-right: 2.6rem; }
+
+.passwordToggle {
+  position: absolute;
+  top: 50%;
+  right: 0.55rem;
+  transform: translateY(-50%);
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0.3rem;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.passwordToggle svg { width: 19px; height: 19px; }
+.passwordToggle:hover { color: var(--ink); }
+.passwordToggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/*
+ * Edge draws its own reveal icon on a password field, and it sits in the
+ * same corner as this one — two overlapping eyes is worse than either alone.
+ */
+.passwordWrap input::-ms-reveal,
+.passwordWrap input::-ms-clear {
+  display: none;
+}
+
 .hint {
   font-size: 0.78rem;
   color: var(--muted);

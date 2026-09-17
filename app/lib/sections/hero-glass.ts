@@ -76,6 +76,7 @@ export const HeroGlass: SectionDefinition<HeroGlassProps> = {
           "yp-hero-glass__media",
           image(p.image.url, requireAlt(p.image.alt, p.heading), "yp-hero-glass__frame", {
             id: p.image.id,
+            title: p.image.title,
             width: p.image.width,
             height: p.image.height,
           }),

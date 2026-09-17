@@ -7,22 +7,18 @@ import { sites, businessProfiles, type SiteMode } from "@/lib/db/schema";
 import { canEditSite } from "@/app/actions/sites";
 import { logActivity } from "@/lib/activity";
 import { profiles } from "@/lib/db/schema";
-import {
-  DEFAULT_PALETTE_KEY,
-  isHexColor,
-  paletteByKey,
-  resolveBrandColors,
-  type PaletteColors,
-} from "@/lib/brand/palettes";
+import { isHexColor, paletteByKey, type PaletteColors } from "@/lib/brand/palettes";
 import { loadBusinessContext, contactFactsFor } from "@/lib/ai/business-context";
-import { LOGO_MAX_BYTES, isSupportedLogoDataUrl } from "@/lib/business/logo";
 import {
-  defaultHours,
-  parseHours,
-  parseServices,
-  type OpeningHours,
-  type ServiceEntry,
-} from "@/lib/business/hours";
+  emptyContext,
+  loadIntakeState,
+  type IntakeData,
+  type IntakeState,
+} from "@/lib/intake-state";
+/* Re-exported so every existing importer of these types is unchanged. */
+export type { IntakeData, IntakeState } from "@/lib/intake-state";
+import { LOGO_MAX_BYTES, isSupportedLogoDataUrl } from "@/lib/business/logo";
+import { defaultHours, parseHours, parseServices, type ServiceEntry } from "@/lib/business/hours";
 
 /**
  * The client intake form: what we ask for once, so we never have to guess.
@@ -45,62 +41,9 @@ import {
  * which one generation should believe.
  */
 
-export type IntakeData = {
-  businessName: string;
-  /** Data URL, or "" for none. */
-  logoUrl: string;
-  phone: string;
-  email: string;
-  address: string;
-  city: string;
-  postcode: string;
-  hours: OpeningHours;
-  services: ServiceEntry[];
-  about: string;
-  seoKeywords: string;
-  paletteKey: string;
-  colors: PaletteColors;
-  /** Vibe or Vibe WordPress. Only settable on the first build — see saveIntakeAction. */
-  mode: SiteMode;
-};
-
-export type IntakeState = {
-  data: IntakeData;
-  /** False the first time — drives "Build my site" vs "Edit my site". */
-  completed: boolean;
-  /**
-   * phone / email / address / hours, resolved.
-   *
-   * Returned alongside the form because generated content carries {{phone}}
-   * rather than a literal, and the canvas needs the values to substitute. After
-   * a save this is what lets the preview show the new number immediately,
-   * without a page reload and without regenerating anything.
-   */
-  facts: Record<string, string>;
-};
-
 /** Facts for the preview, tolerating a site whose profile row is missing. */
 async function buildContext(siteId: string) {
-  const ctx = await loadBusinessContext(siteId);
-  if (ctx) return ctx;
-  return {
-    businessName: "",
-    categories: null,
-    tags: null,
-    city: null,
-    state: null,
-    country: null,
-    phone: null,
-    email: null,
-    street: null,
-    postcode: null,
-    website: null,
-    about: null,
-    services: [],
-    seoKeywords: null,
-    hours: null,
-    logoUrl: null,
-  };
+  return (await loadBusinessContext(siteId)) ?? emptyContext();
 }
 
 async function requireEditor(siteId: string) {
@@ -124,39 +67,7 @@ async function requireEditor(siteId: string) {
  */
 export async function loadIntakeAction(siteId: string): Promise<IntakeState> {
   await requireEditor(siteId);
-
-  const site = await db.query.sites.findFirst({ where: eq(sites.id, siteId) });
-  if (!site) throw new Error("Site not found.");
-
-  const profile = await db.query.businessProfiles.findFirst({
-    where: and(
-      eq(businessProfiles.ownerId, siteId),
-      eq(businessProfiles.ownerType, "site"),
-    ),
-  });
-
-  const paletteKey = site.brandPaletteKey ?? DEFAULT_PALETTE_KEY;
-
-  return {
-    completed: Boolean(site.intakeCompletedAt),
-    facts: contactFactsFor(await buildContext(siteId)),
-    data: {
-      mode: site.mode,
-      businessName: site.name ?? "",
-      logoUrl: profile?.logoUrl ?? "",
-      phone: profile?.phoneNumber ?? "",
-      email: profile?.email ?? "",
-      address: profile?.address ?? "",
-      city: profile?.city ?? "",
-      postcode: profile?.zip ?? "",
-      hours: parseHours(profile?.openingHours) ?? defaultHours(),
-      services: parseServices(profile?.services),
-      about: profile?.aboutText ?? "",
-      seoKeywords: profile?.seoKeywords ?? "",
-      paletteKey,
-      colors: resolveBrandColors(paletteKey, site.brandColors),
-    },
-  };
+  return loadIntakeState(siteId);
 }
 
 /**

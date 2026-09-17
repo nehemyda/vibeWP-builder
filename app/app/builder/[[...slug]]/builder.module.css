@@ -341,32 +341,106 @@
   padding: 0.9rem;
   background: var(--surface);
 }
-.chatInput form {
+/* One bordered box: field on top, its controls in a row beneath. */
+.composer {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 0.55rem 0.6rem 0.5rem;
   display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.composer:focus-within {
+  /* --accent is the app's focus colour, as auth-shared.module.css already
+     uses it. NOT --primary: that token is defined only inside the theme
+     stylesheet for the site being built, so in the builder's own CSS it always
+     fell through to the literal orange and matched nothing. */
+  border-color: var(--accent, #5b6bff);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent, #5b6bff) 16%, transparent);
+}
+.composerField {
+  border: 0;
+  background: transparent;
+  resize: none;
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink);
+  padding: 0.25rem 0.3rem;
+  /* Grows with the text up to about six lines, then scrolls. `field-sizing`
+     does this without measuring in script; the max-height is the fallback's
+     cap either way. */
+  field-sizing: content;
+  min-height: 2.6rem;
+  max-height: 9rem;
+  overflow-y: auto;
+}
+.composerField:focus { outline: none; }
+.composerField::placeholder { color: var(--faint, #9aa1ab); }
+
+.composerBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
 }
-.chatInput input {
-  flex: 1;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 0.7rem 0.8rem;
-  font-size: 0.87rem;
-  color: var(--ink);
-  background: var(--bg);
+.composerScope {
+  font-size: 0.74rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
-.chatInput button {
-  border: none;
+.composerScope strong { color: var(--ink-2, #4a5160); font-weight: 650; }
+
+.composerSend {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  /* Same as .btnPrimary and .chatFab: the app's primary action is ink. */
   background: var(--ink);
   color: #fff;
-  border-radius: 12px;
-  padding: 0 1rem;
-  font-size: 0.87rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  transition: background 120ms ease;
 }
-.chatInput button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.composerSend:hover:not(:disabled) { filter: brightness(1.07); }
+/* Disabled is grey rather than a faded orange: a dimmed primary still reads as
+   the thing to press. */
+.composerSend:disabled {
+  background: var(--bg, #f4f5f7);
+  color: var(--faint, #9aa1ab);
+  cursor: default;
+}
+.composerSpinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in oklch, var(--faint, #9aa1ab) 45%, transparent);
+  border-top-color: var(--ink-2, #4a5160);
+  animation: vibewpSpin 620ms linear infinite;
+}
+@keyframes vibewpSpin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .composerSpinner { animation-duration: 2s; }
+}
+
+.composerNote {
+  margin: 0.5rem 0 0;
+  font-size: 0.7rem;
+  color: var(--faint, #9aa1ab);
+  text-align: center;
 }
 
 /* canvas pane */
@@ -405,6 +479,9 @@
   overflow: hidden;
   height: fit-content;
   transition: max-width 0.2s ease;
+  /* The selection overlay positions against this box, using the rects the
+     frame reports from inside itself. */
+  position: relative;
 }
 /* iPad-ish portrait width — wide enough to keep two columns, narrow enough
    to show where the desktop layout starts to strain. */
@@ -898,3 +975,1845 @@
 .sdEmpty { color: var(--faint, #9aa1ad); font-style: italic; }
 .sdHint { margin: 0 0 0.6rem; font-size: 0.8rem; line-height: 1.5; color: var(--ink-2, #4a5160); }
 .sdLink { display: inline-block; margin-top: 0.5rem; font-size: 0.83rem; }
+
+/* ---- canvas selection overlay ----
+   Positioned against .canvasFrame, which the frame's own rects are relative
+   to. The layer itself is inert; only the controls take a pointer, so hovering
+   the page underneath still highlights sections. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+.selectionBox {
+  position: absolute;
+  pointer-events: none;
+}
+/* Both bars sit inside the top edge: .canvasFrame clips its overflow, so a
+   toolbar above the first section would simply not be drawn. */
+.selectionLabel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  /* Editor chrome, so it must not borrow the site's brand colour: the label
+     sat in whatever orange the fallback gave and clashed with every palette
+     that was not orange. */
+  background: var(--ink);
+  color: #fff;
+  font: 600 10.5px/1 ui-monospace, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 8px;
+  border-radius: 0 0 6px 0;
+  white-space: nowrap;
+}
+.selectionTools {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: auto;
+  background: var(--surface, #fff);
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 9px;
+  padding: 4px;
+  box-shadow: 0 8px 24px -10px rgba(19, 25, 34, 0.35);
+}
+.selectionPrimary {
+  border: 0;
+  border-radius: 6px;
+  background: var(--ink);
+  color: #fff;
+  font: 600 12px/1 inherit;
+  padding: 7px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.selectionPrimary:hover:not(:disabled) { filter: brightness(1.06); }
+.selectionIcon {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink, #131922);
+  font: 600 13px/1 inherit;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+}
+.selectionIcon:hover:not(:disabled) { background: var(--bg, #f4f5f7); }
+.selectionDanger:hover:not(:disabled) { background: #fee2e2; color: #b91c1c; }
+.selectionPrimary:disabled,
+.selectionIcon:disabled { opacity: 0.4; cursor: default; }
+
+/* On a phone the toolbar would cover the section it labels, so it drops to a
+   single row of icons and the wording goes. */
+@media (max-width: 700px) {
+  .selectionPrimary { padding: 7px 8px; font-size: 11px; }
+  .selectionTools { top: 4px; right: 4px; gap: 2px; padding: 3px; }
+  .selectionLabel { font-size: 9.5px; padding: 4px 6px; }
+}
+
+/* ---- design panel ----
+   Occupies the chat pane's slot, so it inherits that pane's width and its
+   mobile behaviour rather than adding a fourth column to the shell. */
+.designPanel {
+  order: 2;
+  /* Wider than the chat pane it stands in for: every pixel here is a pixel of
+     the design being judged, and at 380 a hero's supporting copy scaled to
+     five pixels. */
+  width: 440px;
+  max-width: 100%;
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+}
+.designHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.designTitle { display: block; font-size: 0.85rem; font-weight: 700; }
+.designSubtitle {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.designClose {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  flex: none;
+}
+.designClose:hover { background: var(--bg); color: var(--ink); }
+
+.designSearch { padding: 0.6rem 0.9rem; flex: none; }
+.designSearch input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.designList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 0.7rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.designCard {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  font: inherit;
+  /*
+   * Cards keep their own height.
+   *
+   * As flex children of a scrolling column they shrink to fit by default, so
+   * ten cards squashed to 65px and the fifty-one behind "Browse all" became
+   * fifty-one horizontal lines — a list with nothing in it, and nothing to
+   * scroll, because the content had been compressed rather than overflowed.
+   *
+   * Exactly the fault .msgUser and .msgAi are marked `flex: none` for, a few
+   * hundred lines up, and for the same reason.
+   */
+  flex: none;
+}
+.designCard:hover:not(:disabled) {
+  border-color: var(--ink);
+  box-shadow: 0 8px 24px -14px rgba(19, 25, 34, 0.4);
+}
+.designCard:disabled { opacity: 0.55; cursor: default; }
+.designCardBack {
+  padding: 0.7rem 0.8rem;
+  border-style: dashed;
+  flex: none;
+}
+.designCardName {
+  display: block;
+  padding: 0.55rem 0.7rem 0;
+  font-size: 0.83rem;
+  font-weight: 650;
+  color: var(--ink);
+}
+.designCardNote {
+  display: block;
+  padding: 0.15rem 0.7rem 0.6rem;
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.designCardFree { color: var(--good, #17875a); }
+.designCardLoses { font-style: normal; color: var(--warn, #c9822a); }
+
+.designGroup {
+  flex: none;
+  margin: 0.5rem 0 -0.2rem;
+  font: 600 10px/1 ui-monospace, monospace;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.designEmpty { flex: none; color: var(--muted); font-size: 0.8rem; margin: 0.4rem 0; }
+.designMore {
+  flex: none;
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--ink-2, #4a5160);
+  border-radius: 9px;
+  padding: 0.55rem;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.designMore:hover { border-color: var(--ink); color: var(--ink); }
+
+/* ---- candidate preview ----
+   Rendered at 1100px and scaled, so the card shows the DESKTOP layout: a
+   section laid out at panel width would fire the mobile breakpoints and every
+   card would show the stacked phone version instead of the design. */
+.cardViewport {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+.cardScaler {
+  transform-origin: top left;
+  pointer-events: none;
+}
+/* A tall section is cropped rather than shrunk to illegibility; the fade is
+   what makes that read as deliberate. */
+.cardFade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 44px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff);
+  pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .designPanel { width: 100%; border-left: 0; }
+}
+
+/* ---- working cover ----
+   Over the canvas AND the panel, because a second click during a swap would be
+   built from a schema that is about to be replaced. Inside .panes rather than
+   the whole page so the toolbar's undo stays reachable the moment it ends. */
+.canvasCover {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklch, var(--bg, #f4f5f7) 62%, transparent);
+  backdrop-filter: blur(1.5px);
+  cursor: progress;
+}
+.canvasCoverCard {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--surface, #fff);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+  box-shadow: 0 18px 44px -18px rgba(19, 25, 34, 0.45);
+  max-width: min(28rem, 80%);
+}
+.canvasCoverSpinner {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in oklch, var(--ink) 18%, transparent);
+  border-top-color: var(--ink);
+  animation: vibewpSpin 620ms linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvasCoverSpinner { animation-duration: 2s; }
+}
+
+/* ---- style sidebar ----
+   On the LEFT, opposite the design picker: choosing a different layout and
+   adjusting the one you have are different jobs, and both flying out from the
+   same edge would make them feel like one. `order: 0` puts it before the
+   canvas without changing the DOM order the rest of the shell relies on. */
+.stylePanel {
+  /*
+   * Right, with the assistant and the design picker.
+   *
+   * It was on the left, which is where it was first asked for — but every
+   * panel in this builder operates on the canvas, and putting one of them on
+   * the opposite edge means the canvas jumps sideways depending on which is
+   * open. The three are mutually exclusive, so they never compete for the
+   * space; and the convention everywhere else is structure on the left,
+   * properties on the right.
+   */
+  order: 2;
+  width: 300px;
+  max-width: 100%;
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+}
+.styleHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.styleTitle { display: block; font-size: 0.85rem; font-weight: 700; }
+.styleScope { display: block; font-size: 0.76rem; color: var(--muted); margin-top: 1px; }
+
+.styleBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.2rem 0.9rem 1rem;
+}
+.styleGroup { margin-top: 1rem; }
+.styleGroupName {
+  margin: 0 0 0.5rem;
+  font: 600 10px/1 ui-monospace, monospace;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.styleRow { margin-bottom: 0.9rem; }
+.styleLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 0.3rem;
+}
+/* The number is muted while it matches the design and solid once it does not,
+   so "have I changed this?" is answerable at a glance rather than by memory. */
+.styleValue { font: 600 0.74rem/1 ui-monospace, monospace; color: var(--ink); }
+.styleValueMuted { font: 400 0.74rem/1 ui-monospace, monospace; color: var(--faint, #9aa0aa); }
+.styleHint {
+  margin: 0.3rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.styleRange {
+  width: 100%;
+  accent-color: var(--ink);
+  cursor: pointer;
+}
+.styleRange:disabled { opacity: 0.5; cursor: default; }
+
+.styleFooter { flex: none; padding: 0.7rem 0.9rem; border-top: 1px solid var(--line); }
+.styleReset {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  border-radius: 9px;
+  padding: 0.55rem;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.styleReset:hover:not(:disabled) { border-color: var(--ink); }
+.styleReset:disabled { color: var(--muted); cursor: default; }
+
+/* Same treatment the chat pane gets below 900px: a sheet over the canvas
+   rather than a column squeezing it. */
+@media (max-width: 900px) {
+  .stylePanel {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    width: 100%;
+    max-width: none;
+    border-left: 0;
+  }
+}
+
+/* Pressed state for a toolbar toggle, so an open panel is legible from the
+   button that opened it. */
+.detailsBtnOn {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+/* The second action on the selection toolbar: same weight as Change design,
+   quieter, because most of the time the layout is already right. */
+.selectionSecondary {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: var(--ink);
+  font: 600 12px/1 inherit;
+  padding: 7px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.selectionSecondary:hover:not(:disabled) { border-color: var(--ink); }
+.selectionSecondary:disabled { opacity: 0.4; cursor: default; }
+
+.styleSelect {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  text-transform: capitalize;
+}
+
+/* The section half of the breadcrumb, which is also the way back to it. */
+.styleCrumb {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.styleCrumb:hover { color: var(--ink); }
+
+/*
+ * The section overflow menu.
+ *
+ * Positioned relative to its own button rather than the bar, so it stays
+ * under the ⋯ wherever the bar has been pushed to. z-index above the canvas
+ * chrome for the same reason the bar itself is: it is drawn over the page.
+ */
+.selectionMenuWrap { position: relative; display: inline-flex; }
+
+.selectionMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  /* flex: none on the children — this pane's items have shrunk before. */
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--card, #fff);
+  border: 1px solid var(--border, #e3e5e9);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.14);
+}
+
+.selectionMenu button {
+  flex: none;
+  appearance: none;
+  border: 0;
+  background: none;
+  text-align: left;
+  white-space: nowrap;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink, #131922);
+  cursor: pointer;
+}
+
+.selectionMenu button:hover { background: var(--bg, #f4f5f7); }
+
+.selectionMenuRule {
+  flex: none;
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border, #e3e5e9);
+}
+
+/*
+ * The copy confirmation.
+ *
+ * Bottom-centre over the canvas, out of the way of the section bar at the top
+ * of whatever was just copied. Never interactive — pointer-events off, so it
+ * cannot swallow a click aimed at the section underneath it.
+ */
+.copyToast {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  z-index: 40;
+  transform: translateX(-50%);
+  pointer-events: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #17181c;
+  color: #fff;
+  font-size: 12.5px;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.22);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .copyToast { animation: copyToastIn 140ms ease-out; }
+  @keyframes copyToastIn {
+    from { opacity: 0; transform: translate(-50%, 6px); }
+  }
+}
+
+/* Opened upward, when the section sits too near the bottom of the window. */
+.selectionMenuUp { top: auto; bottom: calc(100% + 6px); }
+
+/*
+ * Edit, while it is on.
+ *
+ * Filled rather than outlined, because it is a mode the client is in rather
+ * than a button they pressed — the same distinction the toolbar's pressed
+ * Bold makes.
+ */
+.selectionSecondaryOn {
+  background: var(--ink, #131922);
+  border-color: var(--ink, #131922);
+  color: var(--surface, #fff);
+}
+.selectionSecondaryOn:hover:not(:disabled) { filter: brightness(1.15); }
+
+/* ── The image library ──────────────────────────────────────────────── */
+
+.mediaPanel {
+  position: relative;
+  /* flex: none — this pane's children have shrunk to nothing before now. */
+  flex: none;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--border, #e3e5e9);
+  background: var(--card, #fff);
+}
+
+.mediaHead {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--border, #e3e5e9);
+}
+.mediaTargetName {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--muted, #757b83);
+}
+.mediaClose {
+  flex: none;
+  appearance: none;
+  border: 0;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 4px;
+  color: var(--muted, #757b83);
+  cursor: pointer;
+}
+.mediaClose:hover { color: var(--ink, #131922); }
+
+.mediaActions { flex: none; padding: 10px 14px; }
+.mediaUpload {
+  width: 100%;
+  appearance: none;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--border, #cfd3da);
+  background: var(--bg, #f7f8fa);
+  color: var(--ink, #131922);
+  font: 600 12.5px/1 inherit;
+  cursor: pointer;
+}
+.mediaUpload:hover:not(:disabled) { border-color: var(--ink, #131922); }
+.mediaUpload:disabled { opacity: 0.55; cursor: default; }
+
+.mediaError {
+  flex: none;
+  margin: 0 14px 8px;
+  font-size: 12px;
+  color: var(--bad, #b42318);
+}
+.mediaHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #757b83);
+}
+.mediaEmpty { flex: none; padding: 8px 14px 16px; display: grid; gap: 6px; }
+
+/*
+ * The grid scrolls, and it is the ONLY thing here that does. min-height: 0 on
+ * the panel above is what allows it to — without it a flex child refuses to
+ * shrink below its content and the whole panel grows instead.
+ */
+.mediaGrid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 0 14px 14px;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.mediaTile { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.mediaTileBtn {
+  position: relative;
+  appearance: none;
+  padding: 0;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg, #f4f5f7);
+  cursor: pointer;
+  /* Equal squares: a wall of mixed shapes cannot be scanned. */
+  aspect-ratio: 1;
+}
+.mediaTileBtn img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mediaTileBtn:disabled { cursor: default; }
+.mediaTileBtn:hover:not(:disabled) { border-color: var(--ink, #131922); }
+
+.mediaUse {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 6px;
+  background: rgb(0 0 0 / 0.62);
+  color: #fff;
+  font: 600 11.5px/1 inherit;
+  opacity: 0;
+  transition: opacity 90ms ease-out;
+}
+.mediaTileBtn:hover .mediaUse,
+.mediaTileBtn:focus-visible .mediaUse { opacity: 1; }
+
+.mediaMeta { display: flex; align-items: center; gap: 4px; min-width: 0; }
+
+.mediaAlt {
+  flex: 1 1 auto;
+  min-width: 0;
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink-2, #4e5661);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: text;
+}
+/* Missing alt is a real defect on a published page, so it reads as one. */
+.mediaAltMissing { color: var(--bad, #b42318); }
+
+.mediaAltInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid var(--ink, #131922);
+  border-radius: 4px;
+}
+
+.mediaRemove {
+  flex: none;
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted, #9aa0aa);
+  cursor: pointer;
+}
+.mediaRemove:hover { color: var(--bad, #b42318); }
+
+.mediaDrop {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--card, #fff) 82%, transparent);
+  border: 2px dashed var(--ink, #131922);
+  border-radius: 10px;
+  font: 600 13px/1 inherit;
+  color: var(--ink, #131922);
+}
+
+@media (max-width: 900px) {
+  .mediaPanel { width: 100%; border-left: 0; }
+}
+
+/* ── The parts of a section ─────────────────────────────────────────── */
+
+.partsEmpty { margin: 4px 0 0; font-size: 12px; color: var(--muted, #757b83); }
+
+.partsList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  /*
+   * minmax(0, 1fr), not the default `auto`.
+   *
+   * An implicit grid column sizes to the MAX-CONTENT of its items, so the one
+   * row showing "Delete / Keep" made every row 326px wide inside a 270px
+   * panel — and pushed Keep, the way out of the confirmation, off the edge of
+   * the screen. minmax(0, …) is what lets the column be narrower than its
+   * widest child.
+   */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+.partRow {
+  /* flex: none — a shrunk row hides the controls at its right-hand end. */
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 7px;
+  background: var(--card, #fff);
+}
+.partRowDragging { opacity: 0.45; }
+/* The line lands ABOVE the row being hovered, which is where it will go. */
+.partRowOver { box-shadow: inset 0 2px 0 var(--ink, #131922); }
+/* A hidden part still reads as present, just not painted. */
+.partRowHidden .partName { opacity: 0.5; text-decoration: line-through; }
+
+.partGrip { cursor: grab; color: var(--muted, #9aa0aa); font-size: 12px; line-height: 1; }
+.partRow:active .partGrip { cursor: grabbing; }
+
+.partName {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.partNudge { flex: none; display: flex; gap: 1px; }
+.partNudge button {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 1px 3px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ink-2, #4e5661);
+  cursor: pointer;
+}
+.partNudge button:hover:not(:disabled) { color: var(--ink, #131922); }
+.partNudge button:disabled { opacity: 0.25; cursor: default; }
+
+.partShow {
+  /* Shrinkable: the confirm buttons need the room, and a truncated select is
+     better than a control pushed out of the panel. */
+  flex: 0 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 4px;
+  max-width: 108px;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 5px;
+  background: var(--surface, #fff);
+  color: var(--ink, #131922);
+}
+
+.partDelete {
+  flex: none;
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0 3px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted, #9aa0aa);
+  cursor: pointer;
+}
+.partDelete:hover:not(:disabled) { color: var(--bad, #b42318); }
+.partDelete:disabled { opacity: 0.3; cursor: default; }
+
+.partConfirm { flex: none; display: flex; gap: 4px; }
+.partConfirm button {
+  appearance: none;
+  border: 1px solid var(--border, #e3e5e9);
+  background: var(--surface, #fff);
+  border-radius: 5px;
+  padding: 2px 6px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.partConfirmYes {
+  border-color: var(--bad, #b42318) !important;
+  background: var(--bad, #b42318) !important;
+  color: #fff;
+}
+
+/* ── The site dashboard ─────────────────────────────────────────────── */
+
+.dashScrim {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: stretch;
+  padding: 24px;
+  background: rgb(15 17 21 / 0.42);
+}
+
+.dashShell {
+  /*
+   * Full width as asked, with a margin so it reads as ON the app rather than
+   * as a new page — a dialog flush to the viewport edge is indistinguishable
+   * from a navigation, and this one is a place you come back FROM.
+   */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: 14px;
+  background: var(--card, #fff);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.28);
+  overflow: hidden;
+}
+
+.dashHead {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border, #e3e5e9);
+}
+.dashEyebrow {
+  font: 700 10px/1 inherit;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted, #757b83);
+}
+.dashSite { font-size: 14px; }
+.dashClose {
+  margin-left: auto;
+  appearance: none;
+  border: 0;
+  background: none;
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 4px;
+  color: var(--muted, #757b83);
+  cursor: pointer;
+}
+.dashClose:hover { color: var(--ink, #131922); }
+
+.dashBody { flex: 1 1 auto; min-height: 0; display: flex; }
+
+.dashRail {
+  /* flex: none — a rail that shrinks puts its labels on two lines. */
+  flex: none;
+  width: 188px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 10px;
+  border-right: 1px solid var(--border, #e3e5e9);
+  background: var(--bg, #f7f8fa);
+}
+
+.dashTab {
+  flex: none;
+  appearance: none;
+  border: 0;
+  background: none;
+  text-align: left;
+  padding: 9px 11px;
+  border-radius: 8px;
+  font: 600 13px/1.2 inherit;
+  color: var(--ink-2, #4e5661);
+  cursor: pointer;
+}
+.dashTab:hover { background: rgb(0 0 0 / 0.05); color: var(--ink, #131922); }
+.dashTabOn {
+  background: var(--card, #fff);
+  color: var(--ink, #131922);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+}
+
+/*
+ * The PANE scrolls, and nothing above it does. min-height: 0 is what allows a
+ * flex child to be shorter than its content; without it the dialog grows to
+ * fit the SEO table and the rail scrolls off the top of the screen.
+ */
+.dashPane {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 20px;
+}
+
+@media (max-width: 900px) {
+  .dashScrim { padding: 0; }
+  .dashShell { border-radius: 0; }
+  .dashBody { flex-direction: column; }
+  .dashRail {
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border, #e3e5e9);
+  }
+}
+
+/* The style controls inside the dashboard: no frame, wider columns. */
+/*
+ * The sliders keep a comfortable reading width — a 1400px slider is harder to
+ * set precisely than a 600px one, and there is nothing beside it to fill the
+ * rest with. Full width is for lists, not for a single control per row.
+ */
+.styleBodyBare { max-width: 620px; display: grid; gap: 18px; }
+
+/* ── The SEO table ──────────────────────────────────────────────────── */
+
+/*
+ * Full width. These panels were written as a 340–760px column because they
+ * began life in a sidebar; inside a full-width dialog that left most of the
+ * screen empty and the rows cramped anyway. The dialog decides the width now,
+ * and the content fills it.
+ */
+.seoWrap { max-width: none; }
+.seoHead { margin-bottom: 14px; }
+.seoTitle { margin: 0 0 4px; font-size: 16px; }
+.seoLede { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-2, #4e5661); }
+
+.seoFilters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.seoFilter {
+  flex: none;
+  appearance: none;
+  border: 1px solid var(--border, #e3e5e9);
+  background: var(--card, #fff);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font: 600 12px/1 inherit;
+  color: var(--ink-2, #4e5661);
+  cursor: pointer;
+}
+.seoFilter:hover { border-color: var(--ink, #131922); }
+.seoFilterOn {
+  background: var(--ink, #131922);
+  border-color: var(--ink, #131922);
+  color: #fff;
+}
+
+.seoList { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+
+.seoRow {
+  /* flex: none — a shrunk row clips its own counters. */
+  flex: none;
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 10px;
+}
+
+/*
+ * Zebra striping. Applied at every width, not only in the wide table layout
+ * below — it helps a stack of cards read as a list of distinct pages too, and
+ * costs nothing to leave on. --bg is the app's own "not card" surface, already
+ * used for the rail and for thumbnail backgrounds, so this introduces no new
+ * colour.
+ *
+ * nth-child counts what is actually rendered — the filtered, paged rows — so
+ * the stripe follows what a person sees rather than each page's fixed
+ * position in the whole list.
+ */
+.seoRow:nth-child(odd) { background: var(--card, #fff); }
+.seoRow:nth-child(even) { background: var(--bg, #f7f8fa); }
+
+.seoPage { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.seoSlug { color: var(--muted, #757b83); font-size: 12px; }
+.seoBadge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg, #f2f3f5);
+  color: var(--ink-2, #4e5661);
+  font: 600 10.5px/1.5 inherit;
+}
+
+.seoField { display: grid; gap: 4px; }
+.seoFieldHead {
+  display: flex;
+  justify-content: space-between;
+  font: 600 11px/1 inherit;
+  color: var(--ink-2, #4e5661);
+}
+.seoCount { color: var(--muted, #9aa0aa); font-weight: 500; }
+/* Over the length Google shows. Flagged, never refused — see SeoPanel. */
+.seoCountOver { color: var(--bad, #b42318); font-weight: 700; }
+
+.seoInput {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 7px 9px;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 7px;
+  background: var(--surface, #fff);
+  color: var(--ink, #131922);
+  resize: vertical;
+}
+.seoInput:focus { outline: 2px solid var(--ink, #131922); outline-offset: -1px; }
+
+.seoNoIndex {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--ink-2, #4e5661);
+}
+
+.seoWarnings {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 2px;
+  font-size: 11.5px;
+  color: var(--bad, #b42318);
+}
+
+/* Column headers for the wide table layout below — absent otherwise. */
+.seoTableHead { display: none; }
+
+/*
+ * ── The wide layout: one page, one row ──────────────────────────────
+ *
+ * Below this, each page is a stack of labelled fields — the original
+ * layout, unchanged, and still what a narrow window gets. At 1080px there is
+ * finally room to lay focus keyword, title, description, canonical URL and
+ * the noindex checkbox out as columns, so nine pages read as a table instead
+ * of nine long cards to scroll past — which is the point of judging them
+ * together (see the panel's own opening comment).
+ *
+ * The column list is written ONCE, on a selector that matches both the
+ * header row and every page row, so the two can never drift out of step —
+ * two separate copies of the same six widths is exactly the kind of thing
+ * that is correct on the day it is written and wrong after the next edit.
+ */
+@media (min-width: 1080px) {
+  .seoRow,
+  .seoTableHead {
+    display: grid;
+    grid-template-columns: 150px minmax(120px, 0.8fr) minmax(170px, 1.1fr) minmax(260px, 2fr) minmax(
+        130px,
+        0.9fr
+      )
+      86px;
+    gap: 14px;
+    align-items: start;
+  }
+
+  .seoTableHead {
+    padding: 8px 14px;
+    border: 1px solid var(--border, #e3e5e9);
+    border-bottom: 0;
+    border-radius: 10px 10px 0 0;
+    background: var(--bg, #f7f8fa);
+    /*
+     * Longhand, not the `font` shorthand — `font: 700 10px/1.3 inherit;`
+     * is not valid CSS (the font-family slot cannot be the keyword
+     * `inherit`; CSS.supports() confirms it) and every browser drops the
+     * whole declaration rather than part of it. So this row was rendering at
+     * the ambient 16px body size, not-bold, not the intended 10px — which is
+     * the actual header-is-too-big bug, not something layout can fix on its
+     * own. The same broken shorthand is used elsewhere in this file; those
+     * are unrelated to this change and are being left alone here.
+     */
+    font-weight: 700;
+    font-size: 10px;
+    line-height: 1.3;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted, #757b83);
+  }
+
+  /*
+   * The rows join into one table: no gap, no border on each row, a shared
+   * border round the whole list, and a rule between rows instead of round
+   * every one. The header's own bottom border serves as the first rule.
+   */
+  .seoList {
+    gap: 0;
+    border: 1px solid var(--border, #e3e5e9);
+    border-top: 0;
+    border-radius: 0 0 10px 10px;
+    overflow: hidden;
+  }
+  .seoRow {
+    border: 0;
+    border-radius: 0;
+    border-bottom: 1px solid var(--border, #e3e5e9);
+    padding: 12px 14px;
+  }
+  .seoList > .seoRow:last-child { border-bottom: 0; }
+
+  /* Title, then slug and badges beneath it — flowing them inline was fine
+     at full width but crowds a 150px column. */
+  .seoPage { flex-direction: column; align-items: flex-start; gap: 3px; }
+
+  /*
+   * The field's own label is redundant with the column header above it, so
+   * it is hidden the same way .srOnly hides text: still announced, gone from
+   * the page. The character count stays and moves to the right, where a
+   * count normally sits over an input.
+   */
+  .seoFieldLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .seoFieldHead { justify-content: flex-end; }
+
+  /* Same treatment for the checkbox's own words — "Hide from search
+     engines" is the column header now, not a label repeated on every row. */
+  .seoNoIndex { justify-content: center; padding-top: 7px; }
+  .seoNoIndexText {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /*
+   * Warnings span every column. Explicit rather than left to grid
+   * auto-placement: it happens to fall on its own row either way, because
+   * the six field cells above it fill every column track — but saying so
+   * here is the difference between that being read as a decision and being
+   * read as an accident the next time this file is edited.
+   */
+  .seoWarnings { grid-column: 1 / -1; margin-top: 2px; }
+}
+
+.seoHead { display: flex; align-items: flex-start; gap: 16px; }
+.seoActions { flex: none; display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.seoGenerate {
+  flex: none;
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--ink, #131922);
+  color: #fff;
+  font: 600 12.5px/1 inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seoGenerate:disabled { opacity: 0.55; cursor: default; }
+.seoGenerateGhost {
+  flex: none;
+  appearance: none;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--card, #fff);
+  color: var(--ink-2, #4e5661);
+  font: 600 12.5px/1 inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seoGenerateGhost:hover:not(:disabled) { border-color: var(--ink, #131922); }
+.seoConfirm { flex: none; display: flex; gap: 5px; }
+.seoConfirm button {
+  appearance: none;
+  border: 1px solid var(--border, #e3e5e9);
+  background: var(--card, #fff);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: 600 12px/1 inherit;
+  cursor: pointer;
+}
+.seoConfirmYes {
+  border-color: var(--bad, #b42318) !important;
+  background: var(--bad, #b42318) !important;
+  color: #fff;
+}
+.seoNote { margin: 0 0 10px; font-size: 12.5px; color: var(--good, #1a7f4b); }
+
+/* ── Image descriptions ─────────────────────────────────────────────── */
+
+.altList { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+
+.altRow {
+  flex: none;
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 10px;
+  background: var(--card, #fff);
+}
+
+/*
+ * The picture, at a size you can actually judge. A 40px thumbnail is a colour
+ * swatch — you cannot describe what you cannot make out, and the whole point
+ * of this screen is writing from the photograph rather than the filename.
+ */
+.altThumb {
+  flex: none;
+  width: 116px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 7px;
+  background: var(--bg, #f2f3f5);
+}
+
+.altFields { flex: 1 1 auto; min-width: 0; display: grid; gap: 5px; align-content: center; }
+.altWhere { font-size: 11.5px; color: var(--muted, #757b83); }
+
+/*
+ * The library inside the dashboard: no column, no frame, and a grid that uses
+ * the width it has been given. auto-fill rather than a fixed count, so the
+ * number of columns follows the dialog instead of being decided here.
+ */
+.mediaPanelWide {
+  width: 100%;
+  border-left: 0;
+  background: transparent;
+}
+.mediaPanelWide .mediaActions { padding: 0 0 12px; max-width: 320px; }
+.mediaPanelWide .mediaGrid {
+  padding: 0 0 14px;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 14px;
+}
+.mediaPanelWide .mediaEmpty { padding: 0 0 16px; max-width: 460px; }
+.mediaPanelWide .mediaError { margin-left: 0; margin-right: 0; }
+
+.mediaTargetWide {
+  flex: none;
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: var(--ink-2, #4e5661);
+}
+
+
+/* ── The images tab ─────────────────────────────────────────────────── */
+
+.imagesTab { position: relative; display: grid; gap: 4px; }
+
+
+/* ── The images grid ────────────────────────────────────────────────── */
+
+/*
+ * Four across, as asked, and fewer as the dialog narrows. auto-fit with a
+ * minimum rather than a hard `repeat(4, …)`: at 900px four columns would be
+ * 200px each with two text fields under them, which is narrower than the
+ * words they hold.
+ */
+.imageGrid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(228px, 1fr));
+  gap: 16px;
+}
+@media (min-width: 1120px) {
+  .imageGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.imageCard {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 10px;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 10px;
+  background: var(--card, #fff);
+}
+
+.imageThumbBtn {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--bg, #f2f3f5);
+  /* 4:3 — tall enough to recognise a photograph, short enough for four rows. */
+  aspect-ratio: 4 / 3;
+  cursor: zoom-in;
+}
+.imageThumbBtn img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.imageThumbBtn:hover { outline: 2px solid var(--ink, #131922); outline-offset: 1px; }
+
+.imageWhere {
+  font-size: 11px;
+  color: var(--muted, #757b83);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.imageField { display: grid; gap: 2px; min-width: 0; }
+.imageFieldLabel {
+  font: 600 10px/1.4 inherit;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted, #757b83);
+}
+
+/*
+ * Delete, on the picture's top-right corner.
+ *
+ * It was a "Remove from library" text link at the foot of the card, under two
+ * text fields — so on a four-across grid the most destructive control on the
+ * screen sat in the position of a caption, and it only appeared on some cards.
+ * The corner of the thumbnail is where a media manager puts this, and it puts
+ * it on every card.
+ */
+/*
+ * grid, not block.
+ *
+ * The thumbnail button used to be a direct child of .imageCard, which is a
+ * grid, so it stretched to the card's width. Wrapping it in a block span made
+ * it shrink to its content while the wrapper stayed full width — so the chip,
+ * which anchors to the wrapper, sat in the white gutter to the RIGHT of the
+ * picture instead of on it. Only visible by looking at it.
+ */
+.imageThumbWrap { position: relative; display: grid; min-width: 0; }
+
+.imageDelete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 7px;
+  /*
+   * A dark scrim AND a light edge, because it sits on an unknown photograph.
+   *
+   * The scrim alone was not enough, which I found by rendering it over a
+   * near-white gradient and a near-black one rather than over one convenient
+   * photo: the white bin read fine on the pale card and the whole chip sank
+   * into the dark one — visible, but no longer reading as a button. The
+   * translucent white border gives it an edge on a dark picture; the dark fill
+   * gives the icon contrast on a light one. Neither works alone.
+   *
+   * The same lesson as the section menu's ⋯, which shipped at #d7dae0 and
+   * could not be seen. A control over arbitrary content needs contrast in both
+   * directions.
+   */
+  border: 1px solid rgb(255 255 255 / 0.55);
+  background: rgb(12 14 17 / 0.62);
+  color: #fff;
+  cursor: pointer;
+  /* Above the thumbnail's own hover outline. */
+  z-index: 1;
+}
+.imageDelete svg { width: 15px; height: 15px; display: block; }
+.imageDelete:hover:not(:disabled) {
+  background: var(--bad, #b42318);
+  border-color: var(--bad, #b42318);
+}
+.imageDelete:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -4px;
+}
+.imageDelete:disabled { opacity: 0.45; cursor: default; }
+
+/*
+ * The lightbox. Inside the dashboard rather than a second dialog, because it
+ * is a closer look at something already on screen — so everything closes it.
+ */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  padding: 40px;
+  background: rgb(12 14 17 / 0.82);
+  cursor: zoom-out;
+}
+.lightbox img {
+  max-width: min(1100px, 100%);
+  max-height: 78vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.5);
+}
+.lightboxWhere { color: #d7dae0; font-size: 12.5px; }
+.lightboxClose {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  appearance: none;
+  border: 0;
+  background: rgb(255 255 255 / 0.14);
+  color: #fff;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.lightboxClose:hover { background: rgb(255 255 255 / 0.26); }
+
+/* The generate button, inside the field it fills. */
+.imageInputWrap { position: relative; display: block; min-width: 0; }
+.imageInputWithBtn { padding-right: 30px; }
+
+.imageGenBtn {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: var(--bg, #f2f3f5);
+  /*
+   * ink-2, not muted. The section menu's ⋯ shipped at #d7dae0 and the report
+   * was that it could not be seen; a 14px glyph at #9aa0aa on white is the
+   * same mistake one shade later. It also carries a faint ground, so it reads
+   * as a button before the pointer is anywhere near it.
+   */
+  color: var(--ink-2, #4e5661);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.imageGenBtn:hover:not(:disabled) {
+  background: var(--ink, #131922);
+  color: #fff;
+}
+.imageGenBtn:disabled { opacity: 0.5; cursor: default; }
+
+.imageGenSpin {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--border, #d7dae0);
+  border-top-color: var(--ink, #131922);
+  border-radius: 50%;
+  animation: imageGenSpin 620ms linear infinite;
+}
+@keyframes imageGenSpin {
+  to { transform: rotate(360deg); }
+}
+/* Still legible to anyone who has asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .imageGenSpin { animation-duration: 2s; }
+}
+
+/* ── Generate with AI ───────────────────────────────────────────────── */
+
+.genWrap { position: relative; display: inline-flex; flex: none; }
+
+/*
+ * Outlined, not filled, and no accent colour.
+ *
+ * This shipped filled in --accent, which is a real token but one nothing else
+ * in the builder uses as a button — so it read as a colour borrowed from the
+ * reference screenshot rather than as part of this app. Upload is the filled
+ * primary because getting pictures in is the common action; this is the
+ * secondary beside it, and outlined is how the rest of the app says that.
+ */
+.genBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  appearance: none;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--card, #fff);
+  color: var(--ink, #131922);
+  font: 600 12.5px/1 inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.genBtn:hover:not(:disabled) { border-color: var(--ink, #131922); }
+.genBtn:disabled { opacity: 0.5; cursor: default; }
+.genCaret { font-size: 11px; opacity: 0.55; }
+
+.genMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 244px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--card, #fff);
+  border: 1px solid var(--border, #e3e5e9);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.16);
+}
+
+/* The group heading, on its own ground like the reference's. */
+.genGroup {
+  display: block;
+  padding: 7px 10px 5px;
+  margin: 2px 0;
+  background: var(--bg, #f7f8fa);
+  border-radius: 6px;
+  font: 700 10px/1 inherit;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted, #757b83);
+}
+
+.genMenu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  appearance: none;
+  border: 0;
+  background: none;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink, #131922);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.genMenu button:hover:not(:disabled) { background: var(--bg, #f2f3f5); }
+.genMenu button:disabled { opacity: 0.4; cursor: default; }
+
+/* How many that command would touch, so the choice needs no guessing. */
+.genCount {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg, #f2f3f5);
+  font-size: 11px;
+  color: var(--ink-2, #4e5661);
+}
+
+.genConfirm { display: flex; gap: 4px; padding: 2px; }
+.genConfirm button { width: auto; font-size: 12px; }
+.genConfirmYes {
+  background: var(--bad, #b42318) !important;
+  color: #fff !important;
+}
+
+/*
+ * The delete confirmation.
+ *
+ * Sits above the dashboard and below nothing: it is the last thing asked
+ * before something goes, so it must not be possible to interact with the grid
+ * behind it. Scrim z-index is above .lightbox's 260 for the same reason — the
+ * two can never be open at once, but a stacking order that depends on that
+ * being true is one feature away from being wrong.
+ */
+.confirmScrim {
+  position: fixed;
+  inset: 0;
+  z-index: 280;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(12 14 17 / 0.5);
+}
+.confirmCard {
+  width: min(440px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 20px;
+  border-radius: 14px;
+  background: var(--card, #fff);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.28);
+}
+.confirmCard:focus { outline: none; }
+
+/* Small, because it identifies the picture rather than showing it off. */
+.confirmThumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--wash, #f4f5f7);
+}
+.confirmTitle { font: 700 15px/1.35 inherit; color: var(--ink, #131922); }
+.confirmName {
+  font: 500 12px/1.4 inherit;
+  color: var(--muted, #757b83);
+  word-break: break-all;
+}
+.confirmBody { margin: 2px 0 0; font: 400 13px/1.5 inherit; color: var(--ink-2, #3f4650); }
+.confirmBody strong { font-weight: 700; }
+
+.confirmList {
+  margin: 0;
+  padding: 8px 10px;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border-radius: 8px;
+  background: var(--wash, #f4f5f7);
+  font: 600 12.5px/1.4 inherit;
+  color: var(--ink, #131922);
+}
+.confirmList span { font-weight: 500; color: var(--muted, #757b83); }
+
+.confirmActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  width: 100%;
+  margin-top: 6px;
+}
+.confirmKeep,
+.confirmGo {
+  appearance: none;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font: 600 12.5px/1 inherit;
+  cursor: pointer;
+}
+/*
+ * Keep is the wider target and the calmer one. The destructive button carries
+ * the colour, so the one that changes nothing cannot be hit by muscle memory
+ * aiming at a primary.
+ */
+.confirmKeep {
+  border: 1px solid var(--border, #e3e5e9);
+  background: var(--card, #fff);
+  color: var(--ink, #131922);
+}
+.confirmKeep:hover:not(:disabled) { border-color: var(--ink, #131922); }
+.confirmGo {
+  border: 1px solid var(--bad, #b42318);
+  background: var(--bad, #b42318);
+  color: #fff;
+}
+.confirmGo:hover:not(:disabled) { filter: brightness(1.06); }
+.confirmKeep:disabled,
+.confirmGo:disabled { opacity: 0.55; cursor: default; }
+
+/*
+ * The Images tab's toolbar: the filter tabs and the search box.
+ *
+ * One row, because they do one job between them — narrowing the same list.
+ * Search below the tabs would read as a separate control over something else.
+ * The filter row keeps its own bottom margin, so this cancels it and owns the
+ * spacing for both.
+ */
+.imageTools {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+/*
+ * The filters take the slack, which is what puts search on the right.
+ *
+ * Search used to claim the right edge with `margin-left: auto`, and an auto
+ * margin eats the free space BEFORE flex-grow gets it — so once the panel
+ * narrowed and search wrapped onto its own line, it sat stranded at 300px
+ * against the right edge instead of filling the line it now had to itself.
+ */
+.imageTools .seoFilters { margin-bottom: 0; flex: 1 1 auto; }
+
+.imageSearch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* First to wrap when the panel narrows, and it fills the line once it does. */
+  min-width: 220px;
+  flex: 1 1 260px;
+  max-width: 340px;
+  padding: 0 8px;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 8px;
+  background: var(--card, #fff);
+}
+.imageSearch:focus-within { border-color: var(--ink, #131922); }
+.imageSearch svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--muted, #757b83);
+}
+.imageSearch input {
+  flex: 1;
+  min-width: 0;
+  appearance: none;
+  border: 0;
+  outline: none;
+  background: none;
+  padding: 8px 0;
+  font: 500 12.5px/1.2 inherit;
+  color: var(--ink, #131922);
+}
+/* Safari draws its own clear button on type=search; this one is ours. */
+.imageSearch input::-webkit-search-decoration,
+.imageSearch input::-webkit-search-cancel-button {
+  appearance: none;
+}
+.imageSearchClear {
+  flex: none;
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 2px 4px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--muted, #757b83);
+  cursor: pointer;
+}
+.imageSearchClear:hover { color: var(--ink, #131922); }
+
+/*
+ * The pager.
+ *
+ * The count sits on the left and stays even when there is one page, because
+ * "47 pictures" answers a question the grid does not: how many there are in
+ * total, rather than how many you can currently see.
+ */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #e3e5e9);
+}
+.pagerCount { font-size: 12px; color: var(--muted, #757b83); }
+.pagerBtns { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+
+.pagerBtn,
+.pagerNum {
+  appearance: none;
+  border: 1px solid var(--border, #e3e5e9);
+  border-radius: 7px;
+  background: var(--card, #fff);
+  color: var(--ink, #131922);
+  font: 600 12px/1 inherit;
+  cursor: pointer;
+}
+.pagerBtn { padding: 7px 10px; }
+/* Square, and wide enough that a two-digit page does not change its size. */
+.pagerNum { min-width: 28px; padding: 7px 4px; text-align: center; }
+.pagerBtn:hover:not(:disabled),
+.pagerNum:hover:not(.pagerNumOn) { border-color: var(--ink, #131922); }
+.pagerBtn:disabled { opacity: 0.4; cursor: default; }
+.pagerNumOn {
+  background: var(--ink, #131922);
+  border-color: var(--ink, #131922);
+  color: #fff;
+}
+.pagerAt { font: 600 12px/1 inherit; color: var(--muted, #757b83); padding: 0 6px; }
+
+/* Named for a screen reader, invisible to everyone else. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

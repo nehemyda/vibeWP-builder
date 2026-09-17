@@ -1,7 +1,7 @@
 /**
  * Raw-SQL migration: make a custom domain an address, not a note.
  * Safe to re-run.
- * Run with: npx tsx lib/db/migrate-batch29.ts
+ * Run with: npx tsx lib/db/migrate-batch33.ts
  *
  * WHY
  *

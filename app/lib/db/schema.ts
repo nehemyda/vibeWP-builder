@@ -146,6 +146,16 @@ export const sites = pgTable("sites", {
    */
   brandPaletteKey: text("brand_palette_key"),
   brandColors: jsonb("brand_colors"),
+  /**
+   * Design values the client set by hand — heading scale, spacing, radius.
+   *
+   * Multipliers rather than sizes, so they compose with each section's own
+   * design instead of flattening 62 of them onto one value. Absent means "as
+   * designed", which is why an at-default control stores nothing: pinning
+   * today's default would freeze a site against a stylesheet that may improve.
+   * Sanitised on the way in and again on the way out — see lib/design/tokens.ts.
+   */
+  designTokens: jsonb("design_tokens"),
   /** Set when the intake form is first submitted — drives Build vs Edit. */
   intakeCompletedAt: timestamp("intake_completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -185,6 +195,27 @@ export const sitePages = pgTable("site_pages", {
    * conflict on every page a client had merely opened. See lib/wp/serialize.ts.
    */
   syncedSchemaJson: jsonb("synced_schema_json"),
+  /**
+   * What search engines are told about this page. See migrate-batch27.ts.
+   *
+   * Null means nobody has written one; empty means someone cleared it. The
+   * generator needs that difference to leave a deliberately blank field alone.
+   */
+  metaTitle: text("meta_title"),
+  metaDescription: text("meta_description"),
+  noIndex: boolean("no_index").notNull().default(false),
+  /**
+   * The phrase this page is meant to be found by.
+   *
+   * An intention rather than a fact, which is why it is stored: two people can
+   * reasonably target different phrases for one page, and the choice has to
+   * survive the next regeneration. See migrate-batch29.ts.
+   */
+  focusKeyword: text("focus_keyword"),
+  /** An override for WordPress's own canonical. Null means "core decides". */
+  canonicalUrl: text("canonical_url"),
+  /** When the model last wrote these, so a client's own words can be spared. */
+  metaGeneratedAt: timestamp("meta_generated_at", { withTimezone: true }),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -286,6 +317,40 @@ export const installationStatusEnum = pgEnum("installation_status", [
  * `driver` records which backend produced it, so local installs and a future
  * hosted one can coexist without the rest of the app caring.
  */
+/**
+ * The site's own image library.
+ *
+ * Files live in Supabase Storage; this is everything about them that a
+ * filename cannot hold — alt text, dimensions, provenance — and the only
+ * thing that can be ordered, filtered or joined. See migrate-batch26.ts.
+ */
+export const mediaAssets = pgTable("media_assets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  siteId: uuid("site_id")
+    .notNull()
+    .references(() => sites.id, { onDelete: "cascade" }),
+  storagePath: text("storage_path").notNull(),
+  url: text("url").notNull(),
+  filename: text("filename").notNull(),
+  mimeType: text("mime_type").notNull(),
+  byteSize: integer("byte_size").notNull(),
+  width: integer("width"),
+  height: integer("height"),
+  alt: text("alt"),
+  /** Shown on hover. Beside alt, not instead of it — see migrate-batch28.ts. */
+  title: text("title"),
+  /** "upload" | "stock" | "wordpress" — where the file came from. */
+  source: text("source").notNull().default("upload"),
+  photographer: text("photographer"),
+  photographerUrl: text("photographer_url"),
+  /** sha-256 of the bytes, so the same picture is not stored twice. */
+  checksum: text("checksum"),
+  createdBy: uuid("created_by").references(() => profiles.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /** Soft: a page may still reference the file, and a broken image is worse. */
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});
+
 export const siteInstallations = pgTable("site_installations", {
   id: uuid("id").primaryKey().defaultRandom(),
   siteId: uuid("site_id")

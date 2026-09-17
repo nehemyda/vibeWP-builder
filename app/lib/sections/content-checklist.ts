@@ -7,6 +7,10 @@ export type ContentChecklistProps = {
   body?: string;
   items?: string[];
   actions?: Action[];
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -34,6 +38,26 @@ export const ContentChecklist: SectionDefinition<ContentChecklistProps> = {
       type: "list",
       label: "Buttons",
       of: { label: { type: "text", label: "Label" }, href: { type: "link", label: "Links to" } },
+    },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Works here for the identical structural reason:
+     * .yp-check__grid already wraps everything under the root with nothing
+     * else emitted alongside it.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The copy and list stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the copy and list.",
+      choices: ["contained", "full"],
+      default: "contained",
     },
   },
 
@@ -69,13 +93,23 @@ export const ContentChecklist: SectionDefinition<ContentChecklistProps> = {
     );
 
     const items = p.items?.length ? list(p.items, "yp-check__list") : "";
-    return group("yp-check", group("yp-check__grid", copy + items), "section");
+    const rootClass = [
+      "yp-check",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(rootClass, group("yp-check__grid", copy + items), "section");
   },
 
   fromGutenberg(root) {
     const el = root.querySelector(".yp-check");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-check__heading")),
       body: text(el.querySelector(".yp-check__body")),
       items: el.querySelectorAll(".yp-check__list li").map((li) => li.textContent.trim()).filter(Boolean),

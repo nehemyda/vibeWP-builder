@@ -47,13 +47,27 @@ export function composePageBody(opts: {
    * the header template part.
    */
   hasLogo: boolean;
+  /**
+   * Stamps every section so a click in the canvas can be traced back to it.
+   *
+   * FOR THE BUILDER ONLY, and opt-in for the same reason the serializer makes
+   * it opt-in: the canvas is an editor and needs the handle, while a served
+   * page and an exported one must not carry a stray attribute that belongs to
+   * our editor. Passing it here rather than assuming it is what lets one
+   * composition serve both.
+   */
+  markNodes?: boolean;
 }): string {
-  const { header, footer, schema, hasLogo } = opts;
+  const { header, footer, schema, hasLogo, markNodes } = opts;
 
-  const head = header ? sectionToTemplatePart(header.type, header.props) : "";
-  const foot = footer ? sectionToTemplatePart(footer.type, footer.props) : "";
+  const head = header
+    ? sectionToTemplatePart(header.type, header.props, markNodes ? { mark: "header" } : undefined)
+    : "";
+  const foot = footer
+    ? sectionToTemplatePart(footer.type, footer.props, markNodes ? { mark: "footer" } : undefined)
+    : "";
 
-  return withSiteLogo(head, hasLogo) + schemaToGutenberg(schema) + foot;
+  return withSiteLogo(head, hasLogo) + schemaToGutenberg(schema, { markNodes }) + foot;
 }
 
 /**

@@ -48,6 +48,25 @@
   --line:        var(--wp--preset--color--line,        #dbdee3);
 
   --radius: 10px;
+
+  /*
+   * The faintest text, for small print.
+   *
+   * It was READ twice — .yp-pricing__footnote and .yp-logos__note — and
+   * defined nowhere the stylesheet could see, so both declarations were
+   * invalid at computed-value time and both elements inherited the body's
+   * near-black --ink instead. Legal small print and a logo caption rendering
+   * at headline colour, on every site, in the builder and on the front end
+   * alike. It went unnoticed because a colour that fails to resolve inherits
+   * rather than disappearing.
+   *
+   * A literal, not a palette preset: this is a neutral, and the neutrals are
+   * identical across all four brand palettes — only `primary` varies. Adding
+   * a ninth preset slug would create a channel theme.json does not declare,
+   * which is the same mistake in a new place.
+   */
+  --faint: #9aa0aa;
+
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
@@ -115,16 +134,36 @@ body.yp-page {
    HeroSplit
    ============================================================ */
 
-.yp-page .yp-hero {
+/*
+ * The ROOT carries no width of its own any more — moved onto .yp-hero__grid
+ * below, which is what used to be centered here. .u-bg--tint and
+ * .u-row--full, the two classes this makes possible, are declared with the
+ * rest of the per-section style utilities near the end of this file, not
+ * here — see the "Section background + full width" block. New rules append
+ * there so the declarations above them keep their positions; this file's
+ * own token gate checks that.
+ *
+ * WHY THE ROOT HAD TO LOSE ITS WIDTH AT ALL: a background on this element
+ * would only ever colour the centered 1160px box, because that box IS this
+ * element. A client asking to add colour "behind" the section means the
+ * whole row, edge to edge — and the only way this element can be both full
+ * width (for a colour to reach the edges) and unchanged in appearance (for a
+ * client who sets no colour) is for it to carry no width constraint of its
+ * own at all.
+ *
+ * This was a pure CSS move — no markup changed, so the exported HTML this
+ * section produces is byte-identical to before. That matters more here than
+ * anywhere else in the theme: this is the one section with live client sites
+ * behind it, kept as the registry's own regression anchor specifically
+ * because its markup must not shift.
+ */
+.yp-page .yp-hero__grid {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
-}
-
-.yp-page .yp-hero__grid {
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: grid;
   grid-template-columns: 1.08fr 0.92fr;
-  gap: var(--space-gap);
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
   align-items: center;
 }
 
@@ -147,7 +186,7 @@ body.yp-page {
   background: color-mix(in oklch, var(--primary) 12%, transparent);
   color: var(--primary);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: calc(0.72rem * var(--yp-text-scale, 1));
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -165,7 +204,7 @@ body.yp-page {
 
 .yp-page .yp-hero__heading {
   margin: 0;
-  font-size: clamp(2.6rem, 4.6vw, 3.9rem);
+  font-size: calc(clamp(2.6rem, 4.6vw, 3.9rem) * var(--yp-display-scale, 1));
   line-height: 1.03;
   letter-spacing: -0.03em;
   font-weight: 800;
@@ -175,7 +214,7 @@ body.yp-page {
 .yp-page .yp-hero__body {
   margin: 0;
   max-width: 46ch;
-  font-size: 1.06rem;
+  font-size: calc(1.06rem * var(--yp-text-scale, 1));
   color: var(--ink-2);
 }
 
@@ -192,24 +231,40 @@ body.yp-page {
 .yp-page .yp-hero__features > li {
   position: relative;
   padding-left: 1.7rem;
-  font-size: 0.94rem;
+  font-size: calc(0.94rem * var(--yp-text-scale, 1));
   color: var(--ink-2);
   line-height: 1.45;
 }
 
+/*
+ * A TICK, drawn the same way .yp-check__list draws its own.
+ *
+ * This was a circle with a diagonal stripe across it, which is the symbol for
+ * "not permitted" — beside lines like "Free parking on site" it said the
+ * opposite of what the list is for. It went unnoticed because `features` had
+ * no FieldSpec, so nothing ever wrote one and the marker was never seen.
+ */
 .yp-page .yp-hero__features > li::before {
   content: "";
   position: absolute;
   left: 0;
   top: 0.28em;
-  width: 1.05rem;
-  height: 1.05rem;
+  width: 1.15rem;
+  height: 1.15rem;
   border-radius: 50%;
-  border: 1.5px solid var(--primary);
-  background: linear-gradient(
-    to bottom right,
-    transparent 46%, var(--primary) 46%, var(--primary) 54%, transparent 54%
-  );
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  border: 1.5px solid color-mix(in oklch, var(--primary) 55%, transparent);
+}
+.yp-page .yp-hero__features > li::after {
+  content: "";
+  position: absolute;
+  left: 0.36rem;
+  top: 0.5em;
+  width: 0.32rem;
+  height: 0.16rem;
+  border-left: 2px solid var(--primary);
+  border-bottom: 2px solid var(--primary);
+  transform: rotate(-45deg);
 }
 
 /* ---- buttons ----
@@ -240,7 +295,7 @@ body.yp-page {
   gap: 0.5rem;
   padding: 0.95rem 1.6rem;
   border-radius: var(--radius);
-  font-size: 0.97rem;
+  font-size: calc(0.97rem * var(--yp-text-scale, 1));
   font-weight: 600;
   text-decoration: none;
   line-height: 1;
@@ -310,7 +365,7 @@ body.yp-page {
   display: grid;
   place-items: center;
   color: var(--primary);
-  font-size: 1.1rem;
+  font-size: calc(1.1rem * var(--yp-text-scale, 1));
   line-height: 1;
 }
 
@@ -324,14 +379,14 @@ body.yp-page {
 
 .yp-page .yp-hero__badge-title {
   margin: 0;
-  font-size: 0.88rem;
+  font-size: calc(0.88rem * var(--yp-text-scale, 1));
   font-weight: 700;
   line-height: 1.25;
 }
 
 .yp-page .yp-hero__badge-sub {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: calc(0.78rem * var(--yp-text-scale, 1));
   color: var(--muted);
   line-height: 1.3;
 }
@@ -355,7 +410,7 @@ body.yp-page {
 .yp-page .yp-hero__stat-label {
   margin: 0 0 0.3rem;
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: calc(0.68rem * var(--yp-text-scale, 1));
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
@@ -364,7 +419,7 @@ body.yp-page {
 .yp-page .yp-hero__stat-value {
   margin: 0 0 0.2rem;
   font-family: var(--font-mono);
-  font-size: 1.85rem;
+  font-size: calc(1.85rem * var(--yp-text-scale, 1));
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.1;
@@ -373,14 +428,14 @@ body.yp-page {
 
 .yp-page .yp-hero__stat-note {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: calc(0.82rem * var(--yp-text-scale, 1));
   color: var(--muted);
 }
 
 /* ---- responsive ---- */
 
 @media (max-width: 880px) {
-  .yp-page .yp-hero__grid { grid-template-columns: 1fr; gap: var(--space-gap); }
+  .yp-page .yp-hero__grid { grid-template-columns: 1fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); }
   /* Image above the copy once the columns collapse, so a phone leads with
      the visual rather than a wall of text. */
   .yp-page .yp-hero__media { order: -1; }
@@ -396,14 +451,18 @@ body.yp-page {
    and mobile stays proportionate without per-section media queries.
    ============================================================ */
 
-.yp-page .yp-features,
-.yp-page .yp-quotes,
-.yp-page .yp-faq,
-.yp-page .yp-contact {
-  max-width: var(--container);
-  margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
-}
+/*
+ * .yp-contact split OUT of this group: it has no width of its own any more,
+ * moved onto .yp-contact__grid below — the same move applied to Split Hero
+ * and Contact: Visit us, and for the identical reason its markup was
+ * checked and found to match: the grid already wraps everything this
+ * section renders. .yp-features, .yp-quotes and .yp-faq have now been
+ * checked too — their own headings sit OUTSIDE their grid/list wrapper, so
+ * each got a new .__inner wrapper instead, the same fix Work gallery
+ * needed; that rule is declared at the true end of this file, alongside
+ * the other new-wrapper sections.
+ */
+
 
 /* Same box-sizing and block-gap resets the hero needs, for the same reasons:
    WordPress stamps margin-block-start on re-saved blocks, and a bare host does
@@ -425,7 +484,7 @@ body.yp-page {
 .yp-page .yp-faq__heading,
 .yp-page .yp-contact__heading {
   margin: 0;
-  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  font-size: calc(clamp(1.9rem, 3vw, 2.6rem) * var(--yp-display-scale, 1));
   line-height: 1.12;
   letter-spacing: -0.02em;
   font-weight: 800;
@@ -439,7 +498,7 @@ body.yp-page {
 .yp-page .yp-features__intro {
   margin: 0.7rem 0 0;
   max-width: 60ch;
-  font-size: 1.02rem;
+  font-size: calc(1.02rem * var(--yp-text-scale, 1));
   color: var(--ink-2);
 }
 
@@ -462,14 +521,14 @@ body.yp-page {
 
 .yp-page .yp-features__item-title {
   margin: 0 0 0.5rem;
-  font-size: 1.12rem;
+  font-size: calc(1.12rem * var(--yp-text-scale, 1));
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .yp-page .yp-features__item-body {
   margin: 0;
-  font-size: 0.97rem;
+  font-size: calc(0.97rem * var(--yp-text-scale, 1));
   color: var(--ink-2);
 }
 
@@ -497,7 +556,7 @@ body.yp-page {
 
 .yp-page .yp-quotes__item p {
   margin: 0;
-  font-size: 1.06rem;
+  font-size: calc(1.06rem * var(--yp-text-scale, 1));
   line-height: 1.55;
   color: var(--ink);
 }
@@ -509,7 +568,7 @@ body.yp-page {
 
 .yp-page .yp-quotes__item cite {
   font-style: normal;
-  font-size: 0.87rem;
+  font-size: calc(0.87rem * var(--yp-text-scale, 1));
   font-weight: 600;
   color: var(--muted);
   margin-top: auto;
@@ -531,7 +590,7 @@ body.yp-page {
 .yp-page .yp-faq__item summary {
   cursor: pointer;
   padding: 1.15rem 2.2rem 1.15rem 0;
-  font-size: 1.05rem;
+  font-size: calc(1.05rem * var(--yp-text-scale, 1));
   font-weight: 700;
   position: relative;
   list-style: none;
@@ -561,7 +620,7 @@ body.yp-page {
   margin: 0;
   padding: 0 2.2rem 1.3rem 0;
   max-width: 70ch;
-  font-size: 1rem;
+  font-size: calc(1rem * var(--yp-text-scale, 1));
   color: var(--ink-2);
 }
 
@@ -572,13 +631,13 @@ body.yp-page {
 .yp-page .yp-cta {
   background: color-mix(in oklch, var(--primary) 8%, var(--surface));
   border-block: 1px solid color-mix(in oklch, var(--primary) 18%, transparent);
-  margin-block: var(--space-section-top) 0;
+  margin-block: calc(var(--space-section-top) * var(--yp-space-scale, 1)) 0;
 }
 
 .yp-page .yp-cta__inner {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -588,7 +647,7 @@ body.yp-page {
 
 .yp-page .yp-cta__heading {
   margin: 0;
-  font-size: clamp(1.9rem, 3.2vw, 2.8rem);
+  font-size: calc(clamp(1.9rem, 3.2vw, 2.8rem) * var(--yp-display-scale, 1));
   line-height: 1.1;
   letter-spacing: -0.02em;
   font-weight: 800;
@@ -598,7 +657,7 @@ body.yp-page {
 .yp-page .yp-cta__body {
   margin: 0;
   max-width: 52ch;
-  font-size: 1.06rem;
+  font-size: calc(1.06rem * var(--yp-text-scale, 1));
   color: var(--ink-2);
 }
 
@@ -615,9 +674,12 @@ body.yp-page {
    ============================================================ */
 
 .yp-page .yp-contact__grid {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
-  gap: var(--space-gap);
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
   align-items: start;
 }
 
@@ -638,7 +700,7 @@ body.yp-page {
 .yp-page .yp-contact__body {
   margin: 0;
   max-width: 44ch;
-  font-size: 1.06rem;
+  font-size: calc(1.06rem * var(--yp-text-scale, 1));
   color: var(--ink-2);
 }
 
@@ -670,7 +732,7 @@ body.yp-page {
 .yp-page .yp-contact__label {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: calc(0.7rem * var(--yp-text-scale, 1));
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -679,7 +741,7 @@ body.yp-page {
 
 .yp-page .yp-contact__value {
   margin: 0;
-  font-size: 0.98rem;
+  font-size: calc(0.98rem * var(--yp-text-scale, 1));
   color: var(--ink);
 }
 
@@ -729,7 +791,7 @@ body.yp-page {
   background: color-mix(in oklch, var(--primary) 12%, transparent);
   color: var(--primary);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: calc(0.72rem * var(--yp-text-scale, 1));
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -752,7 +814,7 @@ body.yp-page {
 .yp-page .yp-hero-centered {
   max-width: var(--container);
   margin: 0 auto;
-  padding: calc(var(--space-section-top) * 1.25) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(calc(var(--space-section-top) * var(--yp-space-scale, 1)) * 1.25) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-hero-centered__inner {
   max-width: 46rem;
@@ -766,7 +828,7 @@ body.yp-page {
 /* Larger than any other hero: with no image, type is the whole composition. */
 .yp-page .yp-hero-centered__heading {
   margin: 0;
-  font-size: clamp(2.8rem, 6vw, 4.7rem);
+  font-size: calc(clamp(2.8rem, 6vw, 4.7rem) * var(--yp-display-scale, 1));
   line-height: 1.0;
   letter-spacing: -0.035em;
   font-weight: 800;
@@ -775,7 +837,7 @@ body.yp-page {
 .yp-page .yp-hero-centered__body {
   margin: 0;
   max-width: 40ch;
-  font-size: 1.14rem;
+  font-size: calc(1.14rem * var(--yp-text-scale, 1));
   color: var(--ink-2);
 }
 .yp-page .yp-hero-centered__actions {
@@ -784,7 +846,7 @@ body.yp-page {
 .yp-page .yp-hero-centered__trust {
   margin: 0.5rem 0 0;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: calc(0.78rem * var(--yp-text-scale, 1));
   letter-spacing: 0.03em;
   color: var(--muted);
 }
@@ -832,7 +894,7 @@ body.yp-page {
   width: 100%;
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -847,7 +909,7 @@ body.yp-page {
   margin: 0;
   max-width: 30ch;
   color: #fff;
-  font-size: clamp(2.5rem, 5.2vw, 4.2rem);
+  font-size: calc(clamp(2.5rem, 5.2vw, 4.2rem) * var(--yp-display-scale, 1));
   line-height: 1.02;
   letter-spacing: -0.03em;
   font-weight: 800;
@@ -857,7 +919,7 @@ body.yp-page {
   margin: 0;
   max-width: 44ch;
   color: rgba(255, 255, 255, 0.86);
-  font-size: 1.1rem;
+  font-size: calc(1.1rem * var(--yp-text-scale, 1));
 }
 .yp-page .yp-hero-banner__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; margin-top: 0.4rem; }
 /* Outline buttons need a light border here, not the default dark one. */
@@ -872,7 +934,7 @@ body.yp-page {
 .yp-page .yp-hero-stacked {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-hero-stacked__copy {
   max-width: 44rem;
@@ -885,13 +947,13 @@ body.yp-page {
 }
 .yp-page .yp-hero-stacked__heading {
   margin: 0;
-  font-size: clamp(2.5rem, 4.8vw, 4rem);
+  font-size: calc(clamp(2.5rem, 4.8vw, 4rem) * var(--yp-display-scale, 1));
   line-height: 1.03;
   letter-spacing: -0.03em;
   font-weight: 800;
   text-wrap: balance;
 }
-.yp-page .yp-hero-stacked__body { margin: 0; max-width: 42ch; font-size: 1.1rem; color: var(--ink-2); }
+.yp-page .yp-hero-stacked__body { margin: 0; max-width: 42ch; font-size: calc(1.1rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-hero-stacked__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; justify-content: center; }
 .yp-page .yp-hero-stacked__media { margin: 2.6rem 0 0; }
 /* 16:9, unlike every other hero's 4:5 — this slot wants landscape. */
@@ -911,12 +973,12 @@ body.yp-page {
 .yp-page .yp-hero-showcase {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-hero-showcase__grid {
   display: grid;
   grid-template-columns: 1.08fr 0.92fr;
-  gap: var(--space-gap);
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
   align-items: center;
 }
 .yp-page .yp-hero-showcase__copy {
@@ -924,13 +986,13 @@ body.yp-page {
 }
 .yp-page .yp-hero-showcase__heading {
   margin: 0;
-  font-size: clamp(2.4rem, 4.4vw, 3.7rem);
+  font-size: calc(clamp(2.4rem, 4.4vw, 3.7rem) * var(--yp-display-scale, 1));
   line-height: 1.04;
   letter-spacing: -0.03em;
   font-weight: 800;
   text-wrap: balance;
 }
-.yp-page .yp-hero-showcase__body { margin: 0; max-width: 46ch; font-size: 1.06rem; color: var(--ink-2); }
+.yp-page .yp-hero-showcase__body { margin: 0; max-width: 46ch; font-size: calc(1.06rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-hero-showcase__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; margin-top: 0.4rem; }
 
 .yp-page .yp-hero-showcase__media { position: relative; margin: 0; }
@@ -954,10 +1016,10 @@ body.yp-page {
   max-width: 15rem;
 }
 .yp-page .yp-hero-showcase__badge-title {
-  margin: 0; font-size: 0.92rem; font-weight: 700; line-height: 1.25;
+  margin: 0; font-size: calc(0.92rem * var(--yp-text-scale, 1)); font-weight: 700; line-height: 1.25;
 }
 .yp-page .yp-hero-showcase__badge-sub {
-  margin: 0.15rem 0 0; font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted);
+  margin: 0.15rem 0 0; font-family: var(--font-mono); font-size: calc(0.72rem * var(--yp-text-scale, 1)); color: var(--muted);
 }
 
 .yp-page .yp-hero-showcase__stats {
@@ -973,26 +1035,24 @@ body.yp-page {
 .yp-page .yp-hero-showcase__stat { min-width: 0; }
 .yp-page .yp-hero-showcase__stat-value {
   margin: 0;
-  font-size: clamp(1.7rem, 2.6vw, 2.3rem);
+  font-size: calc(clamp(1.7rem, 2.6vw, 2.3rem) * var(--yp-display-scale, 1));
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.1;
 }
 .yp-page .yp-hero-showcase__stat-label {
-  margin: 0.25rem 0 0; font-size: 0.87rem; color: var(--muted);
+  margin: 0.25rem 0 0; font-size: calc(0.87rem * var(--yp-text-scale, 1)); color: var(--muted);
 }
 
 /* ---- 5. Hero with cards ---------------------------------------------- */
 
-.yp-page .yp-hero-cards {
+.yp-page .yp-hero-cards__grid-outer {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
-}
-.yp-page .yp-hero-cards__grid-outer {
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-gap);
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
   align-items: center;
 }
 .yp-page .yp-hero-cards__copy {
@@ -1000,13 +1060,13 @@ body.yp-page {
 }
 .yp-page .yp-hero-cards__heading {
   margin: 0;
-  font-size: clamp(2.3rem, 4.2vw, 3.5rem);
+  font-size: calc(clamp(2.3rem, 4.2vw, 3.5rem) * var(--yp-display-scale, 1));
   line-height: 1.05;
   letter-spacing: -0.03em;
   font-weight: 800;
   text-wrap: balance;
 }
-.yp-page .yp-hero-cards__body { margin: 0; max-width: 40ch; font-size: 1.06rem; color: var(--ink-2); }
+.yp-page .yp-hero-cards__body { margin: 0; max-width: 40ch; font-size: calc(1.06rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-hero-cards__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; }
 
 .yp-page .yp-hero-cards__grid {
@@ -1021,9 +1081,9 @@ body.yp-page {
   background: var(--surface);
 }
 .yp-page .yp-hero-cards__card-title {
-  margin: 0 0 0.35rem; font-size: 1rem; font-weight: 700; letter-spacing: -0.01em;
+  margin: 0 0 0.35rem; font-size: calc(1rem * var(--yp-text-scale, 1)); font-weight: 700; letter-spacing: -0.01em;
 }
-.yp-page .yp-hero-cards__card-body { margin: 0; font-size: 0.9rem; color: var(--ink-2); line-height: 1.5; }
+.yp-page .yp-hero-cards__card-body { margin: 0; font-size: calc(0.9rem * var(--yp-text-scale, 1)); color: var(--ink-2); line-height: 1.5; }
 
 /* ---- collapse every two-column hero at the shared breakpoint ---- */
 @media (max-width: 880px) {
@@ -1075,7 +1135,7 @@ body.yp-page {
   background: color-mix(in oklch, var(--primary) 12%, transparent);
   color: var(--primary);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: calc(0.72rem * var(--yp-text-scale, 1));
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1111,27 +1171,27 @@ body.yp-page {
   position: relative;
   max-width: 48rem;
   margin: 0 auto;
-  padding: calc(var(--space-section-top) * 1.35) var(--space-gutter)
-           calc(var(--space-section-bottom) * 1.4);
+  padding: calc(calc(var(--space-section-top) * var(--yp-space-scale, 1)) * 1.35) calc(var(--space-gutter) * var(--yp-space-scale, 1))
+           calc(calc(var(--space-section-bottom) * var(--yp-space-scale, 1)) * 1.4);
   display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1.3rem;
 }
 .yp-page .yp-hero-aurora__heading {
   margin: 0;
-  font-size: clamp(2.7rem, 5.6vw, 4.5rem);
+  font-size: calc(clamp(2.7rem, 5.6vw, 4.5rem) * var(--yp-display-scale, 1));
   line-height: 1.01;
   letter-spacing: -0.035em;
   font-weight: 800;
   text-wrap: balance;
 }
 .yp-page .yp-hero-aurora__body {
-  margin: 0; max-width: 42ch; font-size: 1.14rem; color: var(--ink-2);
+  margin: 0; max-width: 42ch; font-size: calc(1.14rem * var(--yp-text-scale, 1)); color: var(--ink-2);
 }
 .yp-page .yp-hero-aurora__actions {
   display: flex; flex-wrap: wrap; gap: 0.85rem; justify-content: center; margin-top: 0.3rem;
 }
 .yp-page .yp-hero-aurora__trust {
   margin: 0.5rem 0 0; font-family: var(--font-mono);
-  font-size: 0.78rem; letter-spacing: 0.03em; color: var(--muted);
+  font-size: calc(0.78rem * var(--yp-text-scale, 1)); letter-spacing: 0.03em; color: var(--muted);
 }
 
 /* ---- 2. Spotlight: dark + glow + grid -------------------------------- */
@@ -1162,8 +1222,8 @@ body.yp-page {
 .yp-page .yp-hero-spotlight__inner {
   position: relative;
   max-width: 50rem; margin: 0 auto;
-  padding: calc(var(--space-section-top) * 1.4) var(--space-gutter)
-           calc(var(--space-section-bottom) * 1.4);
+  padding: calc(calc(var(--space-section-top) * var(--yp-space-scale, 1)) * 1.4) calc(var(--space-gutter) * var(--yp-space-scale, 1))
+           calc(calc(var(--space-section-bottom) * var(--yp-space-scale, 1)) * 1.4);
   display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1.25rem;
 }
 .yp-page .yp-hero-spotlight__eyebrow {
@@ -1173,11 +1233,11 @@ body.yp-page {
 .yp-page .yp-hero-spotlight__eyebrow::before { background: var(--primary); }
 .yp-page .yp-hero-spotlight__heading {
   margin: 0; color: #fff;
-  font-size: clamp(2.6rem, 5.4vw, 4.4rem);
+  font-size: calc(clamp(2.6rem, 5.4vw, 4.4rem) * var(--yp-display-scale, 1));
   line-height: 1.02; letter-spacing: -0.035em; font-weight: 800; text-wrap: balance;
 }
 .yp-page .yp-hero-spotlight__body {
-  margin: 0; max-width: 44ch; font-size: 1.12rem; color: rgba(255,255,255,0.72);
+  margin: 0; max-width: 44ch; font-size: calc(1.12rem * var(--yp-text-scale, 1)); color: rgba(255,255,255,0.72);
 }
 .yp-page .yp-hero-spotlight__actions {
   display: flex; flex-wrap: wrap; gap: 0.85rem; justify-content: center; margin-top: 0.3rem;
@@ -1196,31 +1256,29 @@ body.yp-page {
 .yp-page .yp-hero-spotlight__stat { min-width: 0; }
 .yp-page .yp-hero-spotlight__stat-value {
   margin: 0; color: #fff;
-  font-size: clamp(1.6rem, 2.4vw, 2.1rem); font-weight: 800; letter-spacing: -0.02em;
+  font-size: calc(clamp(1.6rem, 2.4vw, 2.1rem) * var(--yp-display-scale, 1)); font-weight: 800; letter-spacing: -0.02em;
 }
 .yp-page .yp-hero-spotlight__stat-label {
-  margin: 0.2rem 0 0; font-size: 0.84rem; color: rgba(255,255,255,0.58);
+  margin: 0.2rem 0 0; font-size: calc(0.84rem * var(--yp-text-scale, 1)); color: rgba(255,255,255,0.58);
 }
 
 /* ---- 3. Duotone ------------------------------------------------------ */
 
-.yp-page .yp-hero-duotone {
-  max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
-}
 .yp-page .yp-hero-duotone__grid {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: grid; grid-template-columns: 1fr 1fr;
-  gap: var(--space-gap); align-items: center;
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: center;
 }
 .yp-page .yp-hero-duotone__copy {
   display: flex; flex-direction: column; align-items: flex-start; gap: 1.3rem;
 }
 .yp-page .yp-hero-duotone__heading {
-  margin: 0; font-size: clamp(2.3rem, 4.2vw, 3.5rem);
+  margin: 0; font-size: calc(clamp(2.3rem, 4.2vw, 3.5rem) * var(--yp-display-scale, 1));
   line-height: 1.04; letter-spacing: -0.03em; font-weight: 800; text-wrap: balance;
 }
 .yp-page .yp-hero-duotone__body {
-  margin: 0; max-width: 46ch; font-size: 1.06rem; color: var(--ink-2);
+  margin: 0; max-width: 46ch; font-size: calc(1.06rem * var(--yp-text-scale, 1)); color: var(--ink-2);
 }
 .yp-page .yp-hero-duotone__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; }
 
@@ -1254,7 +1312,7 @@ body.yp-page {
 }
 .yp-page .yp-hero-glass__inner {
   width: 100%; max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-hero-glass__card {
   max-width: 30rem;
@@ -1275,11 +1333,11 @@ body.yp-page {
 .yp-page .yp-hero-glass__eyebrow::before { background: #fff; }
 .yp-page .yp-hero-glass__heading {
   margin: 0; color: #fff;
-  font-size: clamp(2.1rem, 3.6vw, 3.1rem);
+  font-size: calc(clamp(2.1rem, 3.6vw, 3.1rem) * var(--yp-display-scale, 1));
   line-height: 1.05; letter-spacing: -0.03em; font-weight: 800; text-wrap: balance;
 }
 .yp-page .yp-hero-glass__body {
-  margin: 0; color: rgba(255,255,255,0.84); font-size: 1.04rem;
+  margin: 0; color: rgba(255,255,255,0.84); font-size: calc(1.04rem * var(--yp-text-scale, 1));
 }
 .yp-page .yp-hero-glass__actions { display: flex; flex-wrap: wrap; gap: 0.8rem; }
 .yp-page .yp-hero-glass__actions .yp-btn--outline a {
@@ -1288,11 +1346,9 @@ body.yp-page {
 
 /* ---- 5. Pattern panel with overlapping photo ------------------------- */
 
-.yp-page .yp-hero-pattern {
-  max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
-}
 .yp-page .yp-hero-pattern__grid {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
   align-items: center;
@@ -1312,11 +1368,11 @@ body.yp-page {
   z-index: 0;
 }
 .yp-page .yp-hero-pattern__heading {
-  margin: 0; font-size: clamp(2.2rem, 4vw, 3.3rem);
+  margin: 0; font-size: calc(clamp(2.2rem, 4vw, 3.3rem) * var(--yp-display-scale, 1));
   line-height: 1.05; letter-spacing: -0.03em; font-weight: 800; text-wrap: balance;
 }
 .yp-page .yp-hero-pattern__body {
-  margin: 0; max-width: 40ch; font-size: 1.04rem; color: var(--ink-2);
+  margin: 0; max-width: 40ch; font-size: calc(1.04rem * var(--yp-text-scale, 1)); color: var(--ink-2);
 }
 .yp-page .yp-hero-pattern__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; }
 
@@ -1370,19 +1426,28 @@ body.yp-page {
 .yp-page .yp-contact-visit,   .yp-page .yp-contact-visit *,
 .yp-page .yp-contact-band,    .yp-page .yp-contact-band * { margin-block-start: 0; margin-block-end: 0; }
 
+/*
+ * .yp-contact-visit split OUT of this group: it has no width of its own any
+ * more, moved onto .yp-contact-visit__grid below — the same move Split Hero
+ * got, and for the identical reason its markup was checked and found to
+ * match: the grid already wraps everything this section renders, so the
+ * root is free to carry a background without leaving anything else
+ * uncontained. See "Section background + full width" near the end of this
+ * file. .yp-contact-cards and .yp-contact-hours were never checked for the
+ * same thing and keep exactly what they had.
+ */
 .yp-page .yp-contact-cards,
-.yp-page .yp-contact-hours,
-.yp-page .yp-contact-visit {
+.yp-page .yp-contact-hours {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 
 .yp-page .yp-contact-cards__heading,
 .yp-page .yp-contact-hours__heading,
 .yp-page .yp-contact-visit__heading {
   margin: 0;
-  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  font-size: calc(clamp(1.9rem, 3vw, 2.6rem) * var(--yp-display-scale, 1));
   line-height: 1.12; letter-spacing: -0.02em; font-weight: 800; text-wrap: balance;
 }
 
@@ -1393,7 +1458,7 @@ body.yp-page {
 .yp-page .yp-contact-band__label {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  font-size: calc(0.7rem * var(--yp-text-scale, 1)); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--muted);
 }
 
@@ -1417,7 +1482,7 @@ body.yp-page {
 /* ---- 1. Contact cards ------------------------------------------------ */
 
 .yp-page .yp-contact-cards__intro {
-  margin: 0.7rem 0 0; max-width: 58ch; font-size: 1.02rem; color: var(--ink-2);
+  margin: 0.7rem 0 0; max-width: 58ch; font-size: calc(1.02rem * var(--yp-text-scale, 1)); color: var(--ink-2);
 }
 .yp-page .yp-contact-cards__grid {
   display: grid;
@@ -1437,7 +1502,7 @@ body.yp-page {
   border-color: color-mix(in oklch, var(--primary) 40%, var(--line));
 }
 .yp-page .yp-contact-cards__value {
-  margin: 0; font-size: 1.04rem; font-weight: 600; line-height: 1.4;
+  margin: 0; font-size: calc(1.04rem * var(--yp-text-scale, 1)); font-weight: 600; line-height: 1.4;
 }
 
 /* ---- 2. Phone callout ------------------------------------------------ */
@@ -1449,7 +1514,7 @@ body.yp-page {
 .yp-page .yp-contact-callout__inner {
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.9rem;
 }
 .yp-page .yp-contact-callout__eyebrow {
@@ -1459,11 +1524,11 @@ body.yp-page {
   background: color-mix(in oklch, var(--primary) 14%, transparent);
   color: var(--primary);
   font-family: var(--font-mono);
-  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  font-size: calc(0.72rem * var(--yp-text-scale, 1)); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
   line-height: 1;
 }
 .yp-page .yp-contact-callout__heading {
-  margin: 0; font-size: clamp(1.5rem, 2.4vw, 2rem);
+  margin: 0; font-size: calc(clamp(1.5rem, 2.4vw, 2rem) * var(--yp-display-scale, 1));
   font-weight: 700; letter-spacing: -0.02em; color: var(--ink-2);
 }
 /* The number, at headline scale and as the tap target. */
@@ -1472,7 +1537,7 @@ body.yp-page {
 }
 .yp-page .yp-contact-callout__phone a {
   display: inline-block;
-  font-size: clamp(2.6rem, 7vw, 5rem);
+  font-size: calc(clamp(2.6rem, 7vw, 5rem) * var(--yp-display-scale, 1));
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1;
@@ -1483,7 +1548,7 @@ body.yp-page {
 }
 .yp-page .yp-contact-callout__phone a:hover { border-bottom-color: var(--primary); }
 .yp-page .yp-contact-callout__body {
-  margin: 0.4rem 0 0; max-width: 44ch; font-size: 1.02rem; color: var(--ink-2);
+  margin: 0.4rem 0 0; max-width: 44ch; font-size: calc(1.02rem * var(--yp-text-scale, 1)); color: var(--ink-2);
 }
 .yp-page .yp-contact-callout__actions {
   display: flex; flex-wrap: wrap; gap: 0.8rem; justify-content: center; margin-top: 0.5rem;
@@ -1493,17 +1558,17 @@ body.yp-page {
 
 .yp-page .yp-contact-hours__grid {
   display: grid; grid-template-columns: 1.1fr 0.9fr;
-  gap: var(--space-gap); align-items: start;
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: start;
 }
 .yp-page .yp-contact-hours__copy {
   display: flex; flex-direction: column; align-items: flex-start; gap: 1.1rem;
 }
 .yp-page .yp-contact-hours__body {
-  margin: 0; max-width: 44ch; font-size: 1.04rem; color: var(--ink-2);
+  margin: 0; max-width: 44ch; font-size: calc(1.04rem * var(--yp-text-scale, 1)); color: var(--ink-2);
 }
 .yp-page .yp-contact-hours__details { display: grid; gap: 0.9rem; }
 .yp-page .yp-contact-hours__row { display: grid; gap: 0.15rem; }
-.yp-page .yp-contact-hours__value { margin: 0; font-size: 1.02rem; font-weight: 600; }
+.yp-page .yp-contact-hours__value { margin: 0; font-size: calc(1.02rem * var(--yp-text-scale, 1)); font-weight: 600; }
 
 .yp-page .yp-contact-hours__panel {
   border: 1px solid var(--line);
@@ -1512,7 +1577,7 @@ body.yp-page {
   padding: 1.3rem 1.5rem 1.5rem;
 }
 .yp-page .yp-contact-hours__panel-heading {
-  margin: 0 0 0.8rem; font-size: 1.02rem; font-weight: 700;
+  margin: 0 0 0.8rem; font-size: calc(1.02rem * var(--yp-text-scale, 1)); font-weight: 700;
 }
 .yp-page .yp-contact-hours__day {
   display: flex; justify-content: space-between; gap: 1rem;
@@ -1520,34 +1585,37 @@ body.yp-page {
   border-top: 1px solid color-mix(in oklch, var(--line) 70%, transparent);
 }
 .yp-page .yp-contact-hours__day:first-of-type { border-top: none; }
-.yp-page .yp-contact-hours__day-name { margin: 0; font-size: 0.95rem; color: var(--ink-2); }
+.yp-page .yp-contact-hours__day-name { margin: 0; font-size: calc(0.95rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-contact-hours__day-time {
-  margin: 0; font-size: 0.95rem; font-weight: 600;
+  margin: 0; font-size: calc(0.95rem * var(--yp-text-scale, 1)); font-weight: 600;
   font-variant-numeric: tabular-nums; /* times line up column-wise */
 }
 
 /* ---- 4. Visit us ----------------------------------------------------- */
 
 .yp-page .yp-contact-visit__grid {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: grid; grid-template-columns: 1fr 1fr;
-  gap: var(--space-gap); align-items: center;
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: center;
 }
 .yp-page .yp-contact-visit__copy {
   display: flex; flex-direction: column; align-items: flex-start; gap: 1.1rem;
 }
 .yp-page .yp-contact-visit__body {
-  margin: 0; max-width: 42ch; font-size: 1.04rem; color: var(--ink-2);
+  margin: 0; max-width: 42ch; font-size: calc(1.04rem * var(--yp-text-scale, 1)); color: var(--ink-2);
 }
 .yp-page .yp-contact-visit__details { display: grid; gap: 0.9rem; }
 .yp-page .yp-contact-visit__row { display: grid; gap: 0.15rem; }
-.yp-page .yp-contact-visit__value { margin: 0; font-size: 1.02rem; font-weight: 600; }
+.yp-page .yp-contact-visit__value { margin: 0; font-size: calc(1.02rem * var(--yp-text-scale, 1)); font-weight: 600; }
 .yp-page .yp-contact-visit__directions {
   margin: 0;
   padding: 0.95rem 1.1rem;
   border-left: 3px solid color-mix(in oklch, var(--primary) 45%, transparent);
   background: color-mix(in oklch, var(--primary) 5%, transparent);
   border-radius: 0 var(--radius) var(--radius) 0;
-  font-size: 0.97rem; color: var(--ink-2); max-width: 46ch;
+  font-size: calc(0.97rem * var(--yp-text-scale, 1)); color: var(--ink-2); max-width: 46ch;
 }
 .yp-page .yp-contact-visit__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; }
 .yp-page .yp-contact-visit__media { margin: 0; }
@@ -1564,13 +1632,13 @@ body.yp-page {
 .yp-page .yp-contact-band { background: #0b0f16; }
 .yp-page .yp-contact-band__inner {
   max-width: var(--container); margin: 0 auto;
-  padding: calc(var(--space-section-top) * 0.7) var(--space-gutter)
-           calc(var(--space-section-bottom) * 0.8);
+  padding: calc(calc(var(--space-section-top) * var(--yp-space-scale, 1)) * 0.7) calc(var(--space-gutter) * var(--yp-space-scale, 1))
+           calc(calc(var(--space-section-bottom) * var(--yp-space-scale, 1)) * 0.8);
   display: flex; flex-direction: column; gap: 1.6rem;
 }
 .yp-page .yp-contact-band__heading {
   margin: 0; color: #fff;
-  font-size: clamp(1.5rem, 2.6vw, 2.1rem);
+  font-size: calc(clamp(1.5rem, 2.6vw, 2.1rem) * var(--yp-display-scale, 1));
   font-weight: 800; letter-spacing: -0.02em; text-wrap: balance;
 }
 .yp-page .yp-contact-band__row {
@@ -1583,7 +1651,7 @@ body.yp-page {
 .yp-page .yp-contact-band__item { display: grid; gap: 0.3rem; }
 .yp-page .yp-contact-band__label { color: rgba(255,255,255,0.5); }
 .yp-page .yp-contact-band__value {
-  margin: 0; color: #fff; font-size: 1.02rem; font-weight: 600;
+  margin: 0; color: #fff; font-size: calc(1.02rem * var(--yp-text-scale, 1)); font-weight: 600;
 }
 
 @media (max-width: 880px) {
@@ -1613,37 +1681,51 @@ body.yp-page {
 { box-sizing: border-box; margin-block-start: 0; margin-block-end: 0; }
 
 /* Shared container + section heading scale. */
-.yp-page .yp-alt, .yp-page .yp-steps, .yp-page .yp-check, .yp-page .yp-gallery,
-.yp-page .yp-pricing, .yp-page .yp-compare, .yp-page .yp-faq2, .yp-page .yp-faqg,
-.yp-page .yp-faqh, .yp-page .yp-faqo, .yp-page .yp-faqs, .yp-page .yp-ctabox,
-.yp-page .yp-ctadual {
-  max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
-}
+/*
+ * Five split OUT of this group earlier — .yp-check, .yp-faqh, .yp-faqs,
+ * .yp-ctabox, .yp-ctadual — each moved onto its own inner wrapper, because
+ * each one's wrapper already held everything the section renders, heading
+ * included. .yp-gallery is a SIXTH, split out differently: its heading and
+ * intro sit OUTSIDE .yp-gallery__grid with no shared wrapper at all, so
+ * there was nothing existing to move onto — a NEW one was added
+ * (.yp-gallery__inner) purely to give the two of them one ancestor to
+ * share. That is a markup change, not just a CSS one; see the comment
+ * where it is used in content-gallery.ts for what that costs and why it
+ * still renders pixel-for-pixel identically by default.
+ *
+ * .yp-alt, .yp-steps, .yp-pricing, .yp-compare, .yp-faq2, .yp-faqg and
+ * .yp-faqo shared this rule too, and have each since had the identical
+ * new-wrapper treatment content-gallery got — .yp-alt__inner,
+ * .yp-steps__inner, .yp-pricing__inner, .yp-compare__inner,
+ * .yp-faq2__inner, .yp-faqg__inner and .yp-faqo__inner, declared at the
+ * true end of this file alongside .yp-gallery__inner. Nothing shares this
+ * rule any longer, so it is gone rather than left with an empty selector
+ * list.
+ */
 .yp-page .yp-alt__heading, .yp-page .yp-steps__heading, .yp-page .yp-stats__heading,
 .yp-page .yp-check__heading, .yp-page .yp-gallery__heading, .yp-page .yp-pricing__heading,
 .yp-page .yp-promise__heading, .yp-page .yp-compare__heading, .yp-page .yp-faq2__heading,
 .yp-page .yp-faqg__heading, .yp-page .yp-faqh__heading, .yp-page .yp-faqo__heading,
 .yp-page .yp-faqs__heading, .yp-page .yp-ctadual__heading {
-  margin: 0; font-size: clamp(1.9rem, 3vw, 2.6rem); line-height: 1.12;
+  margin: 0; font-size: calc(clamp(1.9rem, 3vw, 2.6rem) * var(--yp-display-scale, 1)); line-height: 1.12;
   letter-spacing: -0.02em; font-weight: 800; text-wrap: balance;
 }
 .yp-page .yp-steps__intro, .yp-page .yp-stats__intro, .yp-page .yp-gallery__intro,
 .yp-page .yp-pricing__intro, .yp-page .yp-promise__intro, .yp-page .yp-compare__intro,
 .yp-page .yp-faq2__intro, .yp-page .yp-faqo__intro {
-  margin: 0.7rem 0 0; max-width: 60ch; font-size: 1.02rem; color: var(--ink-2);
+  margin: 0.7rem 0 0; max-width: 60ch; font-size: calc(1.02rem * var(--yp-text-scale, 1)); color: var(--ink-2);
 }
 
 /* ---- Alternating rows ---- */
 .yp-page .yp-alt__row {
-  display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-gap);
+  display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
   align-items: center; margin-top: 3rem;
 }
 /* The flip. One rule, and the page stops looking templated. */
 .yp-page .yp-alt__row:nth-child(even) .yp-alt__media { order: -1; }
 .yp-page .yp-alt__copy { display: flex; flex-direction: column; gap: 0.9rem; }
-.yp-page .yp-alt__title { margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
-.yp-page .yp-alt__body { margin: 0; max-width: 46ch; font-size: 1.02rem; color: var(--ink-2); }
+.yp-page .yp-alt__title { margin: 0; font-size: calc(1.5rem * var(--yp-text-scale, 1)); font-weight: 700; letter-spacing: -0.02em; }
+.yp-page .yp-alt__body { margin: 0; max-width: 46ch; font-size: calc(1.02rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-alt__media { margin: 0; }
 .yp-page .yp-alt__frame { margin: 0; border-radius: 16px; overflow: hidden; background: var(--surface-2); aspect-ratio: 4/3; }
 .yp-page .yp-alt__frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -1657,27 +1739,31 @@ body.yp-page {
   width: 2.5rem; height: 2.5rem; border-radius: 50%;
   display: grid; place-items: center;
   background: color-mix(in oklch, var(--primary) 12%, transparent);
-  color: var(--primary); font-family: var(--font-mono); font-weight: 700; font-size: 0.95rem;
+  color: var(--primary); font-family: var(--font-mono); font-weight: 700; font-size: calc(0.95rem * var(--yp-text-scale, 1));
 }
-.yp-page .yp-steps__title { margin: 0 0 0.4rem; font-size: 1.1rem; font-weight: 700; }
-.yp-page .yp-steps__body { margin: 0; font-size: 0.97rem; color: var(--ink-2); }
+.yp-page .yp-steps__title { margin: 0 0 0.4rem; font-size: calc(1.1rem * var(--yp-text-scale, 1)); font-weight: 700; }
+.yp-page .yp-steps__body { margin: 0; font-size: calc(0.97rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 
 /* ---- Numbers band ---- */
 .yp-page .yp-stats { background: color-mix(in oklch, var(--primary) 6%, var(--surface)); border-block: 1px solid color-mix(in oklch, var(--primary) 14%, transparent); }
-.yp-page .yp-stats__inner { max-width: var(--container); margin: 0 auto; padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom); }
+.yp-page .yp-stats__inner { max-width: var(--container); margin: 0 auto; padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1)); }
 .yp-page .yp-stats__grid { display: grid; gap: 1.6rem 2.4rem; margin-top: 2.2rem;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); }
 .yp-page .yp-stats__item { display: grid; gap: 0.25rem; }
-.yp-page .yp-stats__value { margin: 0; font-size: clamp(2.1rem, 3.6vw, 3.1rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
-.yp-page .yp-stats__label { margin: 0; font-size: 0.9rem; color: var(--muted); }
+.yp-page .yp-stats__value { margin: 0; font-size: calc(clamp(2.1rem, 3.6vw, 3.1rem) * var(--yp-display-scale, 1)); font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+.yp-page .yp-stats__label { margin: 0; font-size: calc(0.9rem * var(--yp-text-scale, 1)); color: var(--muted); }
 
 /* ---- Checklist: ticks via ::marker, not characters in the text ---- */
-.yp-page .yp-check__grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-gap); align-items: start; }
+.yp-page .yp-check__grid {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+  display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: start;
+}
 .yp-page .yp-check__copy { display: flex; flex-direction: column; align-items: flex-start; gap: 1.1rem; }
-.yp-page .yp-check__body { margin: 0; max-width: 44ch; font-size: 1.04rem; color: var(--ink-2); }
+.yp-page .yp-check__body { margin: 0; max-width: 44ch; font-size: calc(1.04rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-check__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; }
 .yp-page .yp-check__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.75rem; }
-.yp-page .yp-check__list > li { position: relative; padding-left: 2rem; font-size: 1rem; color: var(--ink-2); line-height: 1.5; }
+.yp-page .yp-check__list > li { position: relative; padding-left: 2rem; font-size: calc(1rem * var(--yp-text-scale, 1)); color: var(--ink-2); line-height: 1.5; }
 .yp-page .yp-check__list > li::before {
   content: ""; position: absolute; left: 0; top: 0.3em; width: 1.15rem; height: 1.15rem;
   border-radius: 50%; background: color-mix(in oklch, var(--primary) 14%, transparent);
@@ -1765,7 +1851,7 @@ body.yp-page {
   background: none;
   background-image: none;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: calc(0.85rem * var(--yp-text-scale, 1));
   line-height: 1.5;
   text-align: left;
   overflow: visible;
@@ -1782,7 +1868,7 @@ body.yp-page {
 .yp-page .yp-gallery__tile { margin: 0; }
 .yp-page .yp-gallery__frame { margin: 0; border-radius: 14px; overflow: hidden; background: var(--surface-2); aspect-ratio: 1/1; }
 .yp-page .yp-gallery__frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.yp-page .yp-gallery__caption { margin: 0.6rem 0 0; font-size: 0.88rem; color: var(--muted); }
+.yp-page .yp-gallery__caption { margin: 0.6rem 0 0; font-size: calc(0.88rem * var(--yp-text-scale, 1)); color: var(--muted); }
 
 /* ---- Pricing ---- */
 .yp-page .yp-pricing__grid { display: grid; gap: 1.2rem; margin-top: 2.2rem; align-items: start;
@@ -1792,22 +1878,22 @@ body.yp-page {
   border-color: color-mix(in oklch, var(--primary) 55%, transparent);
   box-shadow: 0 18px 44px -26px color-mix(in oklch, var(--primary) 55%, transparent);
 }
-.yp-page .yp-pricing__name { margin: 0 0 0.6rem; font-size: 1.1rem; font-weight: 700; }
-.yp-page .yp-pricing__price { margin: 0; font-size: clamp(1.8rem, 2.6vw, 2.3rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
-.yp-page .yp-pricing__note { margin: 0.2rem 0 1.1rem; font-family: var(--font-mono); font-size: 0.74rem; color: var(--muted); }
+.yp-page .yp-pricing__name { margin: 0 0 0.6rem; font-size: calc(1.1rem * var(--yp-text-scale, 1)); font-weight: 700; }
+.yp-page .yp-pricing__price { margin: 0; font-size: calc(clamp(1.8rem, 2.6vw, 2.3rem) * var(--yp-display-scale, 1)); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
+.yp-page .yp-pricing__note { margin: 0.2rem 0 1.1rem; font-family: var(--font-mono); font-size: calc(0.74rem * var(--yp-text-scale, 1)); color: var(--muted); }
 .yp-page .yp-pricing__features { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.55rem; border-top: 1px solid var(--line); padding-top: 1.1rem; }
-.yp-page .yp-pricing__features > li { position: relative; padding-left: 1.3rem; font-size: 0.94rem; color: var(--ink-2); }
+.yp-page .yp-pricing__features > li { position: relative; padding-left: 1.3rem; font-size: calc(0.94rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-pricing__features > li::before { content: "+"; position: absolute; left: 0; color: var(--primary); font-weight: 700; }
-.yp-page .yp-pricing__footnote { margin: 1.4rem 0 0; font-size: 0.82rem; color: var(--faint); }
+.yp-page .yp-pricing__footnote { margin: 1.4rem 0 0; font-size: calc(0.82rem * var(--yp-text-scale, 1)); color: var(--faint); }
 
 /* ---- Promises ---- */
 .yp-page .yp-promise { background: var(--surface-2); border-block: 1px solid var(--line); }
-.yp-page .yp-promise__inner { max-width: var(--container); margin: 0 auto; padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom); }
+.yp-page .yp-promise__inner { max-width: var(--container); margin: 0 auto; padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1)); }
 .yp-page .yp-promise__grid { display: grid; gap: 1.4rem; margin-top: 2.2rem;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
 .yp-page .yp-promise__item { padding-left: 1.2rem; border-left: 3px solid color-mix(in oklch, var(--primary) 45%, transparent); }
-.yp-page .yp-promise__title { margin: 0 0 0.4rem; font-size: 1.08rem; font-weight: 700; }
-.yp-page .yp-promise__body { margin: 0; font-size: 0.97rem; color: var(--ink-2); }
+.yp-page .yp-promise__title { margin: 0 0 0.4rem; font-size: calc(1.08rem * var(--yp-text-scale, 1)); font-weight: 700; }
+.yp-page .yp-promise__body { margin: 0; font-size: calc(0.97rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 
 /* ---- Comparison ---- */
 .yp-page .yp-compare__table { margin-top: 2.2rem; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
@@ -1817,15 +1903,15 @@ body.yp-page {
 .yp-page .yp-compare__row--head { background: var(--surface-2); }
 .yp-page .yp-compare__row--head .yp-compare__us,
 .yp-page .yp-compare__row--head .yp-compare__them {
-  font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700;
+  font-family: var(--font-mono); font-size: calc(0.72rem * var(--yp-text-scale, 1)); font-weight: 700;
   letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
 }
-.yp-page .yp-compare__point { margin: 0; font-size: 0.95rem; font-weight: 600; }
-.yp-page .yp-compare__us { margin: 0; font-size: 0.95rem; color: var(--ink); font-weight: 600; }
-.yp-page .yp-compare__them { margin: 0; font-size: 0.95rem; color: var(--muted); }
+.yp-page .yp-compare__point { margin: 0; font-size: calc(0.95rem * var(--yp-text-scale, 1)); font-weight: 600; }
+.yp-page .yp-compare__us { margin: 0; font-size: calc(0.95rem * var(--yp-text-scale, 1)); color: var(--ink); font-weight: 600; }
+.yp-page .yp-compare__them { margin: 0; font-size: calc(0.95rem * var(--yp-text-scale, 1)); color: var(--muted); }
 
 /* ---- Offer ---- */
-.yp-page .yp-offer { max-width: var(--container); margin: 0 auto; padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom); }
+.yp-page .yp-offer { max-width: var(--container); margin: 0 auto; padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1)); }
 .yp-page .yp-offer__card {
   border-radius: 20px; padding: 2.4rem 2.6rem 2.6rem;
   background: color-mix(in oklch, var(--primary) 7%, var(--surface));
@@ -1835,27 +1921,27 @@ body.yp-page {
 .yp-page .yp-offer__eyebrow {
   margin: 0; display: inline-flex; align-items: center; padding: 0.4rem 0.9rem; border-radius: 999px;
   background: color-mix(in oklch, var(--primary) 15%, transparent); color: var(--primary);
-  font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase;
+  font-family: var(--font-mono); font-size: calc(0.7rem * var(--yp-text-scale, 1)); font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase;
 }
-.yp-page .yp-offer__heading { margin: 0; font-size: clamp(1.8rem, 2.8vw, 2.4rem); font-weight: 800; letter-spacing: -0.02em; text-wrap: balance; }
-.yp-page .yp-offer__body { margin: 0; max-width: 52ch; font-size: 1.04rem; color: var(--ink-2); }
+.yp-page .yp-offer__heading { margin: 0; font-size: calc(clamp(1.8rem, 2.8vw, 2.4rem) * var(--yp-display-scale, 1)); font-weight: 800; letter-spacing: -0.02em; text-wrap: balance; }
+.yp-page .yp-offer__body { margin: 0; max-width: 52ch; font-size: calc(1.04rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-offer__bullets { display: grid; gap: 0.5rem; }
 .yp-page .yp-offer__bullet { position: relative; padding-left: 1.4rem; }
 .yp-page .yp-offer__bullet::before { content: "✓"; position: absolute; left: 0; color: var(--primary); font-weight: 700; }
-.yp-page .yp-offer__bullet-text { margin: 0; font-size: 0.97rem; color: var(--ink-2); }
+.yp-page .yp-offer__bullet-text { margin: 0; font-size: calc(0.97rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-offer__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; margin-top: 0.3rem; }
-.yp-page .yp-offer__small { margin: 0; font-size: 0.82rem; color: var(--muted); }
+.yp-page .yp-offer__small { margin: 0; font-size: calc(0.82rem * var(--yp-text-scale, 1)); color: var(--muted); }
 
 /* ---- Logos: wordmarks, never other companies' logo files ---- */
 .yp-page .yp-logos { border-block: 1px solid var(--line); }
 .yp-page .yp-logos__inner { max-width: var(--container); margin: 0 auto;
-  padding: calc(var(--space-section-top) * 0.6) var(--space-gutter) calc(var(--space-section-bottom) * 0.7);
+  padding: calc(calc(var(--space-section-top) * var(--yp-space-scale, 1)) * 0.6) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(calc(var(--space-section-bottom) * var(--yp-space-scale, 1)) * 0.7);
   display: flex; flex-direction: column; align-items: center; gap: 1.2rem; text-align: center; }
-.yp-page .yp-logos__heading { margin: 0; font-family: var(--font-mono); font-size: 0.74rem; font-weight: 600;
+.yp-page .yp-logos__heading { margin: 0; font-family: var(--font-mono); font-size: calc(0.74rem * var(--yp-text-scale, 1)); font-weight: 600;
   letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
 .yp-page .yp-logos__row { display: flex; flex-wrap: wrap; justify-content: center; gap: 1.2rem 2.6rem; }
-.yp-page .yp-logos__name { margin: 0; font-size: 1.06rem; font-weight: 700; letter-spacing: -0.01em; color: color-mix(in oklch, var(--ink) 55%, transparent); }
-.yp-page .yp-logos__note { margin: 0; font-size: 0.8rem; color: var(--faint); }
+.yp-page .yp-logos__name { margin: 0; font-size: calc(1.06rem * var(--yp-text-scale, 1)); font-weight: 700; letter-spacing: -0.01em; color: color-mix(in oklch, var(--ink) 55%, transparent); }
+.yp-page .yp-logos__note { margin: 0; font-size: calc(0.8rem * var(--yp-text-scale, 1)); color: var(--faint); }
 
 /* ---- FAQ variants ---- */
 .yp-page .yp-faq2__cols { margin-top: 2rem; columns: 2; column-gap: 2.6rem; }
@@ -1864,39 +1950,47 @@ body.yp-page {
 /* Grouped FAQs are the section most likely to be printed or read in columns;
    a group split across a break loses its heading. */
 .yp-page .yp-faqg__group { break-inside: avoid; }
-.yp-page .yp-faqg__group-title { margin: 0 0 0.6rem; font-size: 1.05rem; font-weight: 700;
+.yp-page .yp-faqg__group-title { margin: 0 0 0.6rem; font-size: calc(1.05rem * var(--yp-text-scale, 1)); font-weight: 700;
   font-family: var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--primary); }
 .yp-page .yp-faqg__list { border-top: 1px solid var(--line); }
 .yp-page .yp-faqg__item { border-bottom: 1px solid var(--line); }
-.yp-page .yp-faqh__grid { display: grid; grid-template-columns: 1.5fr 0.9fr; gap: var(--space-gap); align-items: start; }
+.yp-page .yp-faqh__grid {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+  display: grid; grid-template-columns: 1.5fr 0.9fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: start;
+}
 .yp-page .yp-faqh__main { min-width: 0; }
 .yp-page .yp-faqh__list { margin-top: 1.6rem; border-top: 1px solid var(--line); }
 .yp-page .yp-faqh__item { border-bottom: 1px solid var(--line); }
 .yp-page .yp-faqh__panel { border: 1px solid var(--line); border-radius: 16px; padding: 1.5rem 1.6rem 1.7rem;
   background: color-mix(in oklch, var(--primary) 6%, var(--surface)); display: grid; gap: 0.7rem; }
-.yp-page .yp-faqh__panel-heading { margin: 0; font-size: 1.1rem; font-weight: 700; }
-.yp-page .yp-faqh__panel-body { margin: 0; font-size: 0.95rem; color: var(--ink-2); }
+.yp-page .yp-faqh__panel-heading { margin: 0; font-size: calc(1.1rem * var(--yp-text-scale, 1)); font-weight: 700; }
+.yp-page .yp-faqh__panel-body { margin: 0; font-size: calc(0.95rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-faqh__phone { margin: 0.2rem 0; }
-.yp-page .yp-faqh__phone a { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; color: var(--ink);
+.yp-page .yp-faqh__phone a { font-size: calc(1.35rem * var(--yp-text-scale, 1)); font-weight: 800; letter-spacing: -0.02em; color: var(--ink);
   text-decoration: none; border-bottom: 2px solid color-mix(in oklch, var(--primary) 55%, transparent); }
 .yp-page .yp-faqh__actions { display: flex; flex-wrap: wrap; gap: 0.7rem; margin-top: 0.3rem; }
 .yp-page .yp-faqo__list { counter-reset: yp-q; display: grid; gap: 2rem; margin-top: 2.2rem; }
 .yp-page .yp-faqo__item { counter-increment: yp-q; position: relative; padding-left: 3.2rem; }
 .yp-page .yp-faqo__item::before { content: counter(yp-q, decimal-leading-zero); position: absolute; left: 0; top: 0.1rem;
-  font-family: var(--font-mono); font-size: 0.95rem; font-weight: 700; color: var(--primary); }
-.yp-page .yp-faqo__question { margin: 0 0 0.5rem; font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }
-.yp-page .yp-faqo__answer { margin: 0; max-width: 68ch; font-size: 1rem; color: var(--ink-2); }
-.yp-page .yp-faqs__grid { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: var(--space-gap); align-items: start; }
+  font-family: var(--font-mono); font-size: calc(0.95rem * var(--yp-text-scale, 1)); font-weight: 700; color: var(--primary); }
+.yp-page .yp-faqo__question { margin: 0 0 0.5rem; font-size: calc(1.15rem * var(--yp-text-scale, 1)); font-weight: 700; letter-spacing: -0.01em; }
+.yp-page .yp-faqo__answer { margin: 0; max-width: 68ch; font-size: calc(1rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
+.yp-page .yp-faqs__grid {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+  display: grid; grid-template-columns: 0.85fr 1.15fr; gap: calc(var(--space-gap) * var(--yp-space-scale, 1)); align-items: start;
+}
 /* Heading follows the reader down a long list. No script needed. */
 .yp-page .yp-faqs__aside { position: sticky; top: 2rem; display: grid; gap: 0.8rem; }
-.yp-page .yp-faqs__body { margin: 0; font-size: 1rem; color: var(--ink-2); max-width: 34ch; }
+.yp-page .yp-faqs__body { margin: 0; font-size: calc(1rem * var(--yp-text-scale, 1)); color: var(--ink-2); max-width: 34ch; }
 .yp-page .yp-faqs__list { border-top: 1px solid var(--line); }
 .yp-page .yp-faqs__item { border-bottom: 1px solid var(--line); }
 
 /* Accordion chrome shared by every <details> variant. */
 .yp-page .yp-faq2__item summary, .yp-page .yp-faqg__item summary,
 .yp-page .yp-faqh__item summary, .yp-page .yp-faqs__item summary {
-  cursor: pointer; padding: 1.05rem 2.2rem 1.05rem 0; font-size: 1.02rem; font-weight: 700;
+  cursor: pointer; padding: 1.05rem 2.2rem 1.05rem 0; font-size: calc(1.02rem * var(--yp-text-scale, 1)); font-weight: 700;
   position: relative; list-style: none; display: block;
 }
 .yp-page .yp-faq2__item summary::-webkit-details-marker, .yp-page .yp-faqg__item summary::-webkit-details-marker,
@@ -1911,28 +2005,44 @@ body.yp-page {
 .yp-page .yp-faqh__item[open] summary::after, .yp-page .yp-faqs__item[open] summary::after { transform: rotate(-135deg); }
 .yp-page .yp-faq2__item p, .yp-page .yp-faqg__item p,
 .yp-page .yp-faqh__item p, .yp-page .yp-faqs__item p {
-  margin: 0; padding: 0 2.2rem 1.2rem 0; max-width: 70ch; font-size: 0.98rem; color: var(--ink-2);
+  margin: 0; padding: 0 2.2rem 1.2rem 0; max-width: 70ch; font-size: calc(0.98rem * var(--yp-text-scale, 1)); color: var(--ink-2);
 }
 
 /* ---- CTA variants ---- */
 .yp-page .yp-ctasplit { background: color-mix(in oklch, var(--primary) 8%, var(--surface));
   border-block: 1px solid color-mix(in oklch, var(--primary) 18%, transparent); }
 .yp-page .yp-ctasplit__inner { max-width: var(--container); margin: 0 auto;
-  padding: calc(var(--space-section-top) * 0.7) var(--space-gutter) calc(var(--space-section-bottom) * 0.8);
+  padding: calc(calc(var(--space-section-top) * var(--yp-space-scale, 1)) * 0.7) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(calc(var(--space-section-bottom) * var(--yp-space-scale, 1)) * 0.8);
   display: flex; align-items: center; justify-content: space-between; gap: 1.6rem; flex-wrap: wrap; }
 .yp-page .yp-ctasplit__copy { display: grid; gap: 0.35rem; }
-.yp-page .yp-ctasplit__heading { margin: 0; font-size: clamp(1.4rem, 2.4vw, 1.9rem); font-weight: 800; letter-spacing: -0.02em; }
-.yp-page .yp-ctasplit__body { margin: 0; font-size: 1rem; color: var(--ink-2); }
+.yp-page .yp-ctasplit__heading { margin: 0; font-size: calc(clamp(1.4rem, 2.4vw, 1.9rem) * var(--yp-display-scale, 1)); font-weight: 800; letter-spacing: -0.02em; }
+.yp-page .yp-ctasplit__body { margin: 0; font-size: calc(1rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-ctasplit__actions { display: flex; gap: 0.8rem; flex: none; }
 
-.yp-page .yp-ctabox__card { border: 1px solid var(--line); border-radius: 20px; padding: 2.4rem 2rem 2.6rem;
+.yp-page .yp-ctabox {
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+}
+
+/*
+ * Only max-width/margin move here — NOT the section's own top/bottom/gutter
+ * padding, which stays on .yp-ctabox above. This one is different from
+ * every other move in this file: .yp-ctabox__card already owns a padding of
+ * its own for a different reason (the bordered card's inner spacing), and a
+ * plain `padding` shorthand would have overwritten it outright. Leaving the
+ * section's padding on the root instead is exactly CtaBand's own shape —
+ * background can still reach it, sitting OUTSIDE the max-width-constrained
+ * card, providing the vertical breathing room around it either way.
+ */
+.yp-page .yp-ctabox__card {
+  max-width: var(--container); margin: 0 auto;
+  border: 1px solid var(--line); border-radius: 20px; padding: 2.4rem 2rem 2.6rem;
   background: var(--surface); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.9rem; }
-.yp-page .yp-ctabox__eyebrow { margin: 0; font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600;
+.yp-page .yp-ctabox__eyebrow { margin: 0; font-family: var(--font-mono); font-size: calc(0.7rem * var(--yp-text-scale, 1)); font-weight: 600;
   letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary); }
-.yp-page .yp-ctabox__heading { margin: 0; font-size: clamp(1.7rem, 2.8vw, 2.3rem); font-weight: 800; letter-spacing: -0.02em; text-wrap: balance; }
-.yp-page .yp-ctabox__body { margin: 0; max-width: 48ch; font-size: 1.02rem; color: var(--ink-2); }
+.yp-page .yp-ctabox__heading { margin: 0; font-size: calc(clamp(1.7rem, 2.8vw, 2.3rem) * var(--yp-display-scale, 1)); font-weight: 800; letter-spacing: -0.02em; text-wrap: balance; }
+.yp-page .yp-ctabox__body { margin: 0; max-width: 48ch; font-size: calc(1.02rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-ctabox__actions { display: flex; flex-wrap: wrap; gap: 0.8rem; justify-content: center; margin-top: 0.4rem; }
-.yp-page .yp-ctabox__small { margin: 0.3rem 0 0; font-size: 0.82rem; color: var(--muted); }
+.yp-page .yp-ctabox__small { margin: 0.3rem 0 0; font-size: calc(0.82rem * var(--yp-text-scale, 1)); color: var(--muted); }
 
 .yp-page .yp-ctaimg { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; min-height: min(46vh, 400px); }
 .yp-page .yp-ctaimg__media { position: absolute; inset: 0; z-index: -2; margin: 0; }
@@ -1940,30 +2050,34 @@ body.yp-page {
 .yp-page .yp-ctaimg::after { content: ""; position: absolute; inset: 0; z-index: -1;
   background: linear-gradient(to top, rgba(8,11,16,0.82) 0%, rgba(8,11,16,0.5) 60%, rgba(8,11,16,0.3) 100%); }
 .yp-page .yp-ctaimg__inner { position: relative; width: 100%; max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.9rem; }
-.yp-page .yp-ctaimg__heading { margin: 0; color: #fff; font-size: clamp(1.9rem, 3.4vw, 2.9rem); font-weight: 800; letter-spacing: -0.03em; text-wrap: balance; }
-.yp-page .yp-ctaimg__body { margin: 0; color: rgba(255,255,255,0.84); font-size: 1.05rem; max-width: 46ch; }
+.yp-page .yp-ctaimg__heading { margin: 0; color: #fff; font-size: calc(clamp(1.9rem, 3.4vw, 2.9rem) * var(--yp-display-scale, 1)); font-weight: 800; letter-spacing: -0.03em; text-wrap: balance; }
+.yp-page .yp-ctaimg__body { margin: 0; color: rgba(255,255,255,0.84); font-size: calc(1.05rem * var(--yp-text-scale, 1)); max-width: 46ch; }
 .yp-page .yp-ctaimg__actions { display: flex; flex-wrap: wrap; gap: 0.8rem; justify-content: center; margin-top: 0.3rem; }
 .yp-page .yp-ctaimg__actions .yp-btn--outline a { border-color: rgba(255,255,255,0.5); color: #fff; }
 
-.yp-page .yp-ctadual__inner { display: grid; gap: 1.8rem; }
+.yp-page .yp-ctadual__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+  display: grid; gap: 1.8rem;
+}
 .yp-page .yp-ctadual__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
 .yp-page .yp-ctadual__option { border: 1px solid var(--line); border-radius: 18px; padding: 1.8rem 1.9rem 2rem;
   background: var(--surface); display: flex; flex-direction: column; align-items: flex-start; gap: 0.7rem; }
 .yp-page .yp-ctadual__option:first-child { background: color-mix(in oklch, var(--primary) 6%, var(--surface));
   border-color: color-mix(in oklch, var(--primary) 22%, transparent); }
-.yp-page .yp-ctadual__title { margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
-.yp-page .yp-ctadual__body { margin: 0; font-size: 0.99rem; color: var(--ink-2); }
+.yp-page .yp-ctadual__title { margin: 0; font-size: calc(1.25rem * var(--yp-text-scale, 1)); font-weight: 700; letter-spacing: -0.01em; }
+.yp-page .yp-ctadual__body { margin: 0; font-size: calc(0.99rem * var(--yp-text-scale, 1)); color: var(--ink-2); }
 .yp-page .yp-ctadual__actions { display: flex; gap: 0.7rem; margin-top: 0.6rem; }
 
 .yp-page .yp-ctastrip { background: var(--ink); }
 .yp-page .yp-ctastrip__inner { max-width: var(--container); margin: 0 auto;
-  padding: 1.1rem var(--space-gutter); display: flex; align-items: center; justify-content: center;
+  padding: 1.1rem calc(var(--space-gutter) * var(--yp-space-scale, 1)); display: flex; align-items: center; justify-content: center;
   gap: 1.2rem; flex-wrap: wrap; text-align: center; }
-.yp-page .yp-ctastrip__text { margin: 0; color: #fff; font-size: 1.02rem; font-weight: 600; }
+.yp-page .yp-ctastrip__text { margin: 0; color: #fff; font-size: calc(1.02rem * var(--yp-text-scale, 1)); font-weight: 600; }
 .yp-page .yp-ctastrip__actions { display: flex; gap: 0.6rem; flex: none; }
-.yp-page .yp-ctastrip__actions .wp-block-button__link { padding: 0.6rem 1.1rem; font-size: 0.9rem; }
+.yp-page .yp-ctastrip__actions .wp-block-button__link { padding: 0.6rem 1.1rem; font-size: calc(0.9rem * var(--yp-text-scale, 1)); }
 
 @media (max-width: 880px) {
   .yp-page .yp-alt__row { grid-template-columns: 1fr; gap: 2rem; }
@@ -2062,7 +2176,7 @@ body.yp-page {
   .wp-block-navigation-item__content {
   display: block;
   padding: 0.55rem 0;
-  font-size: 1.3rem;
+  font-size: calc(1.3rem * var(--yp-text-scale, 1));
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--ink);
@@ -2086,7 +2200,7 @@ body.yp-page {
 }
 
 /* Preview placeholders for the dynamic blocks. */
-.yp-page .yp-ph-brand { margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+.yp-page .yp-ph-brand { margin: 0; font-size: calc(1.15rem * var(--yp-text-scale, 1)); font-weight: 800; letter-spacing: -0.02em; }
 /* The logo, in the canvas (.yp-ph-logo) and on the live site
    (.wp-block-site-logo). Capped by height so a wide wordmark and a square mark
    both sit correctly on the header's baseline. */
@@ -2136,7 +2250,7 @@ body.yp-page {
 .yp-page .yp-ph-nav__links {
   display: flex;
   gap: 1.4rem;
-  font-size: 0.92rem;
+  font-size: calc(0.92rem * var(--yp-text-scale, 1));
   color: var(--ink-2);
 }
 /*
@@ -2277,7 +2391,7 @@ body.yp-page {
   .yp-page .yp-ph-nav__link {
     display: block;
     padding: 0.85rem 1.3rem;
-    font-size: 1.05rem;
+    font-size: calc(1.05rem * var(--yp-text-scale, 1));
     font-weight: 600;
     color: var(--ink);
   }
@@ -2312,13 +2426,13 @@ body.yp-page {
 .yp-page .yp-hdrt__brand, .yp-page .yp-hdrm__brand, .yp-page .yp-ftr__brand,
 .yp-page .yp-ftrc__brand, .yp-page .yp-ftrk__brand, .yp-page .yp-ftrx__brand,
 .yp-page .yp-ftrs__brand {
-  margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em;
+  margin: 0; font-size: calc(1.15rem * var(--yp-text-scale, 1)); font-weight: 800; letter-spacing: -0.02em;
 }
 .yp-page .yp-hdr__brand a, .yp-page .yp-hdrc__brand a, .yp-page .yp-hdrb__brand a,
 .yp-page .yp-hdrt__brand a, .yp-page .yp-hdrm__brand a { text-decoration: none; color: inherit; }
 
 .yp-page .yp-hdr__nav, .yp-page .yp-hdrc__nav, .yp-page .yp-hdrb__nav,
-.yp-page .yp-hdrt__nav, .yp-page .yp-ftrs__nav { font-size: 0.92rem; }
+.yp-page .yp-hdrt__nav, .yp-page .yp-ftrs__nav { font-size: calc(0.92rem * var(--yp-text-scale, 1)); }
 
 /* ---- Headers ---- */
 .yp-page .yp-hdr, .yp-page .yp-hdrc, .yp-page .yp-hdrb, .yp-page .yp-hdrm {
@@ -2326,7 +2440,7 @@ body.yp-page {
 }
 .yp-page .yp-hdr__inner, .yp-page .yp-hdrb__inner, .yp-page .yp-hdrm__inner {
   max-width: var(--container); margin: 0 auto;
-  padding: 1.05rem var(--space-gutter);
+  padding: 1.05rem calc(var(--space-gutter) * var(--yp-space-scale, 1));
   display: flex; align-items: center; gap: 1.5rem;
 }
 .yp-page .yp-hdr__inner { justify-content: space-between; }
@@ -2334,34 +2448,34 @@ body.yp-page {
 /* Nav sits between brand and button, pushed off the brand. */
 .yp-page .yp-hdrb__nav { margin-left: auto; }
 .yp-page .yp-hdrb__actions { flex: none; }
-.yp-page .yp-hdrb__actions .wp-block-button__link { padding: 0.6rem 1.15rem; font-size: 0.9rem; }
+.yp-page .yp-hdrb__actions .wp-block-button__link { padding: 0.6rem 1.15rem; font-size: calc(0.9rem * var(--yp-text-scale, 1)); }
 
 .yp-page .yp-hdrc__inner {
   max-width: var(--container); margin: 0 auto;
-  padding: 1.5rem var(--space-gutter) 1.1rem;
+  padding: 1.5rem calc(var(--space-gutter) * var(--yp-space-scale, 1)) 1.1rem;
   display: flex; flex-direction: column; align-items: center; gap: 0.9rem;
 }
-.yp-page .yp-hdrc__brand { font-size: 1.5rem; }
+.yp-page .yp-hdrc__brand { font-size: calc(1.5rem * var(--yp-text-scale, 1)); }
 
 .yp-page .yp-hdrt { border-bottom: 1px solid var(--line); background: var(--surface); }
 .yp-page .yp-hdrt__bar { background: var(--ink); }
 .yp-page .yp-hdrt__bar-inner {
   max-width: var(--container); margin: 0 auto;
-  padding: 0.5rem var(--space-gutter);
+  padding: 0.5rem calc(var(--space-gutter) * var(--yp-space-scale, 1));
   display: flex; align-items: center; justify-content: flex-end; gap: 1.4rem; flex-wrap: wrap;
 }
 .yp-page .yp-hdrt__phone { margin: 0; }
 .yp-page .yp-hdrt__phone a {
-  color: #fff; font-size: 0.88rem; font-weight: 700; text-decoration: none;
+  color: #fff; font-size: calc(0.88rem * var(--yp-text-scale, 1)); font-weight: 700; text-decoration: none;
   font-variant-numeric: tabular-nums;
 }
 .yp-page .yp-hdrt__note {
-  margin: 0; color: rgba(255,255,255,0.62); font-size: 0.82rem;
+  margin: 0; color: rgba(255,255,255,0.62); font-size: calc(0.82rem * var(--yp-text-scale, 1));
   font-family: var(--font-mono); letter-spacing: 0.02em;
 }
 .yp-page .yp-hdrt__main {
   max-width: var(--container); margin: 0 auto;
-  padding: 1.05rem var(--space-gutter);
+  padding: 1.05rem calc(var(--space-gutter) * var(--yp-space-scale, 1));
   display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;
 }
 
@@ -2413,7 +2527,7 @@ body.yp-page {
 .yp-page .yp-ftrs__brand {
   margin: 0;
   color: #fff;
-  font-size: 1.3rem;
+  font-size: calc(1.3rem * var(--yp-text-scale, 1));
   font-weight: 800;
   letter-spacing: -0.025em;
 }
@@ -2429,7 +2543,7 @@ body.yp-page {
 .yp-page .yp-ftrk__hours-title {
   margin: 0 0 0.9rem;
   font-family: var(--font-mono);
-  font-size: 0.66rem;
+  font-size: calc(0.66rem * var(--yp-text-scale, 1));
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -2444,7 +2558,7 @@ body.yp-page {
 .yp-page .yp-ftrx__copy,
 .yp-page .yp-ftrs__copy {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: calc(0.8rem * var(--yp-text-scale, 1));
   color: rgba(255, 255, 255, 0.42);
   font-variant-numeric: tabular-nums;
 }
@@ -2453,12 +2567,12 @@ body.yp-page {
 .yp-page .yp-ftr__inner {
   max-width: var(--container);
   margin: 0 auto;
-  padding: 3.2rem var(--space-gutter) 2.4rem;
+  padding: 3.2rem calc(var(--space-gutter) * var(--yp-space-scale, 1)) 2.4rem;
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 1.4rem; flex-wrap: wrap;
 }
 .yp-page .yp-ftr__note {
-  margin: 0; font-size: 0.94rem; color: rgba(255, 255, 255, 0.6); max-width: 40ch;
+  margin: 0; font-size: calc(0.94rem * var(--yp-text-scale, 1)); color: rgba(255, 255, 255, 0.6); max-width: 40ch;
 }
 
 /* ---- 2. Link columns ---- */
@@ -2466,7 +2580,7 @@ body.yp-page {
 .yp-page .yp-ftrk__inner {
   max-width: var(--container);
   margin: 0 auto;
-  padding: 4.4rem var(--space-gutter) 2rem;
+  padding: 4.4rem calc(var(--space-gutter) * var(--yp-space-scale, 1)) 2rem;
 }
 /*
  * EXPLICIT tracks, not `1.4fr repeat(auto-fit, …)`.
@@ -2485,12 +2599,12 @@ body.yp-page {
 }
 .yp-page .yp-ftrc__brandcol { display: grid; gap: 0.9rem; align-content: start; }
 .yp-page .yp-ftrc__blurb {
-  margin: 0; max-width: 30ch; font-size: 0.94rem; line-height: 1.65;
+  margin: 0; max-width: 30ch; font-size: calc(0.94rem * var(--yp-text-scale, 1)); line-height: 1.65;
   color: rgba(255, 255, 255, 0.58);
 }
 .yp-page .yp-ftrc__col { display: grid; gap: 0; align-content: start; }
 .yp-page .yp-ftrc__links { display: grid; gap: 0.7rem; }
-.yp-page .yp-ftrc__link { margin: 0; font-size: 0.94rem; color: rgba(255, 255, 255, 0.72); }
+.yp-page .yp-ftrc__link { margin: 0; font-size: calc(0.94rem * var(--yp-text-scale, 1)); color: rgba(255, 255, 255, 0.72); }
 .yp-page .yp-ftrc__link a {
   color: inherit; text-decoration: none;
   transition: color 140ms ease;
@@ -2515,7 +2629,7 @@ body.yp-page {
 .yp-page .yp-ftrk__details { display: grid; gap: 1.3rem; align-content: start; }
 .yp-page .yp-ftrk__row { display: grid; gap: 0.25rem; }
 .yp-page .yp-ftrk__label { margin: 0; }
-.yp-page .yp-ftrk__value { margin: 0; font-size: 0.98rem; font-weight: 600; color: #fff; }
+.yp-page .yp-ftrk__value { margin: 0; font-size: calc(0.98rem * var(--yp-text-scale, 1)); font-weight: 600; color: #fff; }
 .yp-page .yp-ftrk__value a {
   color: inherit; text-decoration: none;
   border-bottom: 1px solid rgba(255, 255, 255, 0.25);
@@ -2529,27 +2643,27 @@ body.yp-page {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .yp-page .yp-ftrk__day:first-of-type { border-top: none; }
-.yp-page .yp-ftrk__day-name { margin: 0; font-size: 0.92rem; color: rgba(255, 255, 255, 0.6); }
+.yp-page .yp-ftrk__day-name { margin: 0; font-size: calc(0.92rem * var(--yp-text-scale, 1)); color: rgba(255, 255, 255, 0.6); }
 .yp-page .yp-ftrk__day-time {
-  margin: 0; font-size: 0.92rem; font-weight: 600; color: #fff;
+  margin: 0; font-size: calc(0.92rem * var(--yp-text-scale, 1)); font-weight: 600; color: #fff;
   font-variant-numeric: tabular-nums;
 }
 
 /* ---- 4. Final ask ---- */
 .yp-page .yp-ftrx__inner {
   max-width: var(--container); margin: 0 auto;
-  padding: 4.6rem var(--space-gutter) 2rem;
+  padding: 4.6rem calc(var(--space-gutter) * var(--yp-space-scale, 1)) 2rem;
 }
 .yp-page .yp-ftrx__cta {
   display: flex; flex-direction: column; align-items: center; text-align: center;
   gap: 1rem; padding-bottom: 3.4rem;
 }
 .yp-page .yp-ftrx__heading {
-  margin: 0; color: #fff; font-size: clamp(1.9rem, 3.2vw, 2.7rem);
+  margin: 0; color: #fff; font-size: calc(clamp(1.9rem, 3.2vw, 2.7rem) * var(--yp-display-scale, 1));
   font-weight: 800; letter-spacing: -0.03em; text-wrap: balance;
 }
 .yp-page .yp-ftrx__body {
-  margin: 0; color: rgba(255, 255, 255, 0.62); font-size: 1.05rem; max-width: 44ch;
+  margin: 0; color: rgba(255, 255, 255, 0.62); font-size: calc(1.05rem * var(--yp-text-scale, 1)); max-width: 44ch;
 }
 .yp-page .yp-ftrx__actions { display: flex; gap: 0.8rem; margin-top: 0.5rem; }
 .yp-page .yp-ftrx__base {
@@ -2561,12 +2675,12 @@ body.yp-page {
 /* ---- 5. Social ---- */
 .yp-page .yp-ftrs__inner {
   max-width: var(--container); margin: 0 auto;
-  padding: 4rem var(--space-gutter) 2.2rem;
+  padding: 4rem calc(var(--space-gutter) * var(--yp-space-scale, 1)) 2.2rem;
   display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1.15rem;
 }
-.yp-page .yp-ftrs__brand { font-size: 1.55rem; }
+.yp-page .yp-ftrs__brand { font-size: calc(1.55rem * var(--yp-text-scale, 1)); }
 .yp-page .yp-ftrs__blurb {
-  margin: 0; font-size: 0.98rem; color: rgba(255, 255, 255, 0.6); max-width: 42ch;
+  margin: 0; font-size: calc(0.98rem * var(--yp-text-scale, 1)); color: rgba(255, 255, 255, 0.6); max-width: 42ch;
 }
 .yp-page .yp-ftrs__nav { color: rgba(255, 255, 255, 0.78); }
 .yp-page .yp-ftrs__social { margin: 0.3rem 0; }
@@ -2623,18 +2737,18 @@ body.yp-page {
   margin-block-end: 0;
 }
 
-.yp-page .yp-svcs, .yp-page .yp-svcf, .yp-page .yp-svce,
-.yp-page .yp-svcp, .yp-page .yp-svca {
-  max-width: var(--container);
-  margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
-}
+/*
+ * All five shared this rule; all five have since had the same new-wrapper
+ * treatment content-gallery got — .yp-svcs__inner, .yp-svcf__inner,
+ * .yp-svce__inner, .yp-svcp__inner and .yp-svca__inner, declared at the
+ * true end of this file. Nothing shares this rule any longer.
+ */
 
 .yp-page .yp-svcs__heading, .yp-page .yp-svcf__heading,
 .yp-page .yp-svce__heading, .yp-page .yp-svcp__heading,
 .yp-page .yp-svca__heading {
   margin: 0;
-  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  font-size: calc(clamp(1.9rem, 3vw, 2.6rem) * var(--yp-display-scale, 1));
   line-height: 1.12;
   letter-spacing: -0.02em;
   font-weight: 800;
@@ -2645,7 +2759,7 @@ body.yp-page {
 .yp-page .yp-svcp__intro, .yp-page .yp-svca__intro {
   margin: 0.7rem 0 0;
   max-width: 58ch;
-  font-size: 1.02rem;
+  font-size: calc(1.02rem * var(--yp-text-scale, 1));
   line-height: 1.6;
   color: var(--ink-2);
 }
@@ -2658,7 +2772,7 @@ body.yp-page {
 .yp-page .yp-svcs__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-  gap: var(--space-gutter);
+  gap: calc(var(--space-gutter) * var(--yp-space-scale, 1));
   margin-top: 2.4rem;
 }
 
@@ -2684,13 +2798,13 @@ body.yp-page {
 
 .yp-page .yp-svcs__title {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: calc(1.2rem * var(--yp-text-scale, 1));
   font-weight: 700;
   letter-spacing: -0.015em;
 }
 .yp-page .yp-svcs__body {
   margin: 0.5rem 0 0;
-  font-size: 0.97rem;
+  font-size: calc(0.97rem * var(--yp-text-scale, 1));
   line-height: 1.6;
   color: var(--ink-2);
 }
@@ -2701,7 +2815,7 @@ body.yp-page {
   padding-top: 0.7rem;
   border-top: 1px solid var(--line);
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: calc(0.74rem * var(--yp-text-scale, 1));
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
@@ -2714,7 +2828,7 @@ body.yp-page {
 .yp-page .yp-svcf__grid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-  gap: var(--space-gap);
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
   margin-top: 2.4rem;
   align-items: start;
 }
@@ -2741,14 +2855,14 @@ body.yp-page {
 .yp-page .yp-svcf__meta {
   margin: 0 0 0.7rem;
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: calc(0.74rem * var(--yp-text-scale, 1));
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--primary);
 }
 .yp-page .yp-svcf__title {
   margin: 0;
-  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  font-size: calc(clamp(1.5rem, 2.4vw, 2rem) * var(--yp-display-scale, 1));
   line-height: 1.15;
   letter-spacing: -0.02em;
   font-weight: 800;
@@ -2756,7 +2870,7 @@ body.yp-page {
 .yp-page .yp-svcf__body {
   margin: 0.8rem 0 0;
   max-width: 46ch;
-  font-size: 1.02rem;
+  font-size: calc(1.02rem * var(--yp-text-scale, 1));
   line-height: 1.65;
   color: var(--ink-2);
 }
@@ -2772,13 +2886,13 @@ body.yp-page {
 }
 .yp-page .yp-svcf__other-title {
   margin: 0;
-  font-size: 1.02rem;
+  font-size: calc(1.02rem * var(--yp-text-scale, 1));
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 .yp-page .yp-svcf__other-body {
   margin: 0.25rem 0 0;
-  font-size: 0.92rem;
+  font-size: calc(0.92rem * var(--yp-text-scale, 1));
   line-height: 1.55;
   color: var(--muted);
 }
@@ -2799,7 +2913,7 @@ body.yp-page {
   counter-increment: svce;
   display: grid;
   grid-template-columns: 3.25rem minmax(0, 0.85fr) minmax(0, 1.25fr);
-  column-gap: var(--space-gutter);
+  column-gap: calc(var(--space-gutter) * var(--yp-space-scale, 1));
   align-items: start;
   padding: 2rem 0;
   border-bottom: 1px solid var(--line);
@@ -2809,7 +2923,7 @@ body.yp-page {
   grid-column: 1;
   grid-row: 1;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: calc(0.78rem * var(--yp-text-scale, 1));
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
   color: var(--muted);
@@ -2820,7 +2934,7 @@ body.yp-page {
   grid-column: 2;
   grid-row: 1;
   margin: 0;
-  font-size: clamp(1.25rem, 1.9vw, 1.6rem);
+  font-size: calc(clamp(1.25rem, 1.9vw, 1.6rem) * var(--yp-display-scale, 1));
   line-height: 1.2;
   letter-spacing: -0.02em;
   font-weight: 700;
@@ -2833,7 +2947,7 @@ body.yp-page {
   grid-row: 2;
   margin: 0.6rem 0 0;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: calc(0.72rem * var(--yp-text-scale, 1));
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
@@ -2842,7 +2956,7 @@ body.yp-page {
   grid-column: 3;
   grid-row: 1 / span 2;
   margin: 0;
-  font-size: 1rem;
+  font-size: calc(1rem * var(--yp-text-scale, 1));
   line-height: 1.7;
   color: var(--ink-2);
 }
@@ -2853,7 +2967,7 @@ body.yp-page {
 
 .yp-page .yp-svcp__groups {
   display: grid;
-  gap: var(--space-gap);
+  gap: calc(var(--space-gap) * var(--yp-space-scale, 1));
   margin-top: 2.6rem;
 }
 
@@ -2866,7 +2980,7 @@ body.yp-page {
   padding-bottom: 0.8rem;
   border-bottom: 2px solid var(--ink);
   font-family: var(--font-mono);
-  font-size: 0.76rem;
+  font-size: calc(0.76rem * var(--yp-text-scale, 1));
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -2897,12 +3011,12 @@ body.yp-page {
 .yp-page .yp-svcp__left { grid-column: 1; grid-row: 1; }
 .yp-page .yp-svcp__name {
   margin: 0;
-  font-size: 1.02rem;
+  font-size: calc(1.02rem * var(--yp-text-scale, 1));
   font-weight: 600;
 }
 .yp-page .yp-svcp__note {
   margin: 0.2rem 0 0;
-  font-size: 0.86rem;
+  font-size: calc(0.86rem * var(--yp-text-scale, 1));
   line-height: 1.5;
   color: var(--muted);
 }
@@ -2913,7 +3027,7 @@ body.yp-page {
   grid-column: 3;
   grid-row: 1;
   margin: 0;
-  font-size: 1.02rem;
+  font-size: calc(1.02rem * var(--yp-text-scale, 1));
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -2922,7 +3036,7 @@ body.yp-page {
 .yp-page .yp-svcp__footnote {
   margin: 1.8rem 0 0;
   max-width: 60ch;
-  font-size: 0.84rem;
+  font-size: calc(0.84rem * var(--yp-text-scale, 1));
   line-height: 1.6;
   color: var(--muted);
 }
@@ -2948,7 +3062,7 @@ body.yp-page {
   gap: 1rem;
   padding: 1.25rem 0;
   cursor: pointer;
-  font-size: 1.08rem;
+  font-size: calc(1.08rem * var(--yp-text-scale, 1));
   font-weight: 700;
   letter-spacing: -0.01em;
   list-style: none;
@@ -2983,7 +3097,7 @@ body.yp-page {
   margin: 0;
   padding: 0 3rem 1.5rem 0;
   max-width: 68ch;
-  font-size: 0.99rem;
+  font-size: calc(0.99rem * var(--yp-text-scale, 1));
   line-height: 1.7;
   color: var(--ink-2);
 }
@@ -3016,15 +3130,15 @@ body.yp-page {
   width: 100%;
   max-width: var(--container);
   margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-embed__heading {
   margin: 0 0 0.6rem;
-  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  font-size: calc(clamp(1.7rem, 3vw, 2.4rem) * var(--yp-display-scale, 1));
   line-height: 1.1; letter-spacing: -0.02em; font-weight: 800; text-wrap: balance;
 }
 .yp-page .yp-embed__body {
-  margin: 0 0 1.8rem; max-width: 46ch; color: var(--ink-2); font-size: 1.02rem;
+  margin: 0 0 1.8rem; max-width: 46ch; color: var(--ink-2); font-size: calc(1.02rem * var(--yp-text-scale, 1));
 }
 /* The script renders into this. Reserving a minimum height keeps the page from
    jumping as the form arrives — the same reason images carry dimensions. */
@@ -3074,10 +3188,10 @@ body.yp-page {
 .yp-page .yp-embed__skeleton b {
   grid-column: span 12; justify-self: start;
   padding: 0.7rem 1.4rem; border-radius: 9px;
-  background: var(--primary); color: #fafafa; font-size: 0.9rem;
+  background: var(--primary); color: #fafafa; font-size: calc(0.9rem * var(--yp-text-scale, 1));
 }
 .yp-page .yp-embed__skeleton em {
-  grid-column: span 12; font-style: normal; font-size: 0.78rem; color: var(--muted);
+  grid-column: span 12; font-style: normal; font-size: calc(0.78rem * var(--yp-text-scale, 1)); color: var(--muted);
 }
 
 /* The caption, in either form the preview takes. <em> is used for grouping,
@@ -3086,7 +3200,7 @@ body.yp-page {
   display: block;
   margin-top: 0.6rem;
   font-style: normal;
-  font-size: 0.78rem;
+  font-size: calc(0.78rem * var(--yp-text-scale, 1));
   color: var(--muted);
 }
 
@@ -3094,7 +3208,7 @@ body.yp-page {
 .yp-page .yp-embed__try {
   display: inline-block;
   margin-top: 0.6rem;
-  font-size: 0.8rem;
+  font-size: calc(0.8rem * var(--yp-text-scale, 1));
   color: var(--primary);
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -3178,7 +3292,7 @@ body.yp-page {
   background: var(--vwf-accent);
   color: var(--vwf-accent-text);
 }
-.yp-page .vibewp-form__status { grid-column: span 12; margin: 0; font-size: 0.9rem; }
+.yp-page .vibewp-form__status { grid-column: span 12; margin: 0; font-size: calc(0.9rem * var(--yp-text-scale, 1)); }
 .yp-page .vibewp-form__status[data-state="error"] { color: #b3261e; }
 @media (max-width: 560px) {
   .yp-page .vibewp-form__field { grid-column: span 12 !important; }
@@ -3200,33 +3314,31 @@ body.yp-page {
 .yp-page .yp-formb, .yp-page .yp-formb * { box-sizing: border-box; }
 
 /* ── Form with reassurance: copy left, form right ── */
-.yp-page .yp-formx {
-  width: 100%; max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
-}
 .yp-page .yp-formx__inner {
+  width: 100%; max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: grid; grid-template-columns: 1fr 1.15fr; gap: clamp(2rem, 5vw, 4.5rem);
   align-items: start;
 }
 .yp-page .yp-formx__heading {
-  margin: 0 0 0.7rem; font-size: clamp(1.8rem, 3.2vw, 2.6rem);
+  margin: 0 0 0.7rem; font-size: calc(clamp(1.8rem, 3.2vw, 2.6rem) * var(--yp-display-scale, 1));
   line-height: 1.08; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
 }
-.yp-page .yp-formx__body { margin: 0 0 1.6rem; color: var(--ink-2); font-size: 1.04rem; max-width: 40ch; }
+.yp-page .yp-formx__body { margin: 0 0 1.6rem; color: var(--ink-2); font-size: calc(1.04rem * var(--yp-text-scale, 1)); max-width: 40ch; }
 /* Counters rather than bullets: these are answers to doubts, and a numbered
    run reads as a sequence someone can hold in their head. */
 .yp-page .yp-formx__points { list-style: none; margin: 0; padding: 0; counter-reset: yp-fx; }
 .yp-page .yp-formx__points li {
   counter-increment: yp-fx; position: relative;
   padding: 0.7rem 0 0.7rem 2.5rem; border-top: 1px solid var(--line);
-  font-size: 0.95rem; color: var(--ink);
+  font-size: calc(0.95rem * var(--yp-text-scale, 1)); color: var(--ink);
 }
 .yp-page .yp-formx__points li::before {
   content: counter(yp-fx); position: absolute; left: 0; top: 0.62rem;
   width: 1.6rem; height: 1.6rem; border-radius: 50%;
   display: grid; place-items: center;
   background: color-mix(in srgb, var(--primary) 12%, transparent);
-  color: var(--primary); font-size: 0.78rem; font-weight: 700;
+  color: var(--primary); font-size: calc(0.78rem * var(--yp-text-scale, 1)); font-weight: 700;
 }
 /* Sticks while the form is filled in, so the reasons to send it stay in view
    rather than scrolling away above the fields. */
@@ -3241,19 +3353,19 @@ body.yp-page {
 /* ── Form on a card, over a tinted band ── */
 .yp-page .yp-formc {
   background: var(--surface-2);
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-formc__inner { max-width: 40rem; margin: 0 auto; text-align: center; }
 .yp-page .yp-formc__eyebrow {
   margin: 0 0 0.6rem; font-family: var(--font-mono);
-  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.11em;
+  font-size: calc(0.72rem * var(--yp-text-scale, 1)); font-weight: 600; letter-spacing: 0.11em;
   text-transform: uppercase; color: var(--primary);
 }
 .yp-page .yp-formc__heading {
-  margin: 0 0 0.7rem; font-size: clamp(1.9rem, 3.4vw, 2.7rem);
+  margin: 0 0 0.7rem; font-size: calc(clamp(1.9rem, 3.4vw, 2.7rem) * var(--yp-display-scale, 1));
   line-height: 1.06; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
 }
-.yp-page .yp-formc__body { margin: 0 auto 2rem; max-width: 44ch; color: var(--ink-2); font-size: 1.04rem; }
+.yp-page .yp-formc__body { margin: 0 auto 2rem; max-width: 44ch; color: var(--ink-2); font-size: calc(1.04rem * var(--yp-text-scale, 1)); }
 .yp-page .yp-formc__card {
   background: var(--surface); border: 1px solid var(--line);
   border-radius: 16px; padding: clamp(1.4rem, 3vw, 2.2rem);
@@ -3262,20 +3374,18 @@ body.yp-page {
 }
 
 /* ── Form with contact details beside it ── */
-.yp-page .yp-formd {
-  width: 100%; max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
-}
 .yp-page .yp-formd__inner {
+  width: 100%; max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: grid; grid-template-columns: 1.3fr 0.85fr; gap: clamp(2rem, 5vw, 4rem);
   align-items: start;
 }
 .yp-page .yp-formd__main { min-width: 0; }
 .yp-page .yp-formd__heading {
-  margin: 0 0 0.7rem; font-size: clamp(1.8rem, 3.2vw, 2.5rem);
+  margin: 0 0 0.7rem; font-size: calc(clamp(1.8rem, 3.2vw, 2.5rem) * var(--yp-display-scale, 1));
   line-height: 1.08; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
 }
-.yp-page .yp-formd__body { margin: 0 0 1.8rem; color: var(--ink-2); font-size: 1.04rem; max-width: 46ch; }
+.yp-page .yp-formd__body { margin: 0 0 1.8rem; color: var(--ink-2); font-size: calc(1.04rem * var(--yp-text-scale, 1)); max-width: 46ch; }
 .yp-page .yp-formd__aside {
   border: 1px solid var(--line); border-radius: 14px;
   padding: 0.4rem 1.2rem; background: var(--surface);
@@ -3291,11 +3401,11 @@ body.yp-page {
 .yp-page .yp-formd__row:has(> .yp-formd__value:empty),
 .yp-page .yp-formd__row:has(> .yp-formd__value > a:empty) { display: none; }
 .yp-page .yp-formd__label {
-  font-family: var(--font-mono); font-size: 0.68rem; font-weight: 600;
+  font-family: var(--font-mono); font-size: calc(0.68rem * var(--yp-text-scale, 1)); font-weight: 600;
   letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
 }
 /* pre-line so opening hours keep the line per day they were written with. */
-.yp-page .yp-formd__value { font-size: 0.98rem; color: var(--ink); white-space: pre-line; }
+.yp-page .yp-formd__value { font-size: calc(0.98rem * var(--yp-text-scale, 1)); color: var(--ink); white-space: pre-line; }
 .yp-page .yp-formd__value a { color: var(--primary); text-decoration: none; }
 .yp-page .yp-formd__value a:hover { text-decoration: underline; text-underline-offset: 2px; }
 @media (max-width: 880px) {
@@ -3303,11 +3413,9 @@ body.yp-page {
 }
 
 /* ── Form with a photograph ── */
-.yp-page .yp-formp {
-  width: 100%; max-width: var(--container); margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
-}
 .yp-page .yp-formp__inner {
+  width: 100%; max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
   display: grid; grid-template-columns: 1fr 1fr; gap: clamp(1.6rem, 4vw, 3.5rem);
   align-items: stretch;
 }
@@ -3316,10 +3424,10 @@ body.yp-page {
 .yp-page .yp-formp__img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .yp-page .yp-formp__panel { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
 .yp-page .yp-formp__heading {
-  margin: 0 0 0.6rem; font-size: clamp(1.7rem, 3vw, 2.4rem);
+  margin: 0 0 0.6rem; font-size: calc(clamp(1.7rem, 3vw, 2.4rem) * var(--yp-display-scale, 1));
   line-height: 1.08; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
 }
-.yp-page .yp-formp__body { margin: 0 0 1.6rem; color: var(--ink-2); font-size: 1.02rem; }
+.yp-page .yp-formp__body { margin: 0 0 1.6rem; color: var(--ink-2); font-size: calc(1.02rem * var(--yp-text-scale, 1)); }
 @media (max-width: 880px) {
   .yp-page .yp-formp__inner { grid-template-columns: 1fr; }
   /* Form first: a photograph that pushes the fields off the first screen
@@ -3331,15 +3439,15 @@ body.yp-page {
 /* ── Form on a dark band ── */
 .yp-page .yp-formb {
   background: var(--ink);
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
 .yp-page .yp-formb__inner { max-width: 38rem; margin: 0 auto; }
 .yp-page .yp-formb__heading {
   margin: 0 0 0.6rem; color: #fff;
-  font-size: clamp(1.9rem, 3.4vw, 2.7rem);
+  font-size: calc(clamp(1.9rem, 3.4vw, 2.7rem) * var(--yp-display-scale, 1));
   line-height: 1.06; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
 }
-.yp-page .yp-formb__body { margin: 0 0 1.9rem; color: rgba(255, 255, 255, 0.72); font-size: 1.04rem; }
+.yp-page .yp-formb__body { margin: 0 0 1.9rem; color: rgba(255, 255, 255, 0.72); font-size: calc(1.04rem * var(--yp-text-scale, 1)); }
 /*
  * The FIELDS stay light on the dark ground. Inverting them too gives a dark
  * box with pale text, which reads as disabled — people do not type into it.
@@ -3352,3 +3460,385 @@ body.yp-page {
 .yp-page .yp-formb__form .yp-embed__ph em { color: rgba(255, 255, 255, 0.6); }
 .yp-page .yp-formb__form .vibewp-form__control { background: #fff; color: var(--ink); }
 .yp-page .yp-formb__form .vibewp-form__control::placeholder { color: var(--muted); }
+
+/* ============================================================
+   PER-SECTION STYLE UTILITIES
+
+   A scale token set on a section's ROOT is inherited by everything
+   inside it, and every size in this file already reads those tokens
+   with a fallback of 1. So scoping a multiplier to one section needs
+   no per-section CSS at all — just a class that sets the token.
+
+   A CLASS, not an inline style: `className` is what a static Gutenberg
+   block's save() emits, so it round-trips through the WordPress editor.
+   An inline custom property does not — core regenerates the block's
+   HTML from its attributes, finds no style attribute, and marks every
+   section as containing unexpected content.
+
+   The value set is finite because the controls are bounded, which is
+   what lets them be written out as real CSS in the one stylesheet the
+   canvas and the exported site both load.
+   ============================================================ */
+
+.yp-page .u-headings--xs { --yp-display-scale: 0.8; }
+.yp-page .u-headings--sm { --yp-display-scale: 0.9; }
+.yp-page .u-headings--lg { --yp-display-scale: 1.15; }
+.yp-page .u-headings--xl { --yp-display-scale: 1.3; }
+
+.yp-page .u-text--sm { --yp-text-scale: 0.9; }
+.yp-page .u-text--lg { --yp-text-scale: 1.12; }
+
+.yp-page .u-space--xs { --yp-space-scale: 0.5; }
+.yp-page .u-space--sm { --yp-space-scale: 0.75; }
+.yp-page .u-space--lg { --yp-space-scale: 1.3; }
+.yp-page .u-space--xl { --yp-space-scale: 1.6; }
+
+/* ---- element-level overrides ----
+   Applied to the element's own class token, so they sit at the same
+   specificity as the rule they override and win on source order — which
+   is why this block is at the end of the file and must stay there. */
+
+.yp-page .u-align--left { text-align: left; }
+.yp-page .u-align--center { text-align: center; }
+.yp-page .u-align--right { text-align: right; }
+
+/* The class lands on .wp-block-button, so the anchor inside is the target. */
+.yp-page .u-btn--square .wp-block-button__link { border-radius: 2px; }
+.yp-page .u-btn--rounded .wp-block-button__link { border-radius: var(--radius); }
+.yp-page .u-btn--pill .wp-block-button__link { border-radius: 999px; }
+.yp-page .u-btn--sm .wp-block-button__link { padding: 0.6rem 1.1rem; font-size: 0.88rem; }
+.yp-page .u-btn--lg .wp-block-button__link { padding: 1rem 1.9rem; font-size: 1.05rem; }
+
+/*
+ * Width only, deliberately — colour and style stay whatever the button's own
+ * variant (primary/outline/ghost) already set. border-width is an
+ * independent longhand: a later, more specific rule can win on JUST the
+ * width and leave the shorthand's colour and style alone.
+ */
+.yp-page .u-btn--border-none .wp-block-button__link { border-width: 0; }
+.yp-page .u-btn--border-thick .wp-block-button__link { border-width: 3px; }
+
+/* ============================================================
+   THE GLOBAL OVERRIDE LAYER
+
+   Where a site's own design values enter. WordPress emits
+   settings.custom from theme.json as --wp--custom--*, and this is
+   the one place those are read; everything above reads the short
+   name with a fallback, so an unset site renders exactly as it did
+   before this block existed.
+
+   APPENDED, not merged into the :root block at the top, for two
+   reasons. It supersedes by source order, which is what an override
+   layer should do. And inserting declarations into that block would
+   shift every declaration index after it, which is precisely the
+   change verify-tokens.ts is built to refuse — appending is reported
+   and allowed, insertion is not.
+
+   The builder canvas emits the SHORT names directly into its own
+   :root after this stylesheet, so it wins there. Same values, one
+   step earlier in the chain, because an iframe has no WordPress to
+   read theme.json for it.
+   ============================================================ */
+
+:root {
+  --yp-display-scale: var(--wp--custom--yp-display-scale, 1);
+  --yp-text-scale: var(--wp--custom--yp-text-scale, 1);
+  --yp-space-scale: var(--wp--custom--yp-space-scale, 1);
+  --radius: var(--wp--custom--yp-radius, 10px);
+
+  /*
+   * The page width, reading the property WordPress actually emits.
+   *
+   * The declaration above reads --wp--custom--layout--content-size, which
+   * theme.json never produces — settings.layout.contentSize comes out as
+   * --wp--style--global--content-size. Dead since it was written, and
+   * invisible because both values happened to be 1160px.
+   */
+  --container: var(--wp--custom--yp-container, var(--wp--style--global--content-size, 1160px));
+}
+
+/* Photo frames. The class lands on the frame, so the <img> inside is the
+   target for the crop — object-fit is what makes a ratio a crop rather than
+   a squash. */
+.yp-page .u-img--square img { border-radius: 0; }
+.yp-page .u-img--rounded img { border-radius: var(--radius); }
+.yp-page .u-img--circle img { border-radius: 50%; }
+.yp-page .u-img--1x1 img { aspect-ratio: 1 / 1; object-fit: cover; width: 100%; height: auto; }
+.yp-page .u-img--16x9 img { aspect-ratio: 16 / 9; object-fit: cover; width: 100%; height: auto; }
+.yp-page .u-img--4x5 img { aspect-ratio: 4 / 5; object-fit: cover; width: 100%; height: auto; }
+
+/*
+ * Border, in the site's own ink colour rather than a free colour picker —
+ * a bounded step (none/thin/thick), the same shape as every other option
+ * here, so it survives as a class rather than as an inline style Gutenberg
+ * would strip on save. The radius classes above already control the
+ * CORNER; this is independent of them, so a rounded photo can also take a
+ * border without the two options needing to know about each other.
+ */
+.yp-page .u-img--border-thin img { border: 1px solid var(--ink); }
+.yp-page .u-img--border-thick img { border: 3px solid var(--ink); }
+
+/*
+ * One generic rule reaches every section's heading, whichever family it
+ * belongs to — [class*="__heading"] matches yp-hero__heading,
+ * yp-features__heading, all 62 of them, the same way the role's own match
+ * regex does. Never applied to .yp-logos__heading in practice: that class
+ * is excluded from the heading role at the point the utility class gets
+ * appended (see ELEMENT_ROLES' "except"), so this selector never needs to
+ * repeat that exclusion itself.
+ */
+.yp-page [class*="__heading"].u-heading--primary { color: var(--primary); }
+
+/* Same trick, for body copy: one rule reaches all 36 families that have one. */
+.yp-page [class*="__body"].u-body--ink { color: var(--ink); }
+.yp-page [class*="__body"].u-body--muted { color: var(--muted); }
+
+/* ────────────────────────────────────────────────────────────────────
+   RESPONSIVE VISIBILITY AND COLUMN ORDER
+
+   Applied by the builder as classes, the way is-sticky and the u-* style
+   utilities already are, so they survive a WordPress round trip: a class
+   is what core's save() emits, and a prop no parser reads is destroyed on
+   every pull.
+
+   THE BREAKPOINTS ARE THE THEME'S OWN — 880 and 560 — not new ones. A
+   control that hid something at 768px while the design reflowed at 880px
+   would hide it in a layout the client never saw.
+
+   !important is deliberate and limited to these. Their entire job is to
+   beat the display and order the section sets on itself; a utility that
+   loses to the rule it exists to override is not a utility.
+   ──────────────────────────────────────────────────────────────────── */
+
+/* Hidden on wide screens only. */
+@media (min-width: 881px) {
+  .yp-page .u-hide--desktop { display: none !important; }
+}
+/* Hidden between the two reflow points. */
+@media (min-width: 561px) and (max-width: 880px) {
+  .yp-page .u-hide--tablet { display: none !important; }
+}
+/* Hidden on phones. */
+@media (max-width: 560px) {
+  .yp-page .u-hide--mobile { display: none !important; }
+}
+
+/*
+ * Swapping two columns.
+ *
+ * On the CONTAINER, not the columns, because "which side is the picture on"
+ * is one decision rather than two that have to agree. Works for flex and for
+ * grid alike: order applies to the children of both.
+ *
+ * This is the one place visual order is allowed to diverge from document
+ * order, and it is the case where that is safe — two peer columns, neither
+ * introducing the other. Reordering a heading against the copy it heads is
+ * done in the markup instead, so a screen reader hears what the eye sees.
+ *
+ * Nothing here sets `display`. An early version forced the mobile flip to be
+ * a flex column so it had something to order, which was both unnecessary —
+ * grid items honour `order` too — and harmful, since most of these grids
+ * already collapse to one column by then and would have had their gaps
+ * redefined out from under them.
+ */
+.yp-page .u-flip > *:first-child { order: 2; }
+@media (max-width: 880px) {
+  .yp-page .u-flip--tablet > *:first-child { order: 2; }
+}
+@media (max-width: 560px) {
+  .yp-page .u-flip--mobile > *:first-child { order: 2; }
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   ELEMENT WIDTH
+
+   Bounded steps rather than a free number, because the carrier is a CLASS.
+   WordPress regenerates a static block's HTML from the className in its
+   comment, so an inline width with no matching attribute makes the block
+   invalid in wp-admin — the client is told their content is unexpected, and
+   one click of Attempt Block Recovery strips it. A class survives that;
+   an arbitrary inline style does not.
+
+   Genuinely arbitrary pixels exist where WordPress itself supports them:
+   an image's width and height, which core keeps as real block attributes.
+
+   max-width is always 100% so a width chosen on a wide screen can never
+   overflow a narrow one. That is the one thing a client cannot see happening
+   at the moment they choose it.
+   ──────────────────────────────────────────────────────────────────── */
+
+.yp-page .u-w--25 { width: 25%; max-width: 100%; }
+.yp-page .u-w--33 { width: 33.3333%; max-width: 100%; }
+.yp-page .u-w--50 { width: 50%; max-width: 100%; }
+.yp-page .u-w--66 { width: 66.6667%; max-width: 100%; }
+.yp-page .u-w--75 { width: 75%; max-width: 100%; }
+.yp-page .u-w--100 { width: 100%; max-width: 100%; }
+
+/*
+ * On phones a fraction of the screen is almost never what was meant — a
+ * quarter-width heading on a 390px viewport is four words stacked in a
+ * column. Everything goes full width there, which is what every one of the
+ * 62 designs already does with its own columns at this size.
+ */
+@media (max-width: 560px) {
+  .yp-page [class*="u-w--"] { width: 100%; }
+}
+
+/*
+ * ── Section background + full width ─────────────────────────────────
+ *
+ * Shared by every section that has been through this move — Split Hero,
+ * then Contact: Visit us, both checked individually for the same shape
+ * before being added here. Declared once, appended, per the same
+ * convention as everything else in this block: new rules keep everything
+ * above them at the position this file's token gate checks.
+ *
+ * u-bg--tint is genuinely generic — background is a property on whatever
+ * carries the class, nothing about it depends on which section. u-row--full
+ * is NOT: it has to name the specific descendant that holds each section's
+ * own max-width, because that class differs per section
+ * (.yp-hero__grid, .yp-contact-visit__grid, ...). This list is an
+ * ALLOW-LIST, not a pattern match — adding a section here means someone
+ * checked its markup has one wrapper covering everything the way these do,
+ * the same way ELEMENT_ROLES declares which classes a role covers rather
+ * than deriving it from a suffix that does not reliably mean one thing.
+ */
+.yp-page .u-bg--tint {
+  /* The exact wash CtaBand already ships with normal (non-inverted) text
+     colours on top of it — borrowed rather than invented, so this is known
+     to read correctly before it is ever seen. */
+  background: color-mix(in oklch, var(--primary) 8%, var(--surface));
+}
+
+/*
+ * Only the centering goes — each grid's own gutter padding stays, so content
+ * still keeps its distance from the browser edge rather than touching it.
+ * !important because this exists specifically to override each grid's own
+ * max-width regardless of which wins on specificity alone; that is its
+ * entire job, not a sign of a losing fight.
+ */
+.yp-page .u-row--full .yp-hero__grid,
+.yp-page .u-row--full .yp-contact-visit__grid,
+.yp-page .u-row--full .yp-hero-duotone__grid,
+.yp-page .u-row--full .yp-hero-cards__grid-outer,
+.yp-page .u-row--full .yp-hero-pattern__grid,
+.yp-page .u-row--full .yp-formp__inner,
+.yp-page .u-row--full .yp-formd__inner,
+.yp-page .u-row--full .yp-formx__inner,
+.yp-page .u-row--full .yp-check__grid,
+.yp-page .u-row--full .yp-faqh__grid,
+.yp-page .u-row--full .yp-faqs__grid,
+.yp-page .u-row--full .yp-ctabox__card,
+.yp-page .u-row--full .yp-ctadual__inner,
+.yp-page .u-row--full .yp-gallery__inner,
+.yp-page .u-row--full .yp-svcs__inner,
+.yp-page .u-row--full .yp-svcf__inner,
+.yp-page .u-row--full .yp-svce__inner,
+.yp-page .u-row--full .yp-svcp__inner,
+.yp-page .u-row--full .yp-svca__inner,
+.yp-page .u-row--full .yp-alt__inner,
+.yp-page .u-row--full .yp-steps__inner,
+.yp-page .u-row--full .yp-pricing__inner,
+.yp-page .u-row--full .yp-compare__inner,
+.yp-page .u-row--full .yp-faq2__inner,
+.yp-page .u-row--full .yp-faqg__inner,
+.yp-page .u-row--full .yp-faqo__inner,
+.yp-page .u-row--full .yp-contact__grid,
+.yp-page .u-row--full .yp-features__inner,
+.yp-page .u-row--full .yp-quotes__inner,
+.yp-page .u-row--full .yp-faq__inner {
+  max-width: none !important;
+}
+
+/*
+ * Work gallery: a NEW wrapper, not a moved property.
+ *
+ * .yp-gallery__grid already existed; .yp-gallery__heading and
+ * .yp-gallery__intro did not have one to share with it, so this element
+ * exists purely to give them one. Declared here, at the true end of the
+ * file, for the same reason every other new rule in this section is: an
+ * insertion anywhere else shifts every declaration after it, which is
+ * exactly what this file's token gate is built to catch.
+ */
+.yp-page .yp-gallery__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+}
+
+/*
+ * The same new-wrapper treatment as .yp-gallery__inner, for the seven
+ * sections that shared its exact shape: heading (and sometimes an intro)
+ * sitting outside their own grid/list/table wrapper with no ancestor to
+ * give this option. Each was checked individually for the same things
+ * content-gallery was: no pre-existing max-width or padding on the
+ * wrapper itself, and no independent centering assumption that a shared
+ * width would break.
+ */
+.yp-page .yp-alt__inner,
+.yp-page .yp-steps__inner,
+.yp-page .yp-pricing__inner,
+.yp-page .yp-compare__inner,
+.yp-page .yp-faq2__inner,
+.yp-page .yp-faqg__inner,
+.yp-page .yp-faqo__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+}
+
+/*
+ * The same new-wrapper treatment as .yp-gallery__inner, for the services
+ * family: heading (and sometimes an intro, once a footnote too) sitting
+ * outside its own grid/list/groups wrapper with no ancestor to give this
+ * option. Each checked individually: no pre-existing max-width or padding
+ * on the wrapper itself (services-featured has none of its own to
+ * conflict with; the other four's .__intro already carries its own
+ * max-width: 58ch, left-aligned, untouched by this).
+ */
+.yp-page .yp-svcs__inner,
+.yp-page .yp-svcf__inner,
+.yp-page .yp-svce__inner,
+.yp-page .yp-svcp__inner,
+.yp-page .yp-svca__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+}
+
+/*
+ * Centred hero: no new wrapper needed, and not part of the u-row--full
+ * allow-list above, because its own container width already lives on the
+ * root (.yp-hero-centered, declared with the other hero types) rather than
+ * on a descendant wrapper. u-row--full lands on that same root element, so
+ * this overrides it directly. .yp-hero-centered__inner's own max-width is
+ * an unrelated 46rem typographic column and is untouched either way.
+ */
+.yp-page .yp-hero-centered.u-row--full {
+  max-width: none !important;
+}
+
+/*
+ * Stacked hero: the same shape as centred hero above — its own max-width
+ * lives on the root, not a descendant, so u-row--full overrides it
+ * directly. .__copy has its own unrelated 44rem typographic column and
+ * stays put; .__media has none of its own, so it bleeds to the row's
+ * edges along with the root, which is the point for the one hero whose
+ * image wants to be wide.
+ */
+.yp-page .yp-hero-stacked.u-row--full {
+  max-width: none !important;
+}
+
+/*
+ * The same new-wrapper treatment as .yp-gallery__inner, for the three
+ * sections that used to share one rule for exactly this: Services grid,
+ * Testimonials and FAQ. Their heading sat outside their own grid/list
+ * wrapper with no ancestor to give this option, the same shape as every
+ * other section in this block — checked individually: none of the three
+ * has any pre-existing max-width or padding on its own grid/list to
+ * conflict with the wrapper now carrying it instead.
+ */
+.yp-page .yp-features__inner,
+.yp-page .yp-quotes__inner,
+.yp-page .yp-faq__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+}

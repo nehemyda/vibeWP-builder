@@ -10,6 +10,10 @@ export type ContactBlockProps = {
   address?: string;
   hours?: string;
   actions?: Array<{ label: string; href: string; variant: "primary" | "outline" | "ghost" }>;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 const text = (el: HTMLElement | null): string => (el ? el.textContent.trim() : "");
@@ -51,6 +55,28 @@ export const ContactBlock: SectionDefinition<ContactBlockProps> = {
       type: "list",
       label: "Buttons",
       of: { label: { type: "text", label: "Label" }, href: { type: "link", label: "Links to" } },
+    },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Works here for the identical structural reason:
+     * .yp-contact__grid already wraps everything under the root — including
+     * the heading, unlike features-grid/testimonials/faq, whose own headings
+     * sit outside their grid or list wrapper and are not (yet) safe for the
+     * same move.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The details stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the details themselves.",
+      choices: ["contained", "full"],
+      default: "contained",
     },
   },
 
@@ -107,8 +133,16 @@ export const ContactBlock: SectionDefinition<ContactBlockProps> = {
      * that has recorded none legitimately produces zero rows — and the first
      * generated bakery homepage rendered exactly that hollow box.
      */
-    return group(
+    const rootClass = [
       "yp-contact",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return group(
+      rootClass,
       group("yp-contact__grid", rows ? copy + group("yp-contact__details", rows) : copy),
       "section",
     );
@@ -117,6 +151,7 @@ export const ContactBlock: SectionDefinition<ContactBlockProps> = {
   fromGutenberg(root) {
     const el = root.querySelector(".yp-contact");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
 
     // Read the rows back by their label, so reordering them in wp-admin
     // doesn't shuffle a phone number into the address field.
@@ -141,6 +176,8 @@ export const ContactBlock: SectionDefinition<ContactBlockProps> = {
     }
 
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-contact__heading")),
       body: text(el.querySelector(".yp-contact__body")),
       phone: byLabel.get("phone") ?? "",

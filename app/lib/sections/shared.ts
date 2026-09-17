@@ -1,4 +1,5 @@
 import type { HTMLElement } from "node-html-parser";
+import { readRichText } from "@/lib/wp/richtext";
 
 /**
  * Parsing helpers every section needs.
@@ -13,12 +14,25 @@ export type Action = { label: string; href: string; variant: "primary" | "outlin
 export type SectionImage = {
   url: string;
   alt: string;
+  /** The image's title attribute — a tooltip, not a second alt. */
+  title?: string;
   id?: number;
   width?: number;
   height?: number;
 };
 
-export const text = (el: HTMLElement | null): string => (el ? el.textContent.trim() : "");
+/**
+ * Reads an element's copy back into a prop.
+ *
+ * Goes through readRichText rather than textContent so a bolded word survives
+ * a pull from WordPress — gutenbergToSchema rebuilds every prop from the
+ * markup, so anything no parser reads is destroyed. For copy with no markup
+ * in it this returns exactly what textContent.trim() did.
+ *
+ * Links are dropped, because every <a> a section renders is generated from a
+ * separate href field rather than stored in the copy. See ReadOptions.
+ */
+export const text = (el: HTMLElement | null): string => readRichText(el, { links: false });
 
 /**
  * A list field's entries, or none when the prop isn't a list.
@@ -73,9 +87,14 @@ export function parseImage(scope: HTMLElement, frameSelector: string): SectionIm
   const width = Number(img.getAttribute("width"));
   const height = Number(img.getAttribute("height"));
 
+  const title = img.getAttribute("title")?.trim();
+
   return {
     url,
     alt: img.getAttribute("alt")?.trim() ?? "",
+    // Omitted when absent rather than set empty, so an image without a title
+    // round-trips to the same bytes it came from.
+    ...(title ? { title } : {}),
     ...(idMatch ? { id: Number(idMatch[1]) } : {}),
     ...(Number.isFinite(width) && width > 0 ? { width } : {}),
     ...(Number.isFinite(height) && height > 0 ? { height } : {}),

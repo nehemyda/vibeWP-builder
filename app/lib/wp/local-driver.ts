@@ -31,6 +31,28 @@ const THEME_SRC =
   join(process.cwd(), "..", "assets", "ai-builder", "themes", "vibewp");
 const PORT_BASE = Number(process.env.VIBEWP_PORT_BASE ?? 8801);
 
+/**
+ * A temp directory the operating system will not empty underneath us.
+ *
+ * `wp server` runs PHP's built-in web server with a router script that WP-CLI
+ * extracts from its own .phar into sys_get_temp_dir() — on macOS, a folder
+ * under /var/folders that the OS periodically purges. When it goes, the server
+ * keeps its socket open and answers EVERY request with
+ *
+ *   Fatal error: Failed opening required '…-router.php'
+ *
+ * served as a 200 with a text/html body. Pages still looked right in the
+ * builder, because the canvas renders from the schema rather than from
+ * WordPress — but every photograph on an exported site is fetched from this
+ * server, so the pictures, and only the pictures, silently turned into broken
+ * images. "Sometimes images are missing" was the OS's temp cleaner running.
+ *
+ * sys_get_temp_dir() honours TMPDIR, so the server is given one inside the
+ * sites directory instead. Verified: `php -r 'echo sys_get_temp_dir();'`
+ * follows TMPDIR on this machine.
+ */
+const SERVER_TMP = join(SITES_ROOT, ".run", "tmp");
+
 /** WP-CLI needs generous memory: core extraction OOMs at the 128M default. */
 async function wp(args: string[], cwd?: string): Promise<string> {
   const { stdout } = await run(PHP, ["-d", "memory_limit=1G", WP_CLI, ...args], {
@@ -107,15 +129,34 @@ export async function ensureSiteServing(opts: {
 }): Promise<{ serving: boolean; error?: string }> {
   const { installPath, port } = opts;
 
-  if (await isPortListening(port)) return { serving: true };
+  /*
+   * An open socket is not a working server, and assuming it was is what let
+   * this fail silently for who knows how long. The check now asks the server
+   * for something and looks at the answer; a listener that is answering with
+   * PHP fatals is killed and replaced rather than trusted.
+   */
+  if (await isPortListening(port)) {
+    if (await isServerHealthy(port)) return { serving: true };
+    await killListener(port);
+  }
 
   try {
     // Keep output so a failure to boot can be diagnosed later.
     const logFile = await open(join(installPath, ".vibewp-server.log"), "a");
+    await mkdir(SERVER_TMP, { recursive: true });
     const child = spawn(
       PHP,
       ["-d", "memory_limit=512M", WP_CLI, "server", `--path=${installPath}`, "--host=localhost", `--port=${port}`],
-      { detached: true, stdio: ["ignore", logFile.fd, logFile.fd] },
+      {
+        detached: true,
+        stdio: ["ignore", logFile.fd, logFile.fd],
+        /*
+         * TMPDIR is the whole point — see SERVER_TMP. Without it WP-CLI puts
+         * the router PHP needs in a folder macOS is free to delete, and the
+         * server outlives its own router.
+         */
+        env: { ...process.env, TMPDIR: SERVER_TMP },
+      },
     );
     child.unref();
     await logFile.close();
@@ -123,12 +164,84 @@ export async function ensureSiteServing(opts: {
     return { serving: false, error: err instanceof Error ? err.message : String(err) };
   }
 
-  // PHP's built-in server binds quickly, but not instantly.
+  // PHP's built-in server binds quickly, but not instantly. Waiting for a
+  // real answer rather than for the bind, for the reason above.
   for (let attempt = 0; attempt < 25; attempt += 1) {
-    if (await isPortListening(port)) return { serving: true };
+    if ((await isPortListening(port)) && (await isServerHealthy(port))) {
+      return { serving: true };
+    }
     await new Promise((r) => setTimeout(r, 200));
   }
   return { serving: false, error: `Server did not start on port ${port}` };
+}
+
+/**
+ * Whether the server on this port is actually answering, or only listening.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * IT LOOKS FOR THE FATAL, NOT FOR A PARTICULAR FILE
+ *
+ * The first version of this fetched a core JavaScript file and called an
+ * HTML content-type a failure. That is wrong in a way worth recording: a
+ * genuine 404 from WordPress is also HTML, so the day core renames that file
+ * — or the day it is fetched before the theme is synced — every export would
+ * decide the server was broken, kill it, and start another. A health check
+ * that can be wrong in the direction of "kill the server" is worse than none.
+ *
+ * So it asks for the site root, which always exists, and looks for the thing
+ * that actually goes wrong: PHP's built-in server answering a fatal error
+ * with a 200. A themed 404 page and a working home page are both fine; only
+ * a fatal is not.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export async function isServerHealthy(port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`http://localhost:${port}/`, {
+      signal: AbortSignal.timeout(5000),
+      redirect: "manual",
+    });
+    if (res.status >= 500) return false;
+
+    /*
+     * Only the head of the body. A PHP fatal is emitted before anything else,
+     * so it is in the first few hundred bytes — and a whole WordPress page is
+     * not worth reading to find out that it rendered.
+     */
+    const head = (await res.text()).slice(0, 1200);
+    return !/Fatal error|Failed opening required|Parse error/i.test(head);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Stops whatever is holding a port, so a broken server can be replaced.
+ *
+ * By port rather than by a PID we remember, because the process outlives the
+ * request that started it and survives restarts of this app — there is no
+ * handle to keep. lsof is asked for the listener only, so this cannot pick up
+ * a browser's outbound connection to the same port.
+ */
+async function killListener(port: number): Promise<void> {
+  try {
+    const { stdout } = await run("/usr/sbin/lsof", [
+      "-nP",
+      `-iTCP:${port}`,
+      "-sTCP:LISTEN",
+      "-t",
+    ]);
+    for (const pid of stdout.trim().split(/\s+/).filter(Boolean)) {
+      try {
+        process.kill(Number(pid), "SIGTERM");
+      } catch {
+        // Already gone, or not ours to signal. Either way, nothing to do.
+      }
+    }
+    // SIGTERM is not instant, and rebinding a port still held would fail.
+    await new Promise((r) => setTimeout(r, 400));
+  } catch {
+    // No lsof, or nothing listening. The spawn below will report the truth.
+  }
 }
 
 /**
@@ -322,6 +435,38 @@ export async function provisionSite(opts: {
 }
 
 /**
+ * The post meta the theme's inc/seo.php reads, via a file.
+ *
+ * NOT interpolated into the script, even JSON-encoded. PHP expands
+ * $variables inside a double-quoted string, so a description containing "$5
+ * off" is fine but one containing "$id" or "{$total}" would be silently
+ * rewritten — or worse — on the client's live site. There is no escaping of
+ * free text into PHP source that is obviously correct at a glance, and this
+ * is a client's own words going onto their own site.
+ *
+ * The page's content already travels by file for the same class of reason.
+ * This follows it: the data never becomes code.
+ *
+ * An absent value DELETES the meta rather than setting it empty. The theme
+ * emits nothing without a value, and an empty description tag is worse than
+ * no tag at all — so absence has to stay absence.
+ */
+function metaScript(path: string | null): string {
+  if (!path) return "";
+  return `
+    $meta = json_decode(file_get_contents(${JSON.stringify(path)}), true);
+    foreach ([
+      "_vibewp_meta_title"       => $meta["title"] ?? null,
+      "_vibewp_meta_description" => $meta["description"] ?? null,
+      "_vibewp_no_index"         => !empty($meta["noIndex"]) ? "1" : null,
+      "_vibewp_canonical"        => $meta["canonical"] ?? null,
+    ] as $key => $value) {
+      if ($value === null || $value === "") { delete_post_meta($id, $key); }
+      else { update_post_meta($id, $key, $value); }
+    }`;
+}
+
+/**
  * Creates the page if its slug is absent, updates it if present — the
  * "first export creates, later exports update" rule, at page level.
  * Returns the resulting page's permalink.
@@ -332,13 +477,34 @@ export async function upsertPage(opts: {
   title: string;
   blockMarkup: string;
   asFrontPage?: boolean;
+  /**
+   * What search engines are told about this page.
+   *
+   * Written as post meta the theme reads, so the values live on the client's
+   * own post and survive whatever they later do with plugins. Undefined means
+   * "the client has not written one", and the meta is DELETED rather than set
+   * empty — an empty description tag is worse than none, and the theme's
+   * "emit nothing without a value" rule depends on absence being absence.
+   */
+  meta?: {
+    title?: string | null;
+    description?: string | null;
+    noIndex?: boolean;
+    canonical?: string | null;
+  };
 }): Promise<{ postId: number; url: string }> {
-  const { installPath, slug, title, blockMarkup, asFrontPage } = opts;
+  const { installPath, slug, title, blockMarkup, asFrontPage, meta } = opts;
 
   // Content goes via a temp file: block markup is long and full of quotes,
   // which is exactly what breaks when passed as a shell argument.
   const tmp = join(installPath, `.vibewp-import-${slug}.html`);
   await writeFile(tmp, blockMarkup, "utf8");
+
+  let metaTmp: string | null = null;
+  if (meta) {
+    metaTmp = join(installPath, `.vibewp-meta-${slug}.json`);
+    await writeFile(metaTmp, JSON.stringify(meta), "utf8");
+  }
 
   const script = `
     $slug = ${JSON.stringify(slug)};
@@ -360,12 +526,26 @@ export async function upsertPage(opts: {
         ? `update_option("show_on_front", "page"); update_option("page_on_front", $id);`
         : ""
     }
+    ${metaScript(metaTmp)}
     echo json_encode(["postId" => (int) $id, "url" => get_permalink($id)]);
   `;
 
-  const out = await wp(["eval", script, `--path=${installPath}`]);
-  const parsed = JSON.parse(out) as { postId: number; url: string };
-  return parsed;
+  try {
+    const out = await wp(["eval", script, `--path=${installPath}`]);
+    return JSON.parse(out) as { postId: number; url: string };
+  } finally {
+    /*
+     * Both hand-off files are removed, whatever happened.
+     *
+     * They live in the WordPress root, which is served — so
+     * .vibewp-import-home.html and .vibewp-meta-home.json were reachable over
+     * HTTP and accumulated one pair per page per export. Nothing secret, but a
+     * client's site should not be littered with our scratch files, and the
+     * meta one carries what they wrote.
+     */
+    await rm(tmp, { force: true });
+    if (metaTmp) await rm(metaTmp, { force: true });
+  }
 }
 
 /**
@@ -526,28 +706,75 @@ export async function writeBusinessOptions(opts: {
 export async function writeThemePalette(opts: {
   installPath: string;
   colors: Record<string, string>;
+  /**
+   * The client's hand-set design values, as settings.custom.
+   *
+   * WordPress emits that block as --wp--custom--*, which is what the
+   * stylesheet's global override layer reads. Without this the style panel
+   * moves the builder canvas and nothing else: the site would publish at the
+   * theme's defaults while the preview showed the client's choices — the exact
+   * divergence the shared-stylesheet architecture exists to prevent.
+   */
+  tokens?: Record<string, number>;
 }): Promise<void> {
-  const { installPath, colors } = opts;
+  const { installPath, colors, tokens } = opts;
   const path = join(installPath, "wp-content", "themes", "vibewp", "theme.json");
 
   const raw = await readFile(path, "utf8");
   const theme = JSON.parse(raw) as {
-    settings?: { color?: { palette?: Array<{ slug: string; name?: string; color: string }> } };
+    settings?: {
+      color?: { palette?: Array<{ slug: string; name?: string; color: string }> };
+      custom?: Record<string, unknown>;
+    };
   };
 
   const palette = theme.settings?.color?.palette;
-  if (!Array.isArray(palette)) return;
-
-  for (const entry of palette) {
-    const next = colors[entry.slug];
-    /*
-     * Re-validated here even though the action already sanitised it. This value
-     * is written to a file that is served as CSS to every visitor, and being
-     * the last gate before that, it does not get to assume an earlier one ran.
-     */
-    if (typeof next === "string" && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(next)) {
-      entry.color = next;
+  if (Array.isArray(palette)) {
+    for (const entry of palette) {
+      const next = colors[entry.slug];
+      /*
+       * Re-validated here even though the action already sanitised it. This value
+       * is written to a file that is served as CSS to every visitor, and being
+       * the last gate before that, it does not get to assume an earlier one ran.
+       */
+      if (typeof next === "string" && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(next)) {
+        entry.color = next;
+      }
     }
+  }
+
+  if (tokens && theme.settings) {
+    /*
+     * REPLACED, not merged. A token the client has set back to the design's own
+     * value is stored as absent, so merging would leave the previous override
+     * in the file forever and "reset" would silently do nothing on the live
+     * site while working perfectly in the builder.
+     *
+     * Names are camelCase because that is what WordPress kebab-cases into the
+     * custom property: ypDisplayScale becomes --wp--custom--yp-display-scale.
+     */
+    /*
+     * Lengths carry their unit; multipliers must not.
+     *
+     * WordPress emits these values verbatim, so a bare 20 becomes
+     * `--wp--custom--yp-radius: 20` and `border-radius: 20` is invalid CSS —
+     * the declaration is dropped and the corner silently keeps the theme's
+     * value. The canvas got this right because tokensToCss appends px there;
+     * writing the same numbers to a different destination is exactly where
+     * that kind of difference hides.
+     */
+    const AS_LENGTH = new Set(["ypRadius", "ypContainer"]);
+    const custom: Record<string, number | string> = {};
+    for (const [name, value] of Object.entries(tokens)) {
+      if (!Number.isFinite(value)) continue;
+      // Only our own vocabulary reaches the file, whatever the caller passed.
+      const camel = name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+      if (!/^(ypDisplayScale|ypTextScale|ypSpaceScale|radius|container)$/.test(camel)) continue;
+      const key = camel === "radius" ? "ypRadius" : camel === "container" ? "ypContainer" : camel;
+      custom[key] = AS_LENGTH.has(key) ? `${value}px` : value;
+    }
+    if (Object.keys(custom).length > 0) theme.settings.custom = custom;
+    else delete theme.settings.custom;
   }
 
   await writeFile(path, `${JSON.stringify(theme, null, "\t")}\n`, "utf8");

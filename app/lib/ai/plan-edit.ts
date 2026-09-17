@@ -1,3 +1,4 @@
+import { plainText } from "@/lib/wp/richtext";
 import { GoogleGenAI } from "@google/genai";
 import { getSectionByNodeType } from "@/lib/sections";
 import type { ResolvedSection } from "@/lib/sections/resolve";
@@ -38,12 +39,14 @@ const OP_SCHEMA = {
         "swap_chrome",
         "rewrite_chrome",
         "edit_form",
+        "swap_section",
         "rewrite_section",
         "regenerate_page",
         "unsupported",
       ],
     },
     section: { type: "string" },
+    design: { type: "string" },
     slot: { type: "string", enum: ["header", "footer"] },
     action: {
       type: "string",
@@ -76,7 +79,7 @@ const OP_SCHEMA = {
    * position to be considered every time.
    */
   required: ["kind", "section", "before", "after"],
-  propertyOrdering: ["kind", "section", "slot", "action", "field", "label", "fieldType", "width", "required", "before", "after", "position", "option", "value", "itemCount", "count", "columns", "instruction", "reason"],
+  propertyOrdering: ["kind", "section", "design", "slot", "action", "field", "label", "fieldType", "width", "required", "before", "after", "position", "option", "value", "itemCount", "count", "columns", "instruction", "reason"],
 } as const;
 
 export async function planEdit(opts: {
@@ -117,7 +120,8 @@ export async function planEdit(opts: {
     .map((n, i) => {
       const def = getSectionByNodeType(n.type);
       const props = (n.props ?? {}) as Record<string, unknown>;
-      const headingText = typeof props.heading === "string" ? ` — “${props.heading}”` : "";
+      const headingText =
+        typeof props.heading === "string" ? ` — “${plainText(props.heading)}”` : "";
       const options = def
         ? Object.entries(def.fields)
             .filter(([, f]) => ["boolean", "choice", "number"].includes(f.type))
@@ -234,7 +238,7 @@ ${page || "(no sections yet)"}
 
 ${chromeLines ? `## Site-wide\n\n${chromeLines}\n` : ""}
 ${formLines}
-## Sections that can be added
+## Section designs — add one, or swap one of these in for a section already there
 
 ${catalogue}
 
@@ -286,6 +290,20 @@ ${chromeCatalogue}
   number" on a header that HAS a button is a rewrite, not a swap. Swapping
   throws away a design the client chose, so only swap when what they want is
   genuinely absent.
+- Use swap_section to change how one section on the page LOOKS, keeping its
+  words. Put the section they mean in "section" — its name, its type or its own
+  heading — and the registry key of the design to use in "design". The
+  available designs are listed above with their categories; pick one from the
+  SAME category as the section being changed, because that is what a client
+  means by a different version of it.
+  "Make the hero centred", "this bit looks wrong, try another layout" and "I
+  don't like this design" are all swap_section. Their copy is carried over, so
+  this is not destructive and does not need a warning.
+  Prefer rewrite_section when they want different WORDS, and swap_section when
+  they want a different ARRANGEMENT of the same words. If a section already has
+  a setting for what they asked — how many columns, sticky or not — use
+  set_option instead: changing the whole design to reach a setting throws away
+  a layout they may have chosen.
 - Use rewrite_section when the client wants different WORDS in one section, and
   put what they asked for in "instruction".
 - Use regenerate_page ONLY when they clearly want the whole page written again.
@@ -381,6 +399,8 @@ Return only the JSON object.`,
         slot: parsed.slot === "footer" ? "footer" : "header",
         section: str("section") ?? "",
       };
+    case "swap_section":
+      return { kind, section: str("section") ?? "", design: str("design") ?? "" };
     case "rewrite_section":
       return { kind, section: str("section") ?? "", instruction: str("instruction") ?? instruction };
     case "regenerate_page":

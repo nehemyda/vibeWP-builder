@@ -1,7 +1,7 @@
 /**
  * Raw-SQL migration: canonicalise stored plan values.
  * Safe to re-run.
- * Run with: npx tsx lib/db/migrate-batch26.ts
+ * Run with: npx tsx lib/db/migrate-batch30.ts
  *
  * WHY
  *

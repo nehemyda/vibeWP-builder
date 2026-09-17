@@ -1,0 +1,3377 @@
+/* ============================================================
+   VibeWP — sections.css
+   Exported from the AI Builder. This file carries the layout.
+   Page content is native Gutenberg blocks; every class below is
+   emitted by those blocks.
+
+   CASCADE STRATEGY
+   ----------------
+   WordPress ships two kinds of CSS:
+
+     1. wp-includes/css/dist/block-library/style.min.css
+        Real class selectors (.wp-block-image, .wp-block-button__link).
+        functions.php re-imports this into @layer plugins so it sits
+        BELOW everything here.
+
+     2. Inline global styles printed in <head> at render time
+        (layout rules, block gap, root padding). These are unlayered
+        and cannot be re-imported — but WordPress wraps them in
+        :where(), which gives them zero specificity.
+
+   So this file stays UNLAYERED on purpose. Unlayered CSS outranks
+   layered CSS, which handles (1). Wrapping this file in @layer theme
+   would lose to (2) and break when a page is re-saved in the editor.
+
+   For (2), every selector is prefixed with .yp-page, giving two
+   classes of specificity. WordPress's heaviest layout rules are
+   .yp-page `body .is-layout-flex { gap: 24px }` at (0,1,1); a prefixed rule
+   at (0,2,0) beats them without a single !important. That prefixing
+   is mechanical — tools/scope-css.mjs applies it at build time.
+
+   COLOR TOKENS
+   ------------
+   Each token reads from the theme.json preset first, so editing the
+   palette in Appearance → Editor → Styles restyles the whole site.
+   The literal is the fallback if the preset is ever removed.
+   ============================================================ */
+
+@layer plugins;
+
+:root {
+  --primary:     var(--wp--preset--color--primary,     #f54900);
+  --primary-fg:  var(--wp--preset--color--primary-fg,  #fafafa);
+  --ink:         var(--wp--preset--color--ink,         #131922);
+  --ink-2:       var(--wp--preset--color--ink-2,       #4e5661);
+  --muted:       var(--wp--preset--color--muted,       #757b83);
+  --surface:     var(--wp--preset--color--surface,     #ffffff);
+  --surface-2:   var(--wp--preset--color--surface-2,   #f4f6f8);
+  --line:        var(--wp--preset--color--line,        #dbdee3);
+
+  --radius: 10px;
+
+  /*
+   * The faintest text, for small print.
+   *
+   * It was READ twice — .yp-pricing__footnote and .yp-logos__note — and
+   * defined nowhere the stylesheet could see, so both declarations were
+   * invalid at computed-value time and both elements inherited the body's
+   * near-black --ink instead. Legal small print and a logo caption rendering
+   * at headline colour, on every site, in the builder and on the front end
+   * alike. It went unnoticed because a colour that fails to resolve inherits
+   * rather than disappearing.
+   *
+   * A literal, not a palette preset: this is a neutral, and the neutrals are
+   * identical across all four brand palettes — only `primary` varies. Adding
+   * a ninth preset slug would create a channel theme.json does not declare,
+   * which is the same mistake in a new place.
+   */
+  --faint: #9aa0aa;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ── SPACING ──────────────────────────────────────────────────────────
+     Every section's padding, gutter and grid gap comes from these four
+     tokens. Two reasons they exist rather than each section hardcoding
+     values:
+
+     1. FLUID, SO MOBILE IS RIGHT BY DEFAULT. Section padding used to be a
+        fixed `4.5rem 2rem 3rem` at every width, so a 390px phone got 72px
+        of top padding and 32px gutters — a quarter of the screen spent on
+        whitespace. clamp() means the same declaration is generous on a
+        desktop and tight on a phone, with no per-breakpoint tuning to
+        forget when a section is added.
+
+     2. ONE PLACE TO CONTROL. Because each reads a --wp--custom--* preset
+        first, editing theme.json (or the platform's Global design screen)
+        restyles every section on every site at once. Hardcoded values in
+        each section would make that impossible.
+
+     The max ends of these clamps are the previously verified desktop
+     values, so wide layouts are byte-identical to before.
+     ─────────────────────────────────────────────────────────────────── */
+  --space-section-top: var(--wp--custom--space--section-top, clamp(2.25rem, 6vw, 4.5rem));
+  --space-section-bottom: var(--wp--custom--space--section-bottom, clamp(1.5rem, 4vw, 3rem));
+  /* Horizontal breathing room at the screen edge. */
+  --space-gutter: var(--wp--custom--space--gutter, clamp(1.15rem, 4vw, 2rem));
+  /* Space between columns, and between stacked blocks once they collapse. */
+  --space-gap: var(--wp--custom--space--gap, clamp(2rem, 5vw, 3.5rem));
+
+  --container: var(--wp--custom--layout--content-size, 1160px);
+}
+
+/* Never inherit box-sizing from the host. WordPress sets border-box on
+   blocks; a bare host does not. Relying on either makes every width
+   differ by twice the horizontal padding. */
+.yp-page .yp-hero,
+.yp-page .yp-hero *,
+.yp-page .yp-hero *::before,
+.yp-page .yp-hero *::after { box-sizing: border-box; }
+
+/* Block-gap reset.
+   WordPress stamps `margin-block-start: 24px` on every non-first child of a
+   group the moment a page is re-saved in the editor. Any element that does
+   not declare its own margin would silently inherit that. This zeroes it at
+   (0,2,0) — high enough to beat WordPress, and deliberately placed BEFORE
+   the component rules so a section can still set an intentional margin and
+   win on source order. */
+.yp-page .yp-hero,
+.yp-page .yp-hero * { margin-block-start: 0; margin-block-end: 0; }
+
+body.yp-page {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+
+
+
+/* ============================================================
+   HeroSplit
+   ============================================================ */
+
+.yp-page .yp-hero__grid {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: grid;
+  grid-template-columns: 1.08fr 0.92fr;
+  gap: var(--space-gap);
+  align-items: center;
+}
+
+/* ---- left column ---- */
+
+.yp-page .yp-hero__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.4rem;
+}
+
+.yp-page .yp-hero__eyebrow {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+  color: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.yp-page .yp-hero__eyebrow::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+  flex: none;
+}
+
+.yp-page .yp-hero__heading {
+  margin: 0;
+  font-size: clamp(2.6rem, 4.6vw, 3.9rem);
+  line-height: 1.03;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.yp-page .yp-hero__body {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 1.06rem;
+  color: var(--ink-2);
+}
+
+.yp-page .yp-hero__features {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem 1.6rem;
+  width: 100%;
+}
+
+.yp-page .yp-hero__features > li {
+  position: relative;
+  padding-left: 1.7rem;
+  font-size: 0.94rem;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+/*
+ * A TICK, drawn the same way .yp-check__list draws its own.
+ *
+ * This was a circle with a diagonal stripe across it, which is the symbol for
+ * "not permitted" — beside lines like "Free parking on site" it said the
+ * opposite of what the list is for. It went unnoticed because `features` had
+ * no FieldSpec, so nothing ever wrote one and the marker was never seen.
+ */
+.yp-page .yp-hero__features > li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.28em;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  border: 1.5px solid color-mix(in oklch, var(--primary) 55%, transparent);
+}
+.yp-page .yp-hero__features > li::after {
+  content: "";
+  position: absolute;
+  left: 0.36rem;
+  top: 0.5em;
+  width: 0.32rem;
+  height: 0.16rem;
+  border-left: 2px solid var(--primary);
+  border-bottom: 2px solid var(--primary);
+  transform: rotate(-45deg);
+}
+
+/* ---- buttons ----
+   WordPress puts its own classes on the <a> and only lets a block
+   author name the wrapper, so the anchor is targeted by position. */
+
+.yp-page .yp-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin: 0.4rem 0 0;
+}
+
+/* ── BUTTON SHAPE — every section, not just the hero ──────────────────────
+   This used to be scoped to `.yp-hero__actions a`, so only the original
+   hero's buttons had padding, a radius and no underline. Every section added
+   later inherited the COLOUR rules below — which are global — but none of the
+   shape, and rendered as an underlined link on a hard-edged colour block.
+
+   Targeting the block's own anchor class fixes it once for all sections,
+   present and future, so a new section gets correct buttons without
+   remembering to add a rule. Two classes of specificity, which is enough to
+   beat WordPress's own `wp-element-button` styling.
+   ──────────────────────────────────────────────────────────────────────── */
+.yp-page .wp-block-button__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.95rem 1.6rem;
+  border-radius: var(--radius);
+  font-size: 0.97rem;
+  font-weight: 600;
+  text-decoration: none;
+  line-height: 1;
+  /* WordPress core sets its own background/border on this class; the variant
+     rules below must be the ones that win, so neutralise the base here. */
+  background: transparent;
+  border: 1.5px solid transparent;
+  color: inherit;
+}
+
+.yp-page .yp-btn--primary a {
+  background: var(--primary);
+  color: var(--primary-fg);
+  border: 1.5px solid var(--primary);
+}
+
+.yp-page .yp-btn--outline a {
+  background: transparent;
+  color: var(--ink);
+  border: 1.5px solid var(--line);
+}
+
+/* ---- right column: media with an overlapping badge ---- */
+
+.yp-page .yp-hero__media {
+  position: relative;
+  margin: 0;
+}
+
+.yp-page .yp-hero__frame {
+  margin: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--surface-2);
+  aspect-ratio: 4 / 5;
+}
+
+.yp-page .yp-hero__frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.yp-page .yp-hero__badge {
+  position: absolute;
+  left: -2.2rem;
+  bottom: 2.4rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.9rem 1.15rem;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 28px -10px rgb(19 25 34 / 0.28);
+  max-width: 17rem;
+}
+
+.yp-page .yp-hero__badge-mark {
+  flex: none;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 9px;
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  display: grid;
+  place-items: center;
+  color: var(--primary);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.yp-page .yp-hero__badge-mark p { margin: 0; }
+
+.yp-page .yp-hero__badge-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.yp-page .yp-hero__badge-title {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.yp-page .yp-hero__badge-sub {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+/* ---- stats rail ---- */
+
+.yp-page .yp-hero__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  margin-top: 3.5rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--line);
+}
+
+.yp-page .yp-hero__stat {
+  padding-left: 1.15rem;
+  border-left: 3px solid var(--primary);
+}
+
+.yp-page .yp-hero__stat-label {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.yp-page .yp-hero__stat-value {
+  margin: 0 0 0.2rem;
+  font-family: var(--font-mono);
+  font-size: 1.85rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.yp-page .yp-hero__stat-note {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* ---- responsive ---- */
+
+@media (max-width: 880px) {
+  .yp-page .yp-hero__grid { grid-template-columns: 1fr; gap: var(--space-gap); }
+  /* Image above the copy once the columns collapse, so a phone leads with
+     the visual rather than a wall of text. */
+  .yp-page .yp-hero__media { order: -1; }
+  .yp-page .yp-hero__badge { left: 1rem; }
+  .yp-page .yp-hero__stats { grid-template-columns: 1fr; gap: 1.4rem; }
+}
+
+/* ============================================================
+   Shared section furniture
+
+   Every section below uses the spacing tokens rather than literal
+   values, so the Global design controls reach all of them at once,
+   and mobile stays proportionate without per-section media queries.
+   ============================================================ */
+
+/* Same box-sizing and block-gap resets the hero needs, for the same reasons:
+   WordPress stamps margin-block-start on re-saved blocks, and a bare host does
+   not set border-box. See the notes at the top of this file. */
+.yp-page .yp-features, .yp-page .yp-features *,
+.yp-page .yp-quotes,   .yp-page .yp-quotes *,
+.yp-page .yp-faq,      .yp-page .yp-faq *,
+.yp-page .yp-cta,      .yp-page .yp-cta *,
+.yp-page .yp-contact,  .yp-page .yp-contact * { box-sizing: border-box; }
+
+.yp-page .yp-features, .yp-page .yp-features *,
+.yp-page .yp-quotes,   .yp-page .yp-quotes *,
+.yp-page .yp-faq,      .yp-page .yp-faq *,
+.yp-page .yp-cta,      .yp-page .yp-cta *,
+.yp-page .yp-contact,  .yp-page .yp-contact * { margin-block-start: 0; margin-block-end: 0; }
+
+.yp-page .yp-features__heading,
+.yp-page .yp-quotes__heading,
+.yp-page .yp-faq__heading,
+.yp-page .yp-contact__heading {
+  margin: 0;
+  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+/* ============================================================
+   FeaturesGrid
+   ============================================================ */
+
+.yp-page .yp-features__intro {
+  margin: 0.7rem 0 0;
+  max-width: 60ch;
+  font-size: 1.02rem;
+  color: var(--ink-2);
+}
+
+/* auto-fit means three across on a desktop, two on a tablet and one on a
+   phone from a single declaration — and it keeps working when the AI returns
+   four or five items instead of three. */
+.yp-page .yp-features__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 1.6rem;
+  margin-top: 2.2rem;
+}
+
+.yp-page .yp-features__item {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.4rem 1.5rem 1.5rem;
+  background: var(--surface);
+}
+
+.yp-page .yp-features__item-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.12rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.yp-page .yp-features__item-body {
+  margin: 0;
+  font-size: 0.97rem;
+  color: var(--ink-2);
+}
+
+/* ============================================================
+   Testimonials
+   ============================================================ */
+
+.yp-page .yp-quotes__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1.6rem;
+  margin-top: 2.2rem;
+}
+
+.yp-page .yp-quotes__item {
+  margin: 0;
+  padding: 1.6rem 1.7rem;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.yp-page .yp-quotes__item p {
+  margin: 0;
+  font-size: 1.06rem;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+/* Quote marks via ::before rather than in the text, so the content stays
+   clean when it round-trips through the editor. */
+.yp-page .yp-quotes__item p::before { content: "\201C"; }
+.yp-page .yp-quotes__item p::after  { content: "\201D"; }
+
+.yp-page .yp-quotes__item cite {
+  font-style: normal;
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-top: auto;
+}
+
+/* ============================================================
+   FAQ  (native <details>, no JavaScript)
+   ============================================================ */
+
+.yp-page .yp-faq__list {
+  margin-top: 2rem;
+  border-top: 1px solid var(--line);
+}
+
+.yp-page .yp-faq__item {
+  border-bottom: 1px solid var(--line);
+}
+
+.yp-page .yp-faq__item summary {
+  cursor: pointer;
+  padding: 1.15rem 2.2rem 1.15rem 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  position: relative;
+  list-style: none;
+  /* Wider than the text so the whole row is a comfortable tap target. */
+  display: block;
+}
+.yp-page .yp-faq__item summary::-webkit-details-marker { display: none; }
+
+/* A rotating chevron drawn in CSS — no icon font, nothing to download. */
+.yp-page .yp-faq__item summary::after {
+  content: "";
+  position: absolute;
+  right: 0.35rem;
+  top: 1.5rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 160ms ease;
+}
+.yp-page .yp-faq__item[open] summary::after {
+  transform: rotate(-135deg);
+}
+
+.yp-page .yp-faq__item p {
+  margin: 0;
+  padding: 0 2.2rem 1.3rem 0;
+  max-width: 70ch;
+  font-size: 1rem;
+  color: var(--ink-2);
+}
+
+/* ============================================================
+   CtaBand  (full-bleed, own inner container)
+   ============================================================ */
+
+.yp-page .yp-cta {
+  background: color-mix(in oklch, var(--primary) 8%, var(--surface));
+  border-block: 1px solid color-mix(in oklch, var(--primary) 18%, transparent);
+  margin-block: var(--space-section-top) 0;
+}
+
+.yp-page .yp-cta__inner {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.9rem;
+}
+
+.yp-page .yp-cta__heading {
+  margin: 0;
+  font-size: clamp(1.9rem, 3.2vw, 2.8rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.yp-page .yp-cta__body {
+  margin: 0;
+  max-width: 52ch;
+  font-size: 1.06rem;
+  color: var(--ink-2);
+}
+
+.yp-page .yp-cta__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+/* ============================================================
+   ContactBlock
+   ============================================================ */
+
+.yp-page .yp-contact__grid {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: var(--space-gap);
+  align-items: start;
+}
+
+/* With no details to show, the copy is the grid's only child and would
+   otherwise sit in a half-width column with dead space beside it. */
+.yp-page .yp-contact__grid > .yp-contact__copy:only-child {
+  grid-column: 1 / -1;
+  max-width: 62ch;
+}
+
+.yp-page .yp-contact__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.1rem;
+}
+
+.yp-page .yp-contact__body {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 1.06rem;
+  color: var(--ink-2);
+}
+
+.yp-page .yp-contact__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+}
+
+.yp-page .yp-contact__details {
+  display: grid;
+  gap: 0.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.4rem 1.2rem;
+  background: var(--surface);
+}
+
+.yp-page .yp-contact__row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.6rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--line);
+  align-items: baseline;
+}
+.yp-page .yp-contact__row:first-child { border-top: none; }
+
+.yp-page .yp-contact__label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.yp-page .yp-contact__value {
+  margin: 0;
+  font-size: 0.98rem;
+  color: var(--ink);
+}
+
+/* ---- collapse the two-column sections at the same breakpoint as the hero,
+        so a page doesn't reflow in two separate stages ---- */
+@media (max-width: 880px) {
+  .yp-page .yp-contact__grid { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   HERO VARIANTS
+
+   Five alternatives to HeroSplit. Each is a different composition
+   rather than a restyle, because the reason to have variants is
+   that businesses differ: some have a great photo, some have none,
+   some win on credentials, some on a list of services.
+
+   Shared resets first — same box-sizing and block-gap problems the
+   other sections have, for the same WordPress reasons.
+   ============================================================ */
+
+.yp-page .yp-hero-centered, .yp-page .yp-hero-centered *,
+.yp-page .yp-hero-banner,   .yp-page .yp-hero-banner *,
+.yp-page .yp-hero-stacked,  .yp-page .yp-hero-stacked *,
+.yp-page .yp-hero-showcase, .yp-page .yp-hero-showcase *,
+.yp-page .yp-hero-cards,    .yp-page .yp-hero-cards * { box-sizing: border-box; }
+
+.yp-page .yp-hero-centered, .yp-page .yp-hero-centered *,
+.yp-page .yp-hero-banner,   .yp-page .yp-hero-banner *,
+.yp-page .yp-hero-stacked,  .yp-page .yp-hero-stacked *,
+.yp-page .yp-hero-showcase, .yp-page .yp-hero-showcase *,
+.yp-page .yp-hero-cards,    .yp-page .yp-hero-cards * { margin-block-start: 0; margin-block-end: 0; }
+
+/* The eyebrow pill is the one piece of visual language shared across every
+   hero, so a page reads as one design whichever variant it uses. */
+.yp-page .yp-hero-centered__eyebrow,
+.yp-page .yp-hero-banner__eyebrow,
+.yp-page .yp-hero-stacked__eyebrow,
+.yp-page .yp-hero-showcase__eyebrow,
+.yp-page .yp-hero-cards__eyebrow {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+  color: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.yp-page .yp-hero-centered__eyebrow::before,
+.yp-page .yp-hero-banner__eyebrow::before,
+.yp-page .yp-hero-stacked__eyebrow::before,
+.yp-page .yp-hero-showcase__eyebrow::before,
+.yp-page .yp-hero-cards__eyebrow::before {
+  content: "";
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+  flex: none;
+}
+
+/* ---- 1. Centred ------------------------------------------------------ */
+
+.yp-page .yp-hero-centered {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: calc(var(--space-section-top) * 1.25) var(--space-gutter) var(--space-section-bottom);
+}
+.yp-page .yp-hero-centered__inner {
+  max-width: 46rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1.3rem;
+}
+/* Larger than any other hero: with no image, type is the whole composition. */
+.yp-page .yp-hero-centered__heading {
+  margin: 0;
+  font-size: clamp(2.8rem, 6vw, 4.7rem);
+  line-height: 1.0;
+  letter-spacing: -0.035em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+.yp-page .yp-hero-centered__body {
+  margin: 0;
+  max-width: 40ch;
+  font-size: 1.14rem;
+  color: var(--ink-2);
+}
+.yp-page .yp-hero-centered__actions {
+  display: flex; flex-wrap: wrap; gap: 0.85rem; justify-content: center; margin-top: 0.3rem;
+}
+.yp-page .yp-hero-centered__trust {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+/* ---- 2. Image banner ------------------------------------------------- */
+
+.yp-page .yp-hero-banner {
+  position: relative;
+  isolation: isolate;
+  min-height: min(78vh, 640px);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+.yp-page .yp-hero-banner__media {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  margin: 0;
+}
+.yp-page .yp-hero-banner__frame,
+.yp-page .yp-hero-banner__frame img {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* Gradient scrim rather than a flat overlay: keeps contrast on light AND dark
+   photographs without tuning an opacity per site. */
+.yp-page .yp-hero-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    to top,
+    rgba(8, 11, 16, 0.86) 0%,
+    rgba(8, 11, 16, 0.55) 42%,
+    rgba(8, 11, 16, 0.15) 100%
+  );
+}
+.yp-page .yp-hero-banner__inner {
+  position: relative;
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.15rem;
+}
+.yp-page .yp-hero-banner__eyebrow {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.yp-page .yp-hero-banner__eyebrow::before { background: #fff; }
+.yp-page .yp-hero-banner__heading {
+  margin: 0;
+  max-width: 30ch;
+  color: #fff;
+  font-size: clamp(2.5rem, 5.2vw, 4.2rem);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+.yp-page .yp-hero-banner__body {
+  margin: 0;
+  max-width: 44ch;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 1.1rem;
+}
+.yp-page .yp-hero-banner__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; margin-top: 0.4rem; }
+/* Outline buttons need a light border here, not the default dark one. */
+.yp-page .yp-hero-banner__actions .yp-btn--outline a {
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+  background: transparent;
+}
+
+/* ---- 3. Stacked ------------------------------------------------------ */
+
+.yp-page .yp-hero-stacked {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+}
+.yp-page .yp-hero-stacked__copy {
+  max-width: 44rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1.1rem;
+}
+.yp-page .yp-hero-stacked__heading {
+  margin: 0;
+  font-size: clamp(2.5rem, 4.8vw, 4rem);
+  line-height: 1.03;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+.yp-page .yp-hero-stacked__body { margin: 0; max-width: 42ch; font-size: 1.1rem; color: var(--ink-2); }
+.yp-page .yp-hero-stacked__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; justify-content: center; }
+.yp-page .yp-hero-stacked__media { margin: 2.6rem 0 0; }
+/* 16:9, unlike every other hero's 4:5 — this slot wants landscape. */
+.yp-page .yp-hero-stacked__frame {
+  margin: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--surface-2);
+  aspect-ratio: 16 / 9;
+}
+.yp-page .yp-hero-stacked__frame img {
+  display: block; width: 100%; height: 100%; object-fit: cover;
+}
+
+/* ---- 4. Showcase (badge + stats) ------------------------------------- */
+
+.yp-page .yp-hero-showcase {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+}
+.yp-page .yp-hero-showcase__grid {
+  display: grid;
+  grid-template-columns: 1.08fr 0.92fr;
+  gap: var(--space-gap);
+  align-items: center;
+}
+.yp-page .yp-hero-showcase__copy {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1.4rem;
+}
+.yp-page .yp-hero-showcase__heading {
+  margin: 0;
+  font-size: clamp(2.4rem, 4.4vw, 3.7rem);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+.yp-page .yp-hero-showcase__body { margin: 0; max-width: 46ch; font-size: 1.06rem; color: var(--ink-2); }
+.yp-page .yp-hero-showcase__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; margin-top: 0.4rem; }
+
+.yp-page .yp-hero-showcase__media { position: relative; margin: 0; }
+.yp-page .yp-hero-showcase__frame {
+  margin: 0; border-radius: 16px; overflow: hidden;
+  background: var(--surface-2); aspect-ratio: 4 / 5;
+}
+.yp-page .yp-hero-showcase__frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* Overlaps the photo's left edge — the detail that stops this reading as a
+   plain two-column layout. */
+.yp-page .yp-hero-showcase__badge {
+  position: absolute;
+  left: -2.2rem;
+  bottom: 1.6rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.85rem 1.1rem;
+  box-shadow: 0 14px 34px -16px rgba(19, 25, 34, 0.4);
+  max-width: 15rem;
+}
+.yp-page .yp-hero-showcase__badge-title {
+  margin: 0; font-size: 0.92rem; font-weight: 700; line-height: 1.25;
+}
+.yp-page .yp-hero-showcase__badge-sub {
+  margin: 0.15rem 0 0; font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted);
+}
+
+.yp-page .yp-hero-showcase__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 1.4rem 2.2rem;
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--line);
+}
+/* Without this a long stat label can push its auto-fit track wider than the
+   1fr it was granted. Same reason as .yp-faqh__main. */
+.yp-page .yp-hero-showcase__stat { min-width: 0; }
+.yp-page .yp-hero-showcase__stat-value {
+  margin: 0;
+  font-size: clamp(1.7rem, 2.6vw, 2.3rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.yp-page .yp-hero-showcase__stat-label {
+  margin: 0.25rem 0 0; font-size: 0.87rem; color: var(--muted);
+}
+
+/* ---- 5. Hero with cards ---------------------------------------------- */
+
+.yp-page .yp-hero-cards__grid-outer {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-gap);
+  align-items: center;
+}
+.yp-page .yp-hero-cards__copy {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1.2rem;
+}
+.yp-page .yp-hero-cards__heading {
+  margin: 0;
+  font-size: clamp(2.3rem, 4.2vw, 3.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+.yp-page .yp-hero-cards__body { margin: 0; max-width: 40ch; font-size: 1.06rem; color: var(--ink-2); }
+.yp-page .yp-hero-cards__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; }
+
+.yp-page .yp-hero-cards__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.yp-page .yp-hero-cards__card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.15rem 1.2rem 1.25rem;
+  background: var(--surface);
+}
+.yp-page .yp-hero-cards__card-title {
+  margin: 0 0 0.35rem; font-size: 1rem; font-weight: 700; letter-spacing: -0.01em;
+}
+.yp-page .yp-hero-cards__card-body { margin: 0; font-size: 0.9rem; color: var(--ink-2); line-height: 1.5; }
+
+/* ---- collapse every two-column hero at the shared breakpoint ---- */
+@media (max-width: 880px) {
+  .yp-page .yp-hero-showcase__grid { grid-template-columns: 1fr; gap: 2.5rem; }
+  /* Photo above the copy on phones, matching HeroSplit's behaviour. */
+  .yp-page .yp-hero-showcase__media { order: -1; }
+  .yp-page .yp-hero-showcase__badge { left: 1rem; }
+  .yp-page .yp-hero-cards__grid-outer { grid-template-columns: 1fr; }
+  .yp-page .yp-hero-banner { min-height: min(70vh, 520px); }
+}
+@media (max-width: 460px) {
+  /* Four cards side by side is unreadable at this width. */
+  .yp-page .yp-hero-cards__grid { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   BACKGROUND-LED HERO VARIANTS
+
+   Five heroes whose character comes from the background rather
+   than the photograph. Every effect is pure CSS derived from
+   --primary, so it recolours with the palette and adds no
+   requests, no fonts and no JavaScript to an exported site.
+   ============================================================ */
+
+.yp-page .yp-hero-aurora,    .yp-page .yp-hero-aurora *,
+.yp-page .yp-hero-spotlight, .yp-page .yp-hero-spotlight *,
+.yp-page .yp-hero-duotone,   .yp-page .yp-hero-duotone *,
+.yp-page .yp-hero-glass,     .yp-page .yp-hero-glass *,
+.yp-page .yp-hero-pattern,   .yp-page .yp-hero-pattern * { box-sizing: border-box; }
+
+.yp-page .yp-hero-aurora,    .yp-page .yp-hero-aurora *,
+.yp-page .yp-hero-spotlight, .yp-page .yp-hero-spotlight *,
+.yp-page .yp-hero-duotone,   .yp-page .yp-hero-duotone *,
+.yp-page .yp-hero-glass,     .yp-page .yp-hero-glass *,
+.yp-page .yp-hero-pattern,   .yp-page .yp-hero-pattern * { margin-block-start: 0; margin-block-end: 0; }
+
+/* Shared eyebrow pill, as with the other variants. */
+.yp-page .yp-hero-aurora__eyebrow,
+.yp-page .yp-hero-spotlight__eyebrow,
+.yp-page .yp-hero-duotone__eyebrow,
+.yp-page .yp-hero-glass__eyebrow,
+.yp-page .yp-hero-pattern__eyebrow {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+  color: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.yp-page .yp-hero-aurora__eyebrow::before,
+.yp-page .yp-hero-spotlight__eyebrow::before,
+.yp-page .yp-hero-duotone__eyebrow::before,
+.yp-page .yp-hero-glass__eyebrow::before,
+.yp-page .yp-hero-pattern__eyebrow::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--primary); flex: none;
+}
+
+/* ---- 1. Aurora: gradient mesh ---------------------------------------- */
+
+.yp-page .yp-hero-aurora {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  /* Three overlapping radial gradients, all mixed from the brand colour so
+     the mesh follows the palette instead of clashing with it. */
+  background:
+    radial-gradient(58% 72% at 18% 8%,
+      color-mix(in oklch, var(--primary) 26%, transparent) 0%, transparent 62%),
+    radial-gradient(50% 64% at 88% 18%,
+      color-mix(in oklch, var(--primary) 16%, transparent) 0%, transparent 60%),
+    radial-gradient(70% 80% at 55% 110%,
+      color-mix(in oklch, var(--primary) 12%, transparent) 0%, transparent 58%),
+    var(--surface);
+}
+.yp-page .yp-hero-aurora__inner {
+  position: relative;
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: calc(var(--space-section-top) * 1.35) var(--space-gutter)
+           calc(var(--space-section-bottom) * 1.4);
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1.3rem;
+}
+.yp-page .yp-hero-aurora__heading {
+  margin: 0;
+  font-size: clamp(2.7rem, 5.6vw, 4.5rem);
+  line-height: 1.01;
+  letter-spacing: -0.035em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+.yp-page .yp-hero-aurora__body {
+  margin: 0; max-width: 42ch; font-size: 1.14rem; color: var(--ink-2);
+}
+.yp-page .yp-hero-aurora__actions {
+  display: flex; flex-wrap: wrap; gap: 0.85rem; justify-content: center; margin-top: 0.3rem;
+}
+.yp-page .yp-hero-aurora__trust {
+  margin: 0.5rem 0 0; font-family: var(--font-mono);
+  font-size: 0.78rem; letter-spacing: 0.03em; color: var(--muted);
+}
+
+/* ---- 2. Spotlight: dark + glow + grid -------------------------------- */
+
+.yp-page .yp-hero-spotlight {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #0b0f16;
+}
+/* Grid, faded out toward the edges by a radial mask so it has no hard end. */
+.yp-page .yp-hero-spotlight::before {
+  content: "";
+  position: absolute; inset: 0; z-index: -2;
+  background:
+    repeating-linear-gradient(to right, rgba(255,255,255,0.055) 0 1px, transparent 1px 72px),
+    repeating-linear-gradient(to bottom, rgba(255,255,255,0.055) 0 1px, transparent 1px 72px);
+  mask-image: radial-gradient(70% 70% at 50% 40%, #000 0%, transparent 78%);
+  -webkit-mask-image: radial-gradient(70% 70% at 50% 40%, #000 0%, transparent 78%);
+}
+/* Brand-coloured glow behind the headline. */
+.yp-page .yp-hero-spotlight::after {
+  content: "";
+  position: absolute; inset: 0; z-index: -1;
+  background: radial-gradient(46% 42% at 50% 26%,
+    color-mix(in oklch, var(--primary) 40%, transparent) 0%, transparent 70%);
+}
+.yp-page .yp-hero-spotlight__inner {
+  position: relative;
+  max-width: 50rem; margin: 0 auto;
+  padding: calc(var(--space-section-top) * 1.4) var(--space-gutter)
+           calc(var(--space-section-bottom) * 1.4);
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1.25rem;
+}
+.yp-page .yp-hero-spotlight__eyebrow {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+}
+.yp-page .yp-hero-spotlight__eyebrow::before { background: var(--primary); }
+.yp-page .yp-hero-spotlight__heading {
+  margin: 0; color: #fff;
+  font-size: clamp(2.6rem, 5.4vw, 4.4rem);
+  line-height: 1.02; letter-spacing: -0.035em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-hero-spotlight__body {
+  margin: 0; max-width: 44ch; font-size: 1.12rem; color: rgba(255,255,255,0.72);
+}
+.yp-page .yp-hero-spotlight__actions {
+  display: flex; flex-wrap: wrap; gap: 0.85rem; justify-content: center; margin-top: 0.3rem;
+}
+.yp-page .yp-hero-spotlight__actions .yp-btn--outline a {
+  border-color: rgba(255,255,255,0.42); color: #fff; background: transparent;
+}
+.yp-page .yp-hero-spotlight__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  gap: 1.2rem 2.4rem;
+  margin-top: 2.6rem; padding-top: 2rem;
+  border-top: 1px solid rgba(255,255,255,0.14);
+  width: 100%;
+}
+.yp-page .yp-hero-spotlight__stat { min-width: 0; }
+.yp-page .yp-hero-spotlight__stat-value {
+  margin: 0; color: #fff;
+  font-size: clamp(1.6rem, 2.4vw, 2.1rem); font-weight: 800; letter-spacing: -0.02em;
+}
+.yp-page .yp-hero-spotlight__stat-label {
+  margin: 0.2rem 0 0; font-size: 0.84rem; color: rgba(255,255,255,0.58);
+}
+
+/* ---- 3. Duotone ------------------------------------------------------ */
+
+.yp-page .yp-hero-duotone__grid {
+  max-width: var(--container); margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: var(--space-gap); align-items: center;
+}
+.yp-page .yp-hero-duotone__copy {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1.3rem;
+}
+.yp-page .yp-hero-duotone__heading {
+  margin: 0; font-size: clamp(2.3rem, 4.2vw, 3.5rem);
+  line-height: 1.04; letter-spacing: -0.03em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-hero-duotone__body {
+  margin: 0; max-width: 46ch; font-size: 1.06rem; color: var(--ink-2);
+}
+.yp-page .yp-hero-duotone__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; }
+
+/* The tint: brand colour underneath, greyscaled photo blended over it. */
+.yp-page .yp-hero-duotone__media {
+  margin: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--primary);
+}
+.yp-page .yp-hero-duotone__frame {
+  margin: 0; aspect-ratio: 4 / 5; overflow: hidden;
+}
+.yp-page .yp-hero-duotone__frame img {
+  display: block; width: 100%; height: 100%; object-fit: cover;
+  filter: grayscale(1) contrast(1.08);
+  mix-blend-mode: luminosity;
+}
+
+/* ---- 4. Glass card over photo ---------------------------------------- */
+
+.yp-page .yp-hero-glass {
+  position: relative; isolation: isolate; overflow: hidden;
+  min-height: min(76vh, 620px);
+  display: flex; align-items: center;
+}
+.yp-page .yp-hero-glass__media { position: absolute; inset: 0; z-index: -1; margin: 0; }
+.yp-page .yp-hero-glass__frame,
+.yp-page .yp-hero-glass__frame img {
+  margin: 0; width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.yp-page .yp-hero-glass__inner {
+  width: 100%; max-width: var(--container); margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+}
+.yp-page .yp-hero-glass__card {
+  max-width: 30rem;
+  padding: 2rem 2.1rem 2.2rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.28);
+  background: rgba(16, 20, 28, 0.42);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: 0 24px 60px -28px rgba(0,0,0,0.6);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1.05rem;
+}
+/* Without backdrop-filter the panel must still be opaque enough to read on. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .yp-page .yp-hero-glass__card { background: rgba(12, 16, 22, 0.86); }
+}
+.yp-page .yp-hero-glass__eyebrow { background: rgba(255,255,255,0.18); color: #fff; }
+.yp-page .yp-hero-glass__eyebrow::before { background: #fff; }
+.yp-page .yp-hero-glass__heading {
+  margin: 0; color: #fff;
+  font-size: clamp(2.1rem, 3.6vw, 3.1rem);
+  line-height: 1.05; letter-spacing: -0.03em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-hero-glass__body {
+  margin: 0; color: rgba(255,255,255,0.84); font-size: 1.04rem;
+}
+.yp-page .yp-hero-glass__actions { display: flex; flex-wrap: wrap; gap: 0.8rem; }
+.yp-page .yp-hero-glass__actions .yp-btn--outline a {
+  border-color: rgba(255,255,255,0.5); color: #fff; background: transparent;
+}
+
+/* ---- 5. Pattern panel with overlapping photo ------------------------- */
+
+.yp-page .yp-hero-pattern__grid {
+  max-width: var(--container); margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  align-items: center;
+}
+.yp-page .yp-hero-pattern__panel {
+  /* Dot grid: one repeating radial-gradient, no image request. */
+  background:
+    radial-gradient(color-mix(in oklch, var(--primary) 22%, transparent) 1px, transparent 1.2px),
+    color-mix(in oklch, var(--primary) 6%, var(--surface));
+  background-size: 18px 18px, auto;
+  border: 1px solid color-mix(in oklch, var(--primary) 14%, transparent);
+  border-radius: 20px;
+  padding: 2.6rem 2.8rem;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1.25rem;
+  /* Sits under the photo so the overlap reads correctly. */
+  position: relative;
+  z-index: 0;
+}
+.yp-page .yp-hero-pattern__heading {
+  margin: 0; font-size: clamp(2.2rem, 4vw, 3.3rem);
+  line-height: 1.05; letter-spacing: -0.03em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-hero-pattern__body {
+  margin: 0; max-width: 40ch; font-size: 1.04rem; color: var(--ink-2);
+}
+.yp-page .yp-hero-pattern__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; }
+
+/* The overlap — the whole point of this variant. */
+.yp-page .yp-hero-pattern__media {
+  margin: 0 0 0 -3.5rem;
+  position: relative;
+  z-index: 1;
+}
+.yp-page .yp-hero-pattern__frame {
+  margin: 0; border-radius: 18px; overflow: hidden;
+  background: var(--surface-2); aspect-ratio: 4 / 5;
+  box-shadow: 0 26px 60px -30px rgba(19,25,34,0.45);
+}
+.yp-page .yp-hero-pattern__frame img {
+  display: block; width: 100%; height: 100%; object-fit: cover;
+}
+
+@media (max-width: 880px) {
+  .yp-page .yp-hero-duotone__grid { grid-template-columns: 1fr; gap: 2.5rem; }
+  .yp-page .yp-hero-duotone__media { order: -1; }
+  .yp-page .yp-hero-glass__card { max-width: none; }
+  .yp-page .yp-hero-pattern__grid { grid-template-columns: 1fr; }
+  /* Stacked, the negative margin would pull the photo off the panel edge. */
+  .yp-page .yp-hero-pattern__media { margin: -2.5rem 1.5rem 0; }
+  .yp-page .yp-hero-pattern__panel { padding: 2rem 1.6rem 3.5rem; }
+  .yp-page .yp-hero-glass { min-height: min(70vh, 520px); }
+}
+
+/* ============================================================
+   CONTACT LAYOUTS
+
+   Five alternatives to the plain details block. Each privileges a
+   different channel, because what matters differs: a plumber lives
+   or dies on the phone, a shop on its opening hours, a studio on
+   people finding the door.
+
+   Contact values that are phone numbers or emails are rendered as
+   links, so the anchor styling below matters as much as the layout.
+   ============================================================ */
+
+.yp-page .yp-contact-cards,   .yp-page .yp-contact-cards *,
+.yp-page .yp-contact-callout, .yp-page .yp-contact-callout *,
+.yp-page .yp-contact-hours,   .yp-page .yp-contact-hours *,
+.yp-page .yp-contact-visit,   .yp-page .yp-contact-visit *,
+.yp-page .yp-contact-band,    .yp-page .yp-contact-band * { box-sizing: border-box; }
+
+.yp-page .yp-contact-cards,   .yp-page .yp-contact-cards *,
+.yp-page .yp-contact-callout, .yp-page .yp-contact-callout *,
+.yp-page .yp-contact-hours,   .yp-page .yp-contact-hours *,
+.yp-page .yp-contact-visit,   .yp-page .yp-contact-visit *,
+.yp-page .yp-contact-band,    .yp-page .yp-contact-band * { margin-block-start: 0; margin-block-end: 0; }
+
+.yp-page .yp-contact-cards,
+.yp-page .yp-contact-hours {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+}
+
+.yp-page .yp-contact-cards__heading,
+.yp-page .yp-contact-hours__heading,
+.yp-page .yp-contact-visit__heading {
+  margin: 0;
+  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  line-height: 1.12; letter-spacing: -0.02em; font-weight: 800; text-wrap: balance;
+}
+
+/* Shared label style: small, mono, quiet — so the VALUE is what reads. */
+.yp-page .yp-contact-cards__label,
+.yp-page .yp-contact-hours__label,
+.yp-page .yp-contact-visit__label,
+.yp-page .yp-contact-band__label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Contact links inherit their colour and only underline on hover — a wall of
+   permanently underlined details looks like an error page. */
+.yp-page .yp-contact-cards__value a,
+.yp-page .yp-contact-hours__value a,
+.yp-page .yp-contact-visit__value a,
+.yp-page .yp-contact-band__value a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklch, currentColor 30%, transparent);
+}
+.yp-page .yp-contact-cards__value a:hover,
+.yp-page .yp-contact-hours__value a:hover,
+.yp-page .yp-contact-visit__value a:hover,
+.yp-page .yp-contact-band__value a:hover {
+  border-bottom-color: currentColor;
+}
+
+/* ---- 1. Contact cards ------------------------------------------------ */
+
+.yp-page .yp-contact-cards__intro {
+  margin: 0.7rem 0 0; max-width: 58ch; font-size: 1.02rem; color: var(--ink-2);
+}
+.yp-page .yp-contact-cards__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 1.1rem;
+  margin-top: 2.2rem;
+}
+.yp-page .yp-contact-cards__card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.3rem 1.4rem 1.4rem;
+  background: var(--surface);
+  display: flex; flex-direction: column; gap: 0.5rem;
+  transition: border-color 140ms ease;
+}
+.yp-page .yp-contact-cards__card:hover {
+  border-color: color-mix(in oklch, var(--primary) 40%, var(--line));
+}
+.yp-page .yp-contact-cards__value {
+  margin: 0; font-size: 1.04rem; font-weight: 600; line-height: 1.4;
+}
+
+/* ---- 2. Phone callout ------------------------------------------------ */
+
+.yp-page .yp-contact-callout {
+  background: color-mix(in oklch, var(--primary) 7%, var(--surface));
+  border-block: 1px solid color-mix(in oklch, var(--primary) 18%, transparent);
+}
+.yp-page .yp-contact-callout__inner {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.9rem;
+}
+.yp-page .yp-contact-callout__eyebrow {
+  margin: 0;
+  display: inline-flex; align-items: center; gap: 0.55rem;
+  padding: 0.45rem 0.95rem; border-radius: 999px;
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  color: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  line-height: 1;
+}
+.yp-page .yp-contact-callout__heading {
+  margin: 0; font-size: clamp(1.5rem, 2.4vw, 2rem);
+  font-weight: 700; letter-spacing: -0.02em; color: var(--ink-2);
+}
+/* The number, at headline scale and as the tap target. */
+.yp-page .yp-contact-callout__phone {
+  margin: 0.2rem 0;
+}
+.yp-page .yp-contact-callout__phone a {
+  display: inline-block;
+  font-size: clamp(2.6rem, 7vw, 5rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 3px solid color-mix(in oklch, var(--primary) 55%, transparent);
+  padding-bottom: 0.1em;
+}
+.yp-page .yp-contact-callout__phone a:hover { border-bottom-color: var(--primary); }
+.yp-page .yp-contact-callout__body {
+  margin: 0.4rem 0 0; max-width: 44ch; font-size: 1.02rem; color: var(--ink-2);
+}
+.yp-page .yp-contact-callout__actions {
+  display: flex; flex-wrap: wrap; gap: 0.8rem; justify-content: center; margin-top: 0.5rem;
+}
+
+/* ---- 3. Contact & hours --------------------------------------------- */
+
+.yp-page .yp-contact-hours__grid {
+  display: grid; grid-template-columns: 1.1fr 0.9fr;
+  gap: var(--space-gap); align-items: start;
+}
+.yp-page .yp-contact-hours__copy {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1.1rem;
+}
+.yp-page .yp-contact-hours__body {
+  margin: 0; max-width: 44ch; font-size: 1.04rem; color: var(--ink-2);
+}
+.yp-page .yp-contact-hours__details { display: grid; gap: 0.9rem; }
+.yp-page .yp-contact-hours__row { display: grid; gap: 0.15rem; }
+.yp-page .yp-contact-hours__value { margin: 0; font-size: 1.02rem; font-weight: 600; }
+
+.yp-page .yp-contact-hours__panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 1.3rem 1.5rem 1.5rem;
+}
+.yp-page .yp-contact-hours__panel-heading {
+  margin: 0 0 0.8rem; font-size: 1.02rem; font-weight: 700;
+}
+.yp-page .yp-contact-hours__day {
+  display: flex; justify-content: space-between; gap: 1rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid color-mix(in oklch, var(--line) 70%, transparent);
+}
+.yp-page .yp-contact-hours__day:first-of-type { border-top: none; }
+.yp-page .yp-contact-hours__day-name { margin: 0; font-size: 0.95rem; color: var(--ink-2); }
+.yp-page .yp-contact-hours__day-time {
+  margin: 0; font-size: 0.95rem; font-weight: 600;
+  font-variant-numeric: tabular-nums; /* times line up column-wise */
+}
+
+/* ---- 4. Visit us ----------------------------------------------------- */
+
+.yp-page .yp-contact-visit__grid {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: var(--space-gap); align-items: center;
+}
+.yp-page .yp-contact-visit__copy {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1.1rem;
+}
+.yp-page .yp-contact-visit__body {
+  margin: 0; max-width: 42ch; font-size: 1.04rem; color: var(--ink-2);
+}
+.yp-page .yp-contact-visit__details { display: grid; gap: 0.9rem; }
+.yp-page .yp-contact-visit__row { display: grid; gap: 0.15rem; }
+.yp-page .yp-contact-visit__value { margin: 0; font-size: 1.02rem; font-weight: 600; }
+.yp-page .yp-contact-visit__directions {
+  margin: 0;
+  padding: 0.95rem 1.1rem;
+  border-left: 3px solid color-mix(in oklch, var(--primary) 45%, transparent);
+  background: color-mix(in oklch, var(--primary) 5%, transparent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: 0.97rem; color: var(--ink-2); max-width: 46ch;
+}
+.yp-page .yp-contact-visit__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; }
+.yp-page .yp-contact-visit__media { margin: 0; }
+.yp-page .yp-contact-visit__frame {
+  margin: 0; border-radius: 18px; overflow: hidden;
+  background: var(--surface-2); aspect-ratio: 4 / 3;
+}
+.yp-page .yp-contact-visit__frame img {
+  display: block; width: 100%; height: 100%; object-fit: cover;
+}
+
+/* ---- 5. Contact band ------------------------------------------------- */
+
+.yp-page .yp-contact-band { background: #0b0f16; }
+.yp-page .yp-contact-band__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * 0.7) var(--space-gutter)
+           calc(var(--space-section-bottom) * 0.8);
+  display: flex; flex-direction: column; gap: 1.6rem;
+}
+.yp-page .yp-contact-band__heading {
+  margin: 0; color: #fff;
+  font-size: clamp(1.5rem, 2.6vw, 2.1rem);
+  font-weight: 800; letter-spacing: -0.02em; text-wrap: balance;
+}
+.yp-page .yp-contact-band__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 1.3rem 2.4rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(255,255,255,0.14);
+}
+.yp-page .yp-contact-band__item { display: grid; gap: 0.3rem; }
+.yp-page .yp-contact-band__label { color: rgba(255,255,255,0.5); }
+.yp-page .yp-contact-band__value {
+  margin: 0; color: #fff; font-size: 1.02rem; font-weight: 600;
+}
+
+@media (max-width: 880px) {
+  .yp-page .yp-contact-hours__grid,
+  .yp-page .yp-contact-visit__grid { grid-template-columns: 1fr; }
+  /* Photo above the details on phones, matching the other sections. */
+  .yp-page .yp-contact-visit__media { order: -1; }
+}
+
+/* ============================================================
+   CONTENT · CONVERSION · SUPPORT · CTA
+   Twenty sections. All spacing comes from the tokens, so Global
+   design reaches them and mobile stays proportionate without
+   per-section breakpoints.
+   ============================================================ */
+
+.yp-page .yp-alt, .yp-page .yp-alt *, .yp-page .yp-steps, .yp-page .yp-steps *,
+.yp-page .yp-stats, .yp-page .yp-stats *, .yp-page .yp-check, .yp-page .yp-check *,
+.yp-page .yp-gallery, .yp-page .yp-gallery *, .yp-page .yp-pricing, .yp-page .yp-pricing *,
+.yp-page .yp-promise, .yp-page .yp-promise *, .yp-page .yp-compare, .yp-page .yp-compare *,
+.yp-page .yp-offer, .yp-page .yp-offer *, .yp-page .yp-logos, .yp-page .yp-logos *,
+.yp-page .yp-faq2, .yp-page .yp-faq2 *, .yp-page .yp-faqg, .yp-page .yp-faqg *,
+.yp-page .yp-faqh, .yp-page .yp-faqh *, .yp-page .yp-faqo, .yp-page .yp-faqo *,
+.yp-page .yp-faqs, .yp-page .yp-faqs *, .yp-page .yp-ctasplit, .yp-page .yp-ctasplit *,
+.yp-page .yp-ctabox, .yp-page .yp-ctabox *, .yp-page .yp-ctaimg, .yp-page .yp-ctaimg *,
+.yp-page .yp-ctadual, .yp-page .yp-ctadual *, .yp-page .yp-ctastrip, .yp-page .yp-ctastrip *
+{ box-sizing: border-box; margin-block-start: 0; margin-block-end: 0; }
+
+/* Shared container + section heading scale. */
+.yp-page .yp-alt__heading, .yp-page .yp-steps__heading, .yp-page .yp-stats__heading,
+.yp-page .yp-check__heading, .yp-page .yp-gallery__heading, .yp-page .yp-pricing__heading,
+.yp-page .yp-promise__heading, .yp-page .yp-compare__heading, .yp-page .yp-faq2__heading,
+.yp-page .yp-faqg__heading, .yp-page .yp-faqh__heading, .yp-page .yp-faqo__heading,
+.yp-page .yp-faqs__heading, .yp-page .yp-ctadual__heading {
+  margin: 0; font-size: clamp(1.9rem, 3vw, 2.6rem); line-height: 1.12;
+  letter-spacing: -0.02em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-steps__intro, .yp-page .yp-stats__intro, .yp-page .yp-gallery__intro,
+.yp-page .yp-pricing__intro, .yp-page .yp-promise__intro, .yp-page .yp-compare__intro,
+.yp-page .yp-faq2__intro, .yp-page .yp-faqo__intro {
+  margin: 0.7rem 0 0; max-width: 60ch; font-size: 1.02rem; color: var(--ink-2);
+}
+
+/* ---- Alternating rows ---- */
+.yp-page .yp-alt__row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-gap);
+  align-items: center; margin-top: 3rem;
+}
+/* The flip. One rule, and the page stops looking templated. */
+.yp-page .yp-alt__row:nth-child(even) .yp-alt__media { order: -1; }
+.yp-page .yp-alt__copy { display: flex; flex-direction: column; gap: 0.9rem; }
+.yp-page .yp-alt__title { margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+.yp-page .yp-alt__body { margin: 0; max-width: 46ch; font-size: 1.02rem; color: var(--ink-2); }
+.yp-page .yp-alt__media { margin: 0; }
+.yp-page .yp-alt__frame { margin: 0; border-radius: 16px; overflow: hidden; background: var(--surface-2); aspect-ratio: 4/3; }
+.yp-page .yp-alt__frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* ---- Steps: numbers from a CSS counter, never in the content ---- */
+.yp-page .yp-steps__list { counter-reset: yp-step; display: grid; gap: 1.2rem; margin-top: 2.2rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+.yp-page .yp-steps__item { counter-increment: yp-step; position: relative; padding-top: 3.4rem; }
+.yp-page .yp-steps__item::before {
+  content: counter(yp-step); position: absolute; top: 0; left: 0;
+  width: 2.5rem; height: 2.5rem; border-radius: 50%;
+  display: grid; place-items: center;
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+  color: var(--primary); font-family: var(--font-mono); font-weight: 700; font-size: 0.95rem;
+}
+.yp-page .yp-steps__title { margin: 0 0 0.4rem; font-size: 1.1rem; font-weight: 700; }
+.yp-page .yp-steps__body { margin: 0; font-size: 0.97rem; color: var(--ink-2); }
+
+/* ---- Numbers band ---- */
+.yp-page .yp-stats { background: color-mix(in oklch, var(--primary) 6%, var(--surface)); border-block: 1px solid color-mix(in oklch, var(--primary) 14%, transparent); }
+.yp-page .yp-stats__inner { max-width: var(--container); margin: 0 auto; padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom); }
+.yp-page .yp-stats__grid { display: grid; gap: 1.6rem 2.4rem; margin-top: 2.2rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); }
+.yp-page .yp-stats__item { display: grid; gap: 0.25rem; }
+.yp-page .yp-stats__value { margin: 0; font-size: clamp(2.1rem, 3.6vw, 3.1rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+.yp-page .yp-stats__label { margin: 0; font-size: 0.9rem; color: var(--muted); }
+
+/* ---- Checklist: ticks via ::marker, not characters in the text ---- */
+.yp-page .yp-check__grid {
+  max-width: var(--container); margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-gap); align-items: start;
+}
+.yp-page .yp-check__copy { display: flex; flex-direction: column; align-items: flex-start; gap: 1.1rem; }
+.yp-page .yp-check__body { margin: 0; max-width: 44ch; font-size: 1.04rem; color: var(--ink-2); }
+.yp-page .yp-check__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; }
+.yp-page .yp-check__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.75rem; }
+.yp-page .yp-check__list > li { position: relative; padding-left: 2rem; font-size: 1rem; color: var(--ink-2); line-height: 1.5; }
+.yp-page .yp-check__list > li::before {
+  content: ""; position: absolute; left: 0; top: 0.3em; width: 1.15rem; height: 1.15rem;
+  border-radius: 50%; background: color-mix(in oklch, var(--primary) 14%, transparent);
+  border: 1.5px solid color-mix(in oklch, var(--primary) 55%, transparent);
+}
+.yp-page .yp-check__list > li::after {
+  content: ""; position: absolute; left: 0.36rem; top: 0.52em; width: 0.32rem; height: 0.16rem;
+  border-left: 2px solid var(--primary); border-bottom: 2px solid var(--primary);
+  transform: rotate(-45deg);
+}
+
+/* ---- Gallery ---- */
+.yp-page .yp-gallery__grid { display: grid; gap: 1.1rem; margin-top: 2.2rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+/* Column count is an option, so the grid is driven by a modifier rather than
+   a fixed track list. auto-fit still handles the narrow end: the explicit
+   count applies from the tablet breakpoint up. */
+@media (min-width: 761px) {
+  .yp-page .yp-gallery__grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .yp-page .yp-gallery__grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .yp-page .yp-gallery__grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* ── core/gallery: taking back the layout ─────────────────────────
+   The gallery is a real core/gallery block, because that is the only way
+   WordPress groups images for next/previous in its lightbox. The cost is that
+   core's block-library CSS comes with it: a flex layout with calc() widths on
+   each figure, and captions absolutely positioned over the photo behind a
+   gradient.
+
+   The builder preview loads ONLY this stylesheet, never WordPress's block
+   library, so none of that appeared there — the preview looked right while the
+   live site did not. These rules are what make the two agree again.
+
+   Two classes of specificity (.yp-page + the class) beats core's own selectors,
+   and this file is unlayered so it outranks the layered block library. */
+.yp-page .yp-gallery__grid.wp-block-gallery.has-nested-images {
+  display: grid;
+  gap: 1.1rem;
+  /* Core sets these to drive its flex sizing; neutralised so the grid decides. */
+  --wp--style--unstable-gallery-gap: 0;
+  /* Tracks declared HERE, at the same specificity as the display switch.
+     Left in the plain .cols-N rules they lost to this selector's extra class
+     and the grid collapsed to a single 0px track. */
+  grid-template-columns: 1fr;
+}
+@media (min-width: 761px) {
+  .yp-page .yp-gallery__grid.has-nested-images.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .yp-page .yp-gallery__grid.has-nested-images.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .yp-page .yp-gallery__grid.has-nested-images.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.yp-page .yp-gallery__grid.has-nested-images > figure.wp-block-image {
+  /* Core: width: calc(50% - …); flex-grow: 1. Both must go. */
+  width: auto;
+  max-width: none;
+  flex: none;
+  margin: 0;
+  display: block;
+  /* Core also gives gallery figures height:100% inside a flex row; in a grid
+     that resolves against nothing and collapses them to zero. */
+  height: auto;
+}
+.yp-page .yp-gallery__grid.has-nested-images > figure.wp-block-image > a,
+.yp-page .yp-gallery__grid.has-nested-images > figure.wp-block-image > img,
+.yp-page .yp-gallery__grid.has-nested-images .wp-lightbox-container img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.yp-page .yp-gallery__grid.has-nested-images .wp-lightbox-container {
+  display: block;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* Captions below the photo, not floating over it. Core's gallery overlays them
+   with a gradient, which buries the caption and darkens the image. */
+.yp-page .yp-gallery__grid.has-nested-images figure.wp-block-image figcaption {
+  position: static;
+  max-height: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  background: none;
+  background-image: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  text-align: left;
+  overflow: visible;
+}
+
+/* A photo that opens full size should say so before it is clicked. Core's
+   lightbox handles the overlay itself; this is only the affordance. */
+.yp-page .yp-gallery__frame.has-lightbox img {
+  cursor: zoom-in;
+  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.yp-page .yp-gallery__frame.has-lightbox:hover img { transform: scale(1.03); }
+
+.yp-page .yp-gallery__tile { margin: 0; }
+.yp-page .yp-gallery__frame { margin: 0; border-radius: 14px; overflow: hidden; background: var(--surface-2); aspect-ratio: 1/1; }
+.yp-page .yp-gallery__frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.yp-page .yp-gallery__caption { margin: 0.6rem 0 0; font-size: 0.88rem; color: var(--muted); }
+
+/* ---- Pricing ---- */
+.yp-page .yp-pricing__grid { display: grid; gap: 1.2rem; margin-top: 2.2rem; align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.yp-page .yp-pricing__tier { border: 1px solid var(--line); border-radius: 16px; padding: 1.6rem 1.7rem 1.8rem; background: var(--surface); }
+.yp-page .yp-pricing__tier--featured {
+  border-color: color-mix(in oklch, var(--primary) 55%, transparent);
+  box-shadow: 0 18px 44px -26px color-mix(in oklch, var(--primary) 55%, transparent);
+}
+.yp-page .yp-pricing__name { margin: 0 0 0.6rem; font-size: 1.1rem; font-weight: 700; }
+.yp-page .yp-pricing__price { margin: 0; font-size: clamp(1.8rem, 2.6vw, 2.3rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
+.yp-page .yp-pricing__note { margin: 0.2rem 0 1.1rem; font-family: var(--font-mono); font-size: 0.74rem; color: var(--muted); }
+.yp-page .yp-pricing__features { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.55rem; border-top: 1px solid var(--line); padding-top: 1.1rem; }
+.yp-page .yp-pricing__features > li { position: relative; padding-left: 1.3rem; font-size: 0.94rem; color: var(--ink-2); }
+.yp-page .yp-pricing__features > li::before { content: "+"; position: absolute; left: 0; color: var(--primary); font-weight: 700; }
+.yp-page .yp-pricing__footnote { margin: 1.4rem 0 0; font-size: 0.82rem; color: var(--faint); }
+
+/* ---- Promises ---- */
+.yp-page .yp-promise { background: var(--surface-2); border-block: 1px solid var(--line); }
+.yp-page .yp-promise__inner { max-width: var(--container); margin: 0 auto; padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom); }
+.yp-page .yp-promise__grid { display: grid; gap: 1.4rem; margin-top: 2.2rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.yp-page .yp-promise__item { padding-left: 1.2rem; border-left: 3px solid color-mix(in oklch, var(--primary) 45%, transparent); }
+.yp-page .yp-promise__title { margin: 0 0 0.4rem; font-size: 1.08rem; font-weight: 700; }
+.yp-page .yp-promise__body { margin: 0; font-size: 0.97rem; color: var(--ink-2); }
+
+/* ---- Comparison ---- */
+.yp-page .yp-compare__table { margin-top: 2.2rem; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.yp-page .yp-compare__row { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 1rem;
+  padding: 0.95rem 1.2rem; border-top: 1px solid var(--line); align-items: baseline; }
+.yp-page .yp-compare__row:first-child { border-top: none; }
+.yp-page .yp-compare__row--head { background: var(--surface-2); }
+.yp-page .yp-compare__row--head .yp-compare__us,
+.yp-page .yp-compare__row--head .yp-compare__them {
+  font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
+}
+.yp-page .yp-compare__point { margin: 0; font-size: 0.95rem; font-weight: 600; }
+.yp-page .yp-compare__us { margin: 0; font-size: 0.95rem; color: var(--ink); font-weight: 600; }
+.yp-page .yp-compare__them { margin: 0; font-size: 0.95rem; color: var(--muted); }
+
+/* ---- Offer ---- */
+.yp-page .yp-offer { max-width: var(--container); margin: 0 auto; padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom); }
+.yp-page .yp-offer__card {
+  border-radius: 20px; padding: 2.4rem 2.6rem 2.6rem;
+  background: color-mix(in oklch, var(--primary) 7%, var(--surface));
+  border: 1px solid color-mix(in oklch, var(--primary) 20%, transparent);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1.05rem;
+}
+.yp-page .yp-offer__eyebrow {
+  margin: 0; display: inline-flex; align-items: center; padding: 0.4rem 0.9rem; border-radius: 999px;
+  background: color-mix(in oklch, var(--primary) 15%, transparent); color: var(--primary);
+  font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase;
+}
+.yp-page .yp-offer__heading { margin: 0; font-size: clamp(1.8rem, 2.8vw, 2.4rem); font-weight: 800; letter-spacing: -0.02em; text-wrap: balance; }
+.yp-page .yp-offer__body { margin: 0; max-width: 52ch; font-size: 1.04rem; color: var(--ink-2); }
+.yp-page .yp-offer__bullets { display: grid; gap: 0.5rem; }
+.yp-page .yp-offer__bullet { position: relative; padding-left: 1.4rem; }
+.yp-page .yp-offer__bullet::before { content: "✓"; position: absolute; left: 0; color: var(--primary); font-weight: 700; }
+.yp-page .yp-offer__bullet-text { margin: 0; font-size: 0.97rem; color: var(--ink-2); }
+.yp-page .yp-offer__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; margin-top: 0.3rem; }
+.yp-page .yp-offer__small { margin: 0; font-size: 0.82rem; color: var(--muted); }
+
+/* ---- Logos: wordmarks, never other companies' logo files ---- */
+.yp-page .yp-logos { border-block: 1px solid var(--line); }
+.yp-page .yp-logos__inner { max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * 0.6) var(--space-gutter) calc(var(--space-section-bottom) * 0.7);
+  display: flex; flex-direction: column; align-items: center; gap: 1.2rem; text-align: center; }
+.yp-page .yp-logos__heading { margin: 0; font-family: var(--font-mono); font-size: 0.74rem; font-weight: 600;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.yp-page .yp-logos__row { display: flex; flex-wrap: wrap; justify-content: center; gap: 1.2rem 2.6rem; }
+.yp-page .yp-logos__name { margin: 0; font-size: 1.06rem; font-weight: 700; letter-spacing: -0.01em; color: color-mix(in oklch, var(--ink) 55%, transparent); }
+.yp-page .yp-logos__note { margin: 0; font-size: 0.8rem; color: var(--faint); }
+
+/* ---- FAQ variants ---- */
+.yp-page .yp-faq2__cols { margin-top: 2rem; columns: 2; column-gap: 2.6rem; }
+.yp-page .yp-faq2__item { break-inside: avoid; border-bottom: 1px solid var(--line); }
+.yp-page .yp-faqg__groups { display: grid; gap: 2.4rem; margin-top: 2.2rem; }
+/* Grouped FAQs are the section most likely to be printed or read in columns;
+   a group split across a break loses its heading. */
+.yp-page .yp-faqg__group { break-inside: avoid; }
+.yp-page .yp-faqg__group-title { margin: 0 0 0.6rem; font-size: 1.05rem; font-weight: 700;
+  font-family: var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--primary); }
+.yp-page .yp-faqg__list { border-top: 1px solid var(--line); }
+.yp-page .yp-faqg__item { border-bottom: 1px solid var(--line); }
+.yp-page .yp-faqh__grid {
+  max-width: var(--container); margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: grid; grid-template-columns: 1.5fr 0.9fr; gap: var(--space-gap); align-items: start;
+}
+.yp-page .yp-faqh__main { min-width: 0; }
+.yp-page .yp-faqh__list { margin-top: 1.6rem; border-top: 1px solid var(--line); }
+.yp-page .yp-faqh__item { border-bottom: 1px solid var(--line); }
+.yp-page .yp-faqh__panel { border: 1px solid var(--line); border-radius: 16px; padding: 1.5rem 1.6rem 1.7rem;
+  background: color-mix(in oklch, var(--primary) 6%, var(--surface)); display: grid; gap: 0.7rem; }
+.yp-page .yp-faqh__panel-heading { margin: 0; font-size: 1.1rem; font-weight: 700; }
+.yp-page .yp-faqh__panel-body { margin: 0; font-size: 0.95rem; color: var(--ink-2); }
+.yp-page .yp-faqh__phone { margin: 0.2rem 0; }
+.yp-page .yp-faqh__phone a { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; color: var(--ink);
+  text-decoration: none; border-bottom: 2px solid color-mix(in oklch, var(--primary) 55%, transparent); }
+.yp-page .yp-faqh__actions { display: flex; flex-wrap: wrap; gap: 0.7rem; margin-top: 0.3rem; }
+.yp-page .yp-faqo__list { counter-reset: yp-q; display: grid; gap: 2rem; margin-top: 2.2rem; }
+.yp-page .yp-faqo__item { counter-increment: yp-q; position: relative; padding-left: 3.2rem; }
+.yp-page .yp-faqo__item::before { content: counter(yp-q, decimal-leading-zero); position: absolute; left: 0; top: 0.1rem;
+  font-family: var(--font-mono); font-size: 0.95rem; font-weight: 700; color: var(--primary); }
+.yp-page .yp-faqo__question { margin: 0 0 0.5rem; font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }
+.yp-page .yp-faqo__answer { margin: 0; max-width: 68ch; font-size: 1rem; color: var(--ink-2); }
+.yp-page .yp-faqs__grid {
+  max-width: var(--container); margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: grid; grid-template-columns: 0.85fr 1.15fr; gap: var(--space-gap); align-items: start;
+}
+/* Heading follows the reader down a long list. No script needed. */
+.yp-page .yp-faqs__aside { position: sticky; top: 2rem; display: grid; gap: 0.8rem; }
+.yp-page .yp-faqs__body { margin: 0; font-size: 1rem; color: var(--ink-2); max-width: 34ch; }
+.yp-page .yp-faqs__list { border-top: 1px solid var(--line); }
+.yp-page .yp-faqs__item { border-bottom: 1px solid var(--line); }
+
+/* Accordion chrome shared by every <details> variant. */
+.yp-page .yp-faq2__item summary, .yp-page .yp-faqg__item summary,
+.yp-page .yp-faqh__item summary, .yp-page .yp-faqs__item summary {
+  cursor: pointer; padding: 1.05rem 2.2rem 1.05rem 0; font-size: 1.02rem; font-weight: 700;
+  position: relative; list-style: none; display: block;
+}
+.yp-page .yp-faq2__item summary::-webkit-details-marker, .yp-page .yp-faqg__item summary::-webkit-details-marker,
+.yp-page .yp-faqh__item summary::-webkit-details-marker, .yp-page .yp-faqs__item summary::-webkit-details-marker { display: none; }
+.yp-page .yp-faq2__item summary::after, .yp-page .yp-faqg__item summary::after,
+.yp-page .yp-faqh__item summary::after, .yp-page .yp-faqs__item summary::after {
+  content: ""; position: absolute; right: 0.35rem; top: 1.4rem; width: 0.5rem; height: 0.5rem;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg); transition: transform 160ms ease;
+}
+.yp-page .yp-faq2__item[open] summary::after, .yp-page .yp-faqg__item[open] summary::after,
+.yp-page .yp-faqh__item[open] summary::after, .yp-page .yp-faqs__item[open] summary::after { transform: rotate(-135deg); }
+.yp-page .yp-faq2__item p, .yp-page .yp-faqg__item p,
+.yp-page .yp-faqh__item p, .yp-page .yp-faqs__item p {
+  margin: 0; padding: 0 2.2rem 1.2rem 0; max-width: 70ch; font-size: 0.98rem; color: var(--ink-2);
+}
+
+/* ---- CTA variants ---- */
+.yp-page .yp-ctasplit { background: color-mix(in oklch, var(--primary) 8%, var(--surface));
+  border-block: 1px solid color-mix(in oklch, var(--primary) 18%, transparent); }
+.yp-page .yp-ctasplit__inner { max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * 0.7) var(--space-gutter) calc(var(--space-section-bottom) * 0.8);
+  display: flex; align-items: center; justify-content: space-between; gap: 1.6rem; flex-wrap: wrap; }
+.yp-page .yp-ctasplit__copy { display: grid; gap: 0.35rem; }
+.yp-page .yp-ctasplit__heading { margin: 0; font-size: clamp(1.4rem, 2.4vw, 1.9rem); font-weight: 800; letter-spacing: -0.02em; }
+.yp-page .yp-ctasplit__body { margin: 0; font-size: 1rem; color: var(--ink-2); }
+.yp-page .yp-ctasplit__actions { display: flex; gap: 0.8rem; flex: none; }
+
+.yp-page .yp-ctabox {
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+}
+.yp-page .yp-ctabox__card {
+  max-width: var(--container); margin: 0 auto;
+  border: 1px solid var(--line); border-radius: 20px; padding: 2.4rem 2rem 2.6rem;
+  background: var(--surface); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.9rem; }
+.yp-page .yp-ctabox__eyebrow { margin: 0; font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary); }
+.yp-page .yp-ctabox__heading { margin: 0; font-size: clamp(1.7rem, 2.8vw, 2.3rem); font-weight: 800; letter-spacing: -0.02em; text-wrap: balance; }
+.yp-page .yp-ctabox__body { margin: 0; max-width: 48ch; font-size: 1.02rem; color: var(--ink-2); }
+.yp-page .yp-ctabox__actions { display: flex; flex-wrap: wrap; gap: 0.8rem; justify-content: center; margin-top: 0.4rem; }
+.yp-page .yp-ctabox__small { margin: 0.3rem 0 0; font-size: 0.82rem; color: var(--muted); }
+
+.yp-page .yp-ctaimg { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; min-height: min(46vh, 400px); }
+.yp-page .yp-ctaimg__media { position: absolute; inset: 0; z-index: -2; margin: 0; }
+.yp-page .yp-ctaimg__frame, .yp-page .yp-ctaimg__frame img { margin: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.yp-page .yp-ctaimg::after { content: ""; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(to top, rgba(8,11,16,0.82) 0%, rgba(8,11,16,0.5) 60%, rgba(8,11,16,0.3) 100%); }
+.yp-page .yp-ctaimg__inner { position: relative; width: 100%; max-width: var(--container); margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.9rem; }
+.yp-page .yp-ctaimg__heading { margin: 0; color: #fff; font-size: clamp(1.9rem, 3.4vw, 2.9rem); font-weight: 800; letter-spacing: -0.03em; text-wrap: balance; }
+.yp-page .yp-ctaimg__body { margin: 0; color: rgba(255,255,255,0.84); font-size: 1.05rem; max-width: 46ch; }
+.yp-page .yp-ctaimg__actions { display: flex; flex-wrap: wrap; gap: 0.8rem; justify-content: center; margin-top: 0.3rem; }
+.yp-page .yp-ctaimg__actions .yp-btn--outline a { border-color: rgba(255,255,255,0.5); color: #fff; }
+
+.yp-page .yp-ctadual__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: grid; gap: 1.8rem;
+}
+.yp-page .yp-ctadual__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+.yp-page .yp-ctadual__option { border: 1px solid var(--line); border-radius: 18px; padding: 1.8rem 1.9rem 2rem;
+  background: var(--surface); display: flex; flex-direction: column; align-items: flex-start; gap: 0.7rem; }
+.yp-page .yp-ctadual__option:first-child { background: color-mix(in oklch, var(--primary) 6%, var(--surface));
+  border-color: color-mix(in oklch, var(--primary) 22%, transparent); }
+.yp-page .yp-ctadual__title { margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
+.yp-page .yp-ctadual__body { margin: 0; font-size: 0.99rem; color: var(--ink-2); }
+.yp-page .yp-ctadual__actions { display: flex; gap: 0.7rem; margin-top: 0.6rem; }
+
+.yp-page .yp-ctastrip { background: var(--ink); }
+.yp-page .yp-ctastrip__inner { max-width: var(--container); margin: 0 auto;
+  padding: 1.1rem var(--space-gutter); display: flex; align-items: center; justify-content: center;
+  gap: 1.2rem; flex-wrap: wrap; text-align: center; }
+.yp-page .yp-ctastrip__text { margin: 0; color: #fff; font-size: 1.02rem; font-weight: 600; }
+.yp-page .yp-ctastrip__actions { display: flex; gap: 0.6rem; flex: none; }
+.yp-page .yp-ctastrip__actions .wp-block-button__link { padding: 0.6rem 1.1rem; font-size: 0.9rem; }
+
+@media (max-width: 880px) {
+  .yp-page .yp-alt__row { grid-template-columns: 1fr; gap: 2rem; }
+  /* Every row's photo goes on top when stacked — the alternating flip only
+     makes sense while there are two columns to swap. */
+  .yp-page .yp-alt__row .yp-alt__media,
+  .yp-page .yp-alt__row:nth-child(even) .yp-alt__media { order: -1; }
+  .yp-page .yp-check__grid, .yp-page .yp-faqh__grid, .yp-page .yp-faqs__grid,
+  .yp-page .yp-ctadual__grid { grid-template-columns: 1fr; }
+  .yp-page .yp-faq2__cols { columns: 1; }
+  .yp-page .yp-faqs__aside { position: static; }
+  .yp-page .yp-compare__row { grid-template-columns: 1fr; gap: 0.3rem; }
+  .yp-page .yp-compare__row--head { display: none; }
+  /* Without the header row, each cell needs to say which side it is. */
+  .yp-page .yp-compare__us::before { content: "Us: "; color: var(--muted); font-weight: 400; }
+  .yp-page .yp-compare__them::before { content: "Alternative: "; color: var(--muted); font-weight: 400; }
+  .yp-page .yp-ctasplit__inner { justify-content: flex-start; }
+}
+
+/* ============================================================
+   HEADERS & FOOTERS
+
+   These land in parts/header.html and parts/footer.html, not in
+   page content, so they appear once site-wide.
+
+   The brand and menu are WordPress dynamic blocks — the title
+   follows Settings, the menu follows Appearance → Menus. The
+   .yp-ph-* rules below style the preview-only placeholders that
+   stand in for them where there is no PHP.
+   ============================================================ */
+
+.yp-page .yp-hdr, .yp-page .yp-hdr *, .yp-page .yp-hdrc, .yp-page .yp-hdrc *,
+.yp-page .yp-hdrb, .yp-page .yp-hdrb *, .yp-page .yp-hdrt, .yp-page .yp-hdrt *,
+.yp-page .yp-hdrm, .yp-page .yp-hdrm *, .yp-page .yp-ftr, .yp-page .yp-ftr *,
+.yp-page .yp-ftrc, .yp-page .yp-ftrc *, .yp-page .yp-ftrk, .yp-page .yp-ftrk *,
+.yp-page .yp-ftrx, .yp-page .yp-ftrx *, .yp-page .yp-ftrs, .yp-page .yp-ftrs *
+{ box-sizing: border-box; margin-block-start: 0; margin-block-end: 0; }
+
+/* ── Sticky headers ───────────────────────────────────────────────
+   On unless the client turns it off. z-index clears the hero's media panel,
+   which establishes its own stacking context.
+
+   Not visible in the builder: the canvas iframe is sized to its content and
+   does not scroll, so there is no scrolling ancestor for this to stick to.
+   Correct on the exported site. */
+.yp-page .yp-hdr.is-sticky,
+.yp-page .yp-hdrc.is-sticky,
+.yp-page .yp-hdrm.is-sticky,
+.yp-page .yp-hdrb.is-sticky,
+.yp-page .yp-hdrt.is-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--surface);
+  /* A hairline rather than a shadow: the header sits on white for most of the
+     page and a shadow reads as heavy the moment it overlaps a photograph. */
+  border-bottom: 1px solid var(--line);
+}
+
+/* ── Mobile navigation overlay ────────────────────────────────────
+   Core's navigation block provides the hamburger, the panel, focus trapping
+   and Escape — so none of that is rebuilt here. These rules only make the
+   panel look like this site rather than like default WordPress.
+
+   Restrained on purpose: core's overlay is already usable, and this is being
+   written without being able to see it (the builder preview substitutes a
+   placeholder for the nav block, and the real one only renders on the
+   exported site). Everything below is a colour, a size or a spacing — nothing
+   that changes how the overlay behaves. */
+
+/* The hamburger itself. */
+.yp-page .wp-block-navigation__responsive-container-open {
+  padding: 0.4rem;
+  color: var(--ink);
+}
+.yp-page .wp-block-navigation__responsive-container-open svg,
+.yp-page .wp-block-navigation__responsive-container-close svg {
+  width: 26px;
+  height: 26px;
+}
+
+/* The panel. Core handles showing and hiding it; this is its surface. */
+.yp-page .wp-block-navigation__responsive-container.is-menu-open {
+  background: var(--surface);
+  color: var(--ink);
+  padding: clamp(1.25rem, 6vw, 2.5rem);
+}
+.yp-page .wp-block-navigation__responsive-container.is-menu-open
+  .wp-block-navigation__responsive-container-content {
+  padding-top: 2.5rem;
+}
+
+/* Links: generous targets and a real type scale, rather than the desktop
+   header's small inline sizing carried over at full screen. */
+.yp-page .wp-block-navigation__responsive-container.is-menu-open
+  .wp-block-navigation-item__content {
+  display: block;
+  padding: 0.55rem 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-decoration: none;
+}
+.yp-page .wp-block-navigation__responsive-container.is-menu-open
+  .wp-block-navigation-item__content:hover {
+  color: var(--primary);
+}
+
+/* Hairlines between items, so a long menu reads as a list. */
+.yp-page .wp-block-navigation__responsive-container.is-menu-open
+  .wp-block-navigation__container > .wp-block-navigation-item + .wp-block-navigation-item {
+  border-top: 1px solid var(--line);
+}
+
+.yp-page .wp-block-navigation__responsive-container-close {
+  top: clamp(1rem, 5vw, 2rem);
+  right: clamp(1rem, 5vw, 2rem);
+  color: var(--ink);
+}
+
+/* Preview placeholders for the dynamic blocks. */
+.yp-page .yp-ph-brand { margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+/* The logo, in the canvas (.yp-ph-logo) and on the live site
+   (.wp-block-site-logo). Capped by height so a wide wordmark and a square mark
+   both sit correctly on the header's baseline. */
+.yp-page .yp-ph-logo { margin: 0; display: flex; align-items: center; }
+.yp-page .yp-ph-logo img,
+.yp-page .wp-block-site-logo img {
+  display: block;
+  max-height: 46px;
+  width: auto;
+  max-width: 200px;
+  object-fit: contain;
+}
+.yp-page .wp-block-site-logo { margin: 0; }
+
+/* ── Mobile navigation: a slide-in sidebar ────────────────────────
+   A SIDEBAR, not a dropdown. Asked for a sidebar, a dropdown was built first;
+   this is the panel that was wanted — right-hand, slides in, dimmed backdrop.
+
+   Collapses at 900px so TABLET gets it too. Core's navigation block collapses
+   at 600px only, so the breakpoint is overridden for the live site further
+   down — otherwise the builder would show a hamburger at 768px and the
+   exported site would not.
+
+   <details> throughout: no JavaScript, same as the FAQ accordion. */
+.yp-page .yp-ph-nav { position: relative; }
+.yp-page .yp-ph-nav__toggle { display: none; }
+.yp-page .yp-ph-nav__scrim { display: none; }
+.yp-page .yp-ph-nav__panel { display: contents; }
+/*
+ * Undoes the browser hiding a closed <details>' contents.
+ *
+ * This is why the desktop menu vanished. A closed <details> has its children
+ * wrapped in a ::details-content pseudo-element carrying
+ * `content-visibility: hidden`, so the links were laid out — display:flex, four
+ * spans — and then skipped at paint. `display: contents` on our own panel
+ * cannot help: the hiding is applied to the slot ABOVE it.
+ *
+ * On desktop the links are not a disclosure, they are the menu, so the hiding
+ * has to go. `display: contents` on the pseudo-element too, or it boxes the
+ * links and breaks the header's flex row. Browsers without ::details-content
+ * ignore this rule and keep working off the panel's own `display: contents`.
+ */
+.yp-page .yp-ph-nav::details-content {
+  content-visibility: visible;
+  display: contents;
+}
+.yp-page .yp-ph-nav__links {
+  display: flex;
+  gap: 1.4rem;
+  font-size: 0.92rem;
+  color: var(--ink-2);
+}
+/*
+ * The menu items are real links now, not <span>s, so they carry a browser's
+ * default anchor styling — blue and underlined — which has to be undone. They
+ * are anchors so the menu can be clicked, focused and reached by keyboard;
+ * spans could do none of that.
+ */
+.yp-page .yp-ph-nav__link {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.yp-page .yp-ph-nav__link:hover { color: var(--ink); }
+
+@media (max-width: 900px) {
+  .yp-page .yp-ph-nav__toggle {
+    display: block;
+    list-style: none;
+    cursor: pointer;
+    padding: 0.35rem;
+    /* Above the panel, so the icon stays reachable as the close affordance. */
+    position: relative;
+    z-index: 61;
+    /* Tapping a <summary> otherwise paints a text-selection box over the icon. */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .yp-page .yp-ph-nav__toggle:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  .yp-page .yp-ph-nav__toggle::-webkit-details-marker { display: none; }
+
+  /* Three drawn bars — inherits colour, no icon font, no asset. */
+  .yp-page .yp-ph-nav__bars,
+  .yp-page .yp-ph-nav__bars::before,
+  .yp-page .yp-ph-nav__bars::after {
+    display: block;
+    width: 24px;
+    height: 2px;
+    background: var(--ink);
+    border-radius: 2px;
+  }
+  .yp-page .yp-ph-nav__bars::before,
+  .yp-page .yp-ph-nav__bars::after { content: ""; position: relative; }
+  .yp-page .yp-ph-nav__bars::before { top: -7px; }
+  .yp-page .yp-ph-nav__bars::after { top: 5px; }
+
+  /*
+   * Open, the three bars fold into an X. The middle bar is the one that
+   * disappears; the outer two rotate about their own centres, which is why they
+   * need their offsets zeroed first — otherwise they cross off-centre.
+   */
+  .yp-page .yp-ph-nav__bars,
+  .yp-page .yp-ph-nav__bars::before,
+  .yp-page .yp-ph-nav__bars::after {
+    transition: transform 200ms ease, opacity 140ms ease, top 200ms ease;
+  }
+  .yp-page .yp-ph-nav[open] .yp-ph-nav__bars { background: transparent; }
+  .yp-page .yp-ph-nav[open] .yp-ph-nav__bars::before {
+    top: 0;
+    transform: translateY(2px) rotate(45deg);
+  }
+  .yp-page .yp-ph-nav[open] .yp-ph-nav__bars::after {
+    top: 0;
+    transform: translateY(0) rotate(-45deg);
+  }
+
+  /*
+   * The panel is always rendered and parked off-screen, rather than being
+   * hidden — a display:none element cannot animate, and a sidebar that appears
+   * instantly reads as a glitch. Overrides the UA rule that hides a closed
+   * <details>' children.
+   */
+  .yp-page .yp-ph-nav__panel {
+    display: block;
+    /*
+     * FIXED, not absolute.
+     *
+     * Absolute made it a child of the header, so it hung down from the nav into
+     * the page — a floating box, not a sidebar. A drawer has to be pinned to
+     * the edge of the screen, which is what fixed does.
+     *
+     * In the preview the iframe has no real viewport (it is sized to the whole
+     * page), so this drawer is as tall as the page rather than as tall as a
+     * phone screen. That is a preview artefact, not the exported site: there,
+     * core's overlay is pinned to the real viewport.
+     */
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    width: min(320px, 84vw);
+    overflow-y: auto;
+    padding: 4.25rem 0 1rem;
+    background: var(--surface);
+    border-left: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    box-shadow: -18px 0 40px -20px rgba(15, 20, 35, 0.3);
+    transform: translateX(100%);
+    /*
+     * Hidden while parked, so the four links are not reachable by Tab from a
+     * drawer nobody has opened. Transitioned rather than switched: visibility
+     * holds `visible` for the whole outgoing run, so the panel is still painted
+     * as it slides away, and flips to visible immediately on the way in.
+     */
+    visibility: hidden;
+    transition:
+      transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 260ms;
+  }
+  .yp-page .yp-ph-nav[open] .yp-ph-nav__panel {
+    transform: translateX(0);
+    visibility: visible;
+  }
+
+  .yp-page .yp-ph-nav__scrim {
+    display: block;
+    /* Covers everything, for the same reason the panel is fixed. */
+    position: fixed;
+    inset: 0;
+    z-index: 59;
+    background: rgba(12, 16, 24, 0.42);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 260ms ease;
+  }
+  .yp-page .yp-ph-nav[open] .yp-ph-nav__scrim { opacity: 1; }
+
+  .yp-page .yp-ph-nav__links {
+    flex-direction: column;
+    gap: 0;
+  }
+  .yp-page .yp-ph-nav__link {
+    display: block;
+    padding: 0.85rem 1.3rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .yp-page .yp-ph-nav__link + .yp-ph-nav__link { border-top: 1px solid var(--line); }
+}
+
+/* ── The same breakpoint and sidebar shape for core's real overlay ──
+   Core collapses its navigation at 600px and opens a full-screen overlay.
+   These rules move the collapse to 900px so tablet matches the builder, and
+   reshape the overlay into the same right-hand sidebar. */
+@media (min-width: 601px) and (max-width: 900px) {
+  .yp-page .wp-block-navigation__responsive-container-open:not(.always-shown) {
+    display: flex;
+  }
+  .yp-page .wp-block-navigation__responsive-container:not(.hidden-by-default):not(.is-menu-open) {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .yp-page .wp-block-navigation__responsive-container.is-menu-open {
+    /* Right-hand panel rather than the full screen. */
+    left: auto;
+    right: 0;
+    width: min(320px, 84vw);
+    border-left: 1px solid var(--line);
+    box-shadow: -18px 0 44px -20px rgba(15, 20, 35, 0.34);
+  }
+}
+
+/* Brand and nav share one look across every header/footer variant. */
+.yp-page .yp-hdr__brand, .yp-page .yp-hdrc__brand, .yp-page .yp-hdrb__brand,
+.yp-page .yp-hdrt__brand, .yp-page .yp-hdrm__brand, .yp-page .yp-ftr__brand,
+.yp-page .yp-ftrc__brand, .yp-page .yp-ftrk__brand, .yp-page .yp-ftrx__brand,
+.yp-page .yp-ftrs__brand {
+  margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em;
+}
+.yp-page .yp-hdr__brand a, .yp-page .yp-hdrc__brand a, .yp-page .yp-hdrb__brand a,
+.yp-page .yp-hdrt__brand a, .yp-page .yp-hdrm__brand a { text-decoration: none; color: inherit; }
+
+.yp-page .yp-hdr__nav, .yp-page .yp-hdrc__nav, .yp-page .yp-hdrb__nav,
+.yp-page .yp-hdrt__nav, .yp-page .yp-ftrs__nav { font-size: 0.92rem; }
+
+/* ---- Headers ---- */
+.yp-page .yp-hdr, .yp-page .yp-hdrc, .yp-page .yp-hdrb, .yp-page .yp-hdrm {
+  border-bottom: 1px solid var(--line); background: var(--surface);
+}
+.yp-page .yp-hdr__inner, .yp-page .yp-hdrb__inner, .yp-page .yp-hdrm__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: 1.05rem var(--space-gutter);
+  display: flex; align-items: center; gap: 1.5rem;
+}
+.yp-page .yp-hdr__inner { justify-content: space-between; }
+.yp-page .yp-hdrb__inner { justify-content: space-between; }
+/* Nav sits between brand and button, pushed off the brand. */
+.yp-page .yp-hdrb__nav { margin-left: auto; }
+.yp-page .yp-hdrb__actions { flex: none; }
+.yp-page .yp-hdrb__actions .wp-block-button__link { padding: 0.6rem 1.15rem; font-size: 0.9rem; }
+
+.yp-page .yp-hdrc__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: 1.5rem var(--space-gutter) 1.1rem;
+  display: flex; flex-direction: column; align-items: center; gap: 0.9rem;
+}
+.yp-page .yp-hdrc__brand { font-size: 1.5rem; }
+
+.yp-page .yp-hdrt { border-bottom: 1px solid var(--line); background: var(--surface); }
+.yp-page .yp-hdrt__bar { background: var(--ink); }
+.yp-page .yp-hdrt__bar-inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: 0.5rem var(--space-gutter);
+  display: flex; align-items: center; justify-content: flex-end; gap: 1.4rem; flex-wrap: wrap;
+}
+.yp-page .yp-hdrt__phone { margin: 0; }
+.yp-page .yp-hdrt__phone a {
+  color: #fff; font-size: 0.88rem; font-weight: 700; text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+.yp-page .yp-hdrt__note {
+  margin: 0; color: rgba(255,255,255,0.62); font-size: 0.82rem;
+  font-family: var(--font-mono); letter-spacing: 0.02em;
+}
+.yp-page .yp-hdrt__main {
+  max-width: var(--container); margin: 0 auto;
+  padding: 1.05rem var(--space-gutter);
+  display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;
+}
+
+/* ---- Footers ─ premium treatment ─────────────────────────────────────
+
+   Redesigned. The first pass used a light grey panel with tight padding and
+   a broken column grid, which read as an afterthought — and a footer is the
+   last thing a visitor sees, so it sets the impression they leave with.
+
+   Three changes carry most of it: a deep ink ground instead of light grey, a
+   hairline brand accent along the top edge, and roughly double the vertical
+   room. Type is quieter and more spaced; links reveal on hover rather than
+   shouting by default.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.yp-page .yp-ftr,
+.yp-page .yp-ftrc,
+.yp-page .yp-ftrk,
+.yp-page .yp-ftrs,
+.yp-page .yp-ftrx {
+  position: relative;
+  background: #0b0f16;
+  color: rgba(255, 255, 255, 0.72);
+}
+/* A 2px brand rule along the top edge — the one flash of colour, and what
+   stops a dark footer reading as a dead zone. */
+.yp-page .yp-ftr::before,
+.yp-page .yp-ftrc::before,
+.yp-page .yp-ftrk::before,
+.yp-page .yp-ftrs::before,
+.yp-page .yp-ftrx::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(
+    to right,
+    var(--primary) 0%,
+    color-mix(in oklch, var(--primary) 45%, transparent) 38%,
+    transparent 78%
+  );
+}
+
+/* Brand sits larger and in white across every footer. */
+.yp-page .yp-ftr__brand,
+.yp-page .yp-ftrc__brand,
+.yp-page .yp-ftrk__brand,
+.yp-page .yp-ftrx__brand,
+.yp-page .yp-ftrs__brand {
+  margin: 0;
+  color: #fff;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+.yp-page .yp-ftr__brand a,
+.yp-page .yp-ftrc__brand a,
+.yp-page .yp-ftrk__brand a,
+.yp-page .yp-ftrx__brand a,
+.yp-page .yp-ftrs__brand a { color: inherit; text-decoration: none; }
+
+/* Column labels: small, mono, tracked — quiet enough that the links lead. */
+.yp-page .yp-ftrc__col-title,
+.yp-page .yp-ftrk__label,
+.yp-page .yp-ftrk__hours-title {
+  margin: 0 0 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: color-mix(in oklch, var(--primary) 70%, #fff);
+}
+
+/* Copyright. The © and the year live in the CONTENT now (as "© {{year}} Name"),
+   not in a ::before — CSS has no access to the date. */
+.yp-page .yp-ftr__copy,
+.yp-page .yp-ftrc__copy,
+.yp-page .yp-ftrk__copy,
+.yp-page .yp-ftrx__copy,
+.yp-page .yp-ftrs__copy {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.42);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 1. Minimal ---- */
+.yp-page .yp-ftr__inner {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 3.2rem var(--space-gutter) 2.4rem;
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 1.4rem; flex-wrap: wrap;
+}
+.yp-page .yp-ftr__note {
+  margin: 0; font-size: 0.94rem; color: rgba(255, 255, 255, 0.6); max-width: 40ch;
+}
+
+/* ---- 2. Link columns ---- */
+.yp-page .yp-ftrc__inner,
+.yp-page .yp-ftrk__inner {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 4.4rem var(--space-gutter) 2rem;
+}
+/*
+ * EXPLICIT tracks, not `1.4fr repeat(auto-fit, …)`.
+ *
+ * That mixture silently collapsed to a single column: a percentage inside
+ * minmax() makes an auto-repeat's repetition count indeterminate, so auto-fit
+ * resolved to one track and all three link columns stacked. The same
+ * min(100%, …) idiom is fine where it is the ONLY track, which is why the
+ * other grids in this file are unaffected.
+ */
+.yp-page .yp-ftrc__grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  gap: 2.6rem;
+  padding-bottom: 3rem;
+}
+.yp-page .yp-ftrc__brandcol { display: grid; gap: 0.9rem; align-content: start; }
+.yp-page .yp-ftrc__blurb {
+  margin: 0; max-width: 30ch; font-size: 0.94rem; line-height: 1.65;
+  color: rgba(255, 255, 255, 0.58);
+}
+.yp-page .yp-ftrc__col { display: grid; gap: 0; align-content: start; }
+.yp-page .yp-ftrc__links { display: grid; gap: 0.7rem; }
+.yp-page .yp-ftrc__link { margin: 0; font-size: 0.94rem; color: rgba(255, 255, 255, 0.72); }
+.yp-page .yp-ftrc__link a {
+  color: inherit; text-decoration: none;
+  transition: color 140ms ease;
+}
+.yp-page .yp-ftrc__link a:hover { color: #fff; }
+
+/* Bottom bar, separated by a hairline. */
+.yp-page .yp-ftrc__copy,
+.yp-page .yp-ftrk__copy {
+  padding-top: 1.8rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ---- 3. Contact + hours ---- */
+.yp-page .yp-ftrk__grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 2.6rem;
+  padding-bottom: 3rem;
+}
+.yp-page .yp-ftrk__brandcol { align-content: start; }
+.yp-page .yp-ftrk__details { display: grid; gap: 1.3rem; align-content: start; }
+.yp-page .yp-ftrk__row { display: grid; gap: 0.25rem; }
+.yp-page .yp-ftrk__label { margin: 0; }
+.yp-page .yp-ftrk__value { margin: 0; font-size: 0.98rem; font-weight: 600; color: #fff; }
+.yp-page .yp-ftrk__value a {
+  color: inherit; text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+  transition: border-color 140ms ease;
+}
+.yp-page .yp-ftrk__value a:hover { border-bottom-color: #fff; }
+.yp-page .yp-ftrk__hours { align-content: start; }
+.yp-page .yp-ftrk__day {
+  display: flex; justify-content: space-between; gap: 1rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.yp-page .yp-ftrk__day:first-of-type { border-top: none; }
+.yp-page .yp-ftrk__day-name { margin: 0; font-size: 0.92rem; color: rgba(255, 255, 255, 0.6); }
+.yp-page .yp-ftrk__day-time {
+  margin: 0; font-size: 0.92rem; font-weight: 600; color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 4. Final ask ---- */
+.yp-page .yp-ftrx__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: 4.6rem var(--space-gutter) 2rem;
+}
+.yp-page .yp-ftrx__cta {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 1rem; padding-bottom: 3.4rem;
+}
+.yp-page .yp-ftrx__heading {
+  margin: 0; color: #fff; font-size: clamp(1.9rem, 3.2vw, 2.7rem);
+  font-weight: 800; letter-spacing: -0.03em; text-wrap: balance;
+}
+.yp-page .yp-ftrx__body {
+  margin: 0; color: rgba(255, 255, 255, 0.62); font-size: 1.05rem; max-width: 44ch;
+}
+.yp-page .yp-ftrx__actions { display: flex; gap: 0.8rem; margin-top: 0.5rem; }
+.yp-page .yp-ftrx__base {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 1rem; padding-top: 1.8rem; flex-wrap: wrap;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ---- 5. Social ---- */
+.yp-page .yp-ftrs__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: 4rem var(--space-gutter) 2.2rem;
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1.15rem;
+}
+.yp-page .yp-ftrs__brand { font-size: 1.55rem; }
+.yp-page .yp-ftrs__blurb {
+  margin: 0; font-size: 0.98rem; color: rgba(255, 255, 255, 0.6); max-width: 42ch;
+}
+.yp-page .yp-ftrs__nav { color: rgba(255, 255, 255, 0.78); }
+.yp-page .yp-ftrs__social { margin: 0.3rem 0; }
+.yp-page .yp-ftrs__copy {
+  margin-top: 0.8rem; padding-top: 1.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  width: 100%;
+}
+
+/* Nav and social placeholders read light inside a dark footer. */
+.yp-page .yp-ftrs__inner .yp-ph-nav,
+.yp-page .yp-ftrs__inner .yp-ph-social { color: rgba(255, 255, 255, 0.7); }
+.yp-page .yp-ftrs__inner .yp-ph-brand { color: #fff; }
+.yp-page .yp-ftr__inner .yp-ph-brand,
+.yp-page .yp-ftrc__inner .yp-ph-brand,
+.yp-page .yp-ftrk__inner .yp-ph-brand,
+.yp-page .yp-ftrx__inner .yp-ph-brand { color: #fff; }
+
+@media (max-width: 880px) {
+  /* Brand takes the full first row, link columns share the second. */
+  .yp-page .yp-ftrc__grid { grid-template-columns: 1fr 1fr; }
+  .yp-page .yp-ftrc__brandcol { grid-column: 1 / -1; }
+  .yp-page .yp-ftrk__grid { grid-template-columns: 1fr 1fr; }
+  .yp-page .yp-ftrk__brandcol { grid-column: 1 / -1; }
+  .yp-page .yp-hdrb__inner, .yp-page .yp-hdrt__main { flex-wrap: wrap; }
+  .yp-page .yp-hdrb__nav { margin-left: 0; }
+}
+@media (max-width: 560px) {
+  .yp-page .yp-ftrc__grid, .yp-page .yp-ftrk__grid { grid-template-columns: 1fr; }
+  .yp-page .yp-hdrt__bar-inner { justify-content: center; }
+}
+
+/* ============================================================
+   The services family — 5 layouts, one job
+
+   All five answer "what do you sell?", which FeaturesGrid already
+   did as bordered text cards. They exist because the right answer
+   depends on the business: a florist wants photographs, a garage
+   wants a price list, a clinic with twenty treatments wants an
+   index that collapses.
+
+   Self-contained on purpose: the box-sizing and margin resets are
+   repeated here rather than added to the shared selector lists
+   above, so a section family can be added or removed in one block
+   without editing four multi-line selectors and mis-splitting one.
+   ============================================================ */
+
+.yp-page .yp-svcs, .yp-page .yp-svcf, .yp-page .yp-svce,
+.yp-page .yp-svcp, .yp-page .yp-svca,
+.yp-page .yp-svcs *, .yp-page .yp-svcf *, .yp-page .yp-svce *,
+.yp-page .yp-svcp *, .yp-page .yp-svca * {
+  box-sizing: border-box;
+  margin-block-start: 0;
+  margin-block-end: 0;
+}
+
+.yp-page .yp-svcs__heading, .yp-page .yp-svcf__heading,
+.yp-page .yp-svce__heading, .yp-page .yp-svcp__heading,
+.yp-page .yp-svca__heading {
+  margin: 0;
+  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.yp-page .yp-svcs__intro, .yp-page .yp-svce__intro,
+.yp-page .yp-svcp__intro, .yp-page .yp-svca__intro {
+  margin: 0.7rem 0 0;
+  max-width: 58ch;
+  font-size: 1.02rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+/* ── ServicesShowcase — photo cards ─────────────────────────────
+   The photograph is the object, not something inside a box: no card
+   border, no card background. A border here would frame the image
+   twice and read as a widget rather than editorial. */
+
+.yp-page .yp-svcs__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: var(--space-gutter);
+  margin-top: 2.4rem;
+}
+
+.yp-page .yp-svcs__card { display: flex; flex-direction: column; }
+
+.yp-page .yp-svcs__frame {
+  margin: 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.yp-page .yp-svcs__frame img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  /* Slow, small — a hover that announces itself cheapens the photo. */
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.yp-page .yp-svcs__card:hover .yp-svcs__frame img { transform: scale(1.035); }
+
+.yp-page .yp-svcs__copy { padding: 1.1rem 0 0; }
+
+.yp-page .yp-svcs__title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.yp-page .yp-svcs__body {
+  margin: 0.5rem 0 0;
+  font-size: 0.97rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+/* The aside is a commitment (lead time, from-price), so it is set apart
+   from the description rather than running on from it. */
+.yp-page .yp-svcs__meta {
+  margin: 0.85rem 0 0;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ── ServicesFeatured — one large, the rest listed ──────────────
+   Deliberately unequal. Most businesses have one service that pays
+   the bills; equal cards hide that and make the visitor rank them. */
+
+.yp-page .yp-svcf__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: var(--space-gap);
+  margin-top: 2.4rem;
+  align-items: start;
+}
+
+/* A grid item holding an image needs this or the photo's intrinsic width
+   can push the track wider than its own minmax allows. */
+.yp-page .yp-svcf__main { min-width: 0; }
+
+.yp-page .yp-svcf__frame {
+  margin: 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.yp-page .yp-svcf__frame img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+
+.yp-page .yp-svcf__maincopy { padding-top: 1.4rem; }
+
+.yp-page .yp-svcf__meta {
+  margin: 0 0 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+.yp-page .yp-svcf__title {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+}
+.yp-page .yp-svcf__body {
+  margin: 0.8rem 0 0;
+  max-width: 46ch;
+  font-size: 1.02rem;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+.yp-page .yp-svcf__actions { margin-top: 1.4rem; }
+
+/* Hairlines, not boxes: the featured service already carries the weight,
+   so the alternatives should read as a list you can scan past. */
+.yp-page .yp-svcf__others { border-top: 1px solid var(--line); }
+
+.yp-page .yp-svcf__other {
+  padding: 1.15rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.yp-page .yp-svcf__other-title {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.yp-page .yp-svcf__other-body {
+  margin: 0.25rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* ── ServicesEditorial — numbered rows ──────────────────────────
+   No images at all, which is the point: a generated site rarely has
+   good photography, and this layout never asks for any. */
+
+.yp-page .yp-svce__list {
+  counter-reset: svce;
+  margin-top: 2.6rem;
+  border-top: 1px solid var(--line);
+}
+
+/* Counter rather than numbers in the content: deleting a row in
+   wp-admin renumbers the rest instead of leaving 01, 03, 04. */
+.yp-page .yp-svce__row {
+  counter-increment: svce;
+  display: grid;
+  grid-template-columns: 3.25rem minmax(0, 0.85fr) minmax(0, 1.25fr);
+  column-gap: var(--space-gutter);
+  align-items: start;
+  padding: 2rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.yp-page .yp-svce__row::before {
+  content: counter(svce, decimal-leading-zero);
+  grid-column: 1;
+  grid-row: 1;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding-top: 0.35em;
+}
+
+.yp-page .yp-svce__title {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+  font-size: clamp(1.25rem, 1.9vw, 1.6rem);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  transition: color 180ms ease;
+}
+.yp-page .yp-svce__row:hover .yp-svce__title { color: var(--primary); }
+
+.yp-page .yp-svce__meta {
+  grid-column: 2;
+  grid-row: 2;
+  margin: 0.6rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.yp-page .yp-svce__body {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+
+/* ── ServicesPricelist — menu with dotted leaders ───────────────
+   What salons, garages and clinics actually need and almost never
+   get: name left, price right, a rule joining them. */
+
+.yp-page .yp-svcp__groups {
+  display: grid;
+  gap: var(--space-gap);
+  margin-top: 2.6rem;
+}
+
+/* Price lists get printed and pinned up, so a group should not split
+   across two sheets. */
+.yp-page .yp-svcp__group { break-inside: avoid; }
+
+.yp-page .yp-svcp__group-title {
+  margin: 0 0 0.4rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 2px solid var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Three columns with the middle one generated, so the leader is drawn
+   rather than typed. A row of full stops in the content would survive
+   an editor save badly and never reflow correctly. */
+.yp-page .yp-svcp__row {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(1.5rem, 1fr) auto;
+  column-gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.95rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.yp-page .yp-svcp__row::before {
+  content: "";
+  grid-column: 2;
+  grid-row: 1;
+  border-bottom: 1px dotted var(--line);
+}
+
+/* The last row's hairline would sit just above the next group's heavy top
+   rule, reading as a double line. */
+.yp-page .yp-svcp__rows > .yp-svcp__row:last-child { border-bottom: none; }
+
+.yp-page .yp-svcp__left { grid-column: 1; grid-row: 1; }
+.yp-page .yp-svcp__name {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 600;
+}
+.yp-page .yp-svcp__note {
+  margin: 0.2rem 0 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* Tabular figures so the column of prices aligns digit-for-digit — the
+   single detail that separates a real price list from a table of text. */
+.yp-page .yp-svcp__price {
+  grid-column: 3;
+  grid-row: 1;
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.yp-page .yp-svcp__footnote {
+  margin: 1.8rem 0 0;
+  max-width: 60ch;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* ── ServicesAccordion — expandable rows ────────────────────────
+   Native <details>: no JavaScript reaches the exported site and
+   keyboard access comes free. */
+
+.yp-page .yp-svca__list {
+  margin-top: 2.4rem;
+  border-top: 1px solid var(--line);
+}
+
+.yp-page .yp-svca__item {
+  border-bottom: 1px solid var(--line);
+  padding: 0;
+}
+
+.yp-page .yp-svca__item summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.5rem;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 0;
+  cursor: pointer;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  list-style: none;
+  transition: color 180ms ease;
+}
+.yp-page .yp-svca__item summary::-webkit-details-marker { display: none; }
+.yp-page .yp-svca__item summary:hover { color: var(--primary); }
+
+/* A drawn +/− rather than a glyph: it inherits colour, stays crisp at any
+   size, and is unaffected by which fonts a client installs later. */
+.yp-page .yp-svca__item summary::after {
+  content: "";
+  width: 0.85rem;
+  height: 0.85rem;
+  justify-self: end;
+  background:
+    linear-gradient(currentColor, currentColor) center / 100% 1.5px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 1.5px 100% no-repeat;
+  opacity: 0.55;
+  transition: transform 220ms ease, opacity 180ms ease;
+}
+/* Dropping the vertical stroke turns + into −. An earlier version also
+   rotated 90deg, which rotated the surviving horizontal stroke upright and
+   showed a vertical bar when open — the opposite of the intent. */
+.yp-page .yp-svca__item[open] summary::after {
+  background: linear-gradient(currentColor, currentColor) center / 100% 1.5px no-repeat;
+  opacity: 1;
+}
+.yp-page .yp-svca__item[open] summary { color: var(--primary); }
+
+.yp-page .yp-svca__item p {
+  margin: 0;
+  padding: 0 3rem 1.5rem 0;
+  max-width: 68ch;
+  font-size: 0.99rem;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+
+@media (max-width: 880px) {
+  .yp-page .yp-svcf__grid { grid-template-columns: 1fr; }
+  /* The index moves above the title rather than beside it — a 3.25rem
+     gutter is a tenth of a phone's width spent on a number. */
+  .yp-page .yp-svce__row {
+    grid-template-columns: 1fr;
+    padding: 1.6rem 0;
+  }
+  .yp-page .yp-svce__row::before { grid-column: 1; grid-row: 1; padding-top: 0; }
+  .yp-page .yp-svce__title { grid-column: 1; grid-row: 2; margin-top: 0.35rem; }
+  .yp-page .yp-svce__body { grid-column: 1; grid-row: 3; margin-top: 0.6rem; }
+  .yp-page .yp-svce__meta { grid-column: 1; grid-row: 4; }
+  .yp-page .yp-svca__item p { padding-right: 0; }
+}
+
+@media (max-width: 560px) {
+  /* Leader dropped rather than squeezed: below this width the name wraps
+     to two lines and a rule joining a wrapped name to a price misleads
+     about which price belongs to what. */
+  .yp-page .yp-svcp__row { grid-template-columns: minmax(0, 1fr) auto; column-gap: 1rem; }
+  .yp-page .yp-svcp__row::before { display: none; }
+}
+
+/* ── Embedded form ── */
+.yp-page .yp-embed {
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+}
+.yp-page .yp-embed__heading {
+  margin: 0 0 0.6rem;
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  line-height: 1.1; letter-spacing: -0.02em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-embed__body {
+  margin: 0 0 1.8rem; max-width: 46ch; color: var(--ink-2); font-size: 1.02rem;
+}
+/* The script renders into this. Reserving a minimum height keeps the page from
+   jumping as the form arrives — the same reason images carry dimensions. */
+.yp-page .yp-embed__mount { min-height: 12rem; }
+
+/* ── Its stand-in in the builder canvas ──
+   The canvas runs no JavaScript, so the real form cannot appear. It draws the
+   client's ACTUAL questions instead of grey bars: a preview that shows the
+   labels they wrote is the difference between "this is your form" and "a
+   section failed to load". */
+/* Now only a wrapper.
+   Everything inside carries the real vibewp-form classes and is styled by the
+   rules below, so the dashed outline is all this contributes — the canvas
+   saying "preview".
+
+   It deliberately styles NOTHING within itself: the old skeleton rules here
+   targeted bare `label`, `span` and `i`, which then matched the real form's
+   own elements and, for one, made every label a column so the required
+   asterisk fell to its own line. A preview that restyles the thing it is
+   previewing is not a preview. */
+.yp-page .yp-embed__ph {
+  display: block;
+  /* Padding of its own, so the form inside never touches the dashed edge — and
+     box-sizing, or that padding pushes the content out through the border. */
+  padding: 1rem;
+  box-sizing: border-box;
+  max-width: calc(var(--vwf-max, 34rem) + 2rem);
+  border: 1px dashed var(--line);
+  border-radius: var(--vwf-radius, 12px);
+}
+/* The form fills the wrapper rather than keeping its own narrower cap, which
+   left the grid overflowing the dashed box on one side and short on the other. */
+.yp-page .yp-embed__ph > .vibewp-form { max-width: none; width: 100%; }
+
+/* The stand-in shown when no form is attached — bars, not fields, because
+   there are no questions to show yet. Scoped to its own class so it cannot
+   reach a real form. */
+.yp-page .yp-embed__skeleton label { display: flex; flex-direction: column; gap: 0.35rem; }
+.yp-page .yp-embed__skeleton span {
+  display: block; height: 0.62rem; width: 6.5rem; border-radius: 4px; background: var(--line);
+}
+.yp-page .yp-embed__skeleton i {
+  display: block; height: 2.6rem; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--surface);
+}
+.yp-page .yp-embed__skeleton i.tall { height: 6rem; }
+.yp-page .yp-embed__skeleton b {
+  grid-column: span 12; justify-self: start;
+  padding: 0.7rem 1.4rem; border-radius: 9px;
+  background: var(--primary); color: #fafafa; font-size: 0.9rem;
+}
+.yp-page .yp-embed__skeleton em {
+  grid-column: span 12; font-style: normal; font-size: 0.78rem; color: var(--muted);
+}
+
+/* The caption, in either form the preview takes. <em> is used for grouping,
+   not emphasis, so it must not inherit italics. */
+.yp-page .yp-embed__ph em {
+  display: block;
+  margin-top: 0.6rem;
+  font-style: normal;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* The one clickable thing in the preview, and it looks it. */
+.yp-page .yp-embed__try {
+  display: inline-block;
+  margin-top: 0.6rem;
+  font-size: 0.8rem;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ── The embedded form, styled by the THEME ──
+   embed.js injects these same rules when it renders, but the export writes a
+   working <form> that must look right BEFORE any script loads — and if the
+   script never loads, must look right permanently. Without them the exported
+   page showed browser-default inputs with the labels inline, and the honeypot,
+   which is only hidden by CSS, was visible to every visitor.
+
+   embed.js injects its copy at runtime, after this file, so its custom
+   properties still win once it takes over. */
+.yp-page .vibewp-form {
+  --vwf-gap: 14px;
+  --vwf-radius: 10px;
+  --vwf-border: var(--line);
+  --vwf-accent: var(--primary);
+  --vwf-accent-text: #fafafa;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--vwf-gap);
+  max-width: var(--vwf-max, 34rem);
+  background: var(--vwf-bg, transparent);
+  padding: var(--vwf-pad, 0);
+  border-radius: var(--vwf-radius);
+  box-sizing: border-box;
+}
+.yp-page .vibewp-form * { box-sizing: border-box; }
+.yp-page .vibewp-form__field {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.yp-page .vibewp-form__label {
+  font-size: var(--vwf-label-size, 0.85rem);
+  font-weight: var(--vwf-label-weight, 600);
+  color: var(--vwf-label, var(--ink));
+}
+.yp-page .vibewp-form__req { color: var(--vwf-accent); margin-left: 2px; }
+.yp-page .vibewp-form__control {
+  width: 100%;
+  font: inherit;
+  font-size: var(--vwf-input-size, 0.95rem);
+  padding: var(--vwf-input-pad, 10px 12px);
+  border: 1px solid var(--vwf-border);
+  border-radius: var(--vwf-radius);
+  background: var(--vwf-input-bg, var(--surface));
+  color: inherit;
+}
+.yp-page .vibewp-form__control:focus {
+  outline: none;
+  border-color: var(--vwf-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vwf-accent) 20%, transparent);
+}
+.yp-page .vibewp-form textarea.vibewp-form__control {
+  resize: vertical; min-height: var(--vwf-textarea-height, 120px);
+}
+.yp-page .vibewp-form__control::placeholder {
+  font-size: var(--vwf-ph-size, inherit);
+  color: var(--vwf-ph-color, var(--muted));
+  opacity: 1;
+}
+/*
+ * The honeypot. Off-screen, NEVER display:none — bots increasingly skip the
+ * obvious tell. Without this rule it is a visible extra field on the live page,
+ * which is how it appeared on the first export.
+ */
+.yp-page .vibewp-form__hp {
+  position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden;
+}
+.yp-page .vibewp-form__submit {
+  grid-column: span 12;
+  justify-self: var(--vwf-btn-justify, start);
+  font: inherit;
+  font-size: var(--vwf-btn-size, 0.95rem);
+  font-weight: 600;
+  cursor: pointer;
+  padding: var(--vwf-btn-pad, 11px 22px);
+  border: 0;
+  border-radius: var(--vwf-radius);
+  background: var(--vwf-accent);
+  color: var(--vwf-accent-text);
+}
+.yp-page .vibewp-form__status { grid-column: span 12; margin: 0; font-size: 0.9rem; }
+.yp-page .vibewp-form__status[data-state="error"] { color: #b3261e; }
+@media (max-width: 560px) {
+  .yp-page .vibewp-form__field { grid-column: span 12 !important; }
+}
+
+/* ══ Form sections ══
+   Five presentations of the same embedded form. Each styles only its own
+   frame — the form inside carries the vibewp-form classes and is styled once,
+   above, so a change to the form's look reaches all five. */
+
+/* There is no global box-sizing reset — each family declares its own, because
+   the host page's is not ours to assume. Without it `width: 100%` plus a
+   gutter measures 100% AND the gutter, and the section hangs 64px off the
+   right edge of the page. */
+.yp-page .yp-formx, .yp-page .yp-formx *,
+.yp-page .yp-formc, .yp-page .yp-formc *,
+.yp-page .yp-formd, .yp-page .yp-formd *,
+.yp-page .yp-formp, .yp-page .yp-formp *,
+.yp-page .yp-formb, .yp-page .yp-formb * { box-sizing: border-box; }
+
+/* ── Form with reassurance: copy left, form right ── */
+.yp-page .yp-formx__inner {
+  width: 100%; max-width: var(--container); margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: grid; grid-template-columns: 1fr 1.15fr; gap: clamp(2rem, 5vw, 4.5rem);
+  align-items: start;
+}
+.yp-page .yp-formx__heading {
+  margin: 0 0 0.7rem; font-size: clamp(1.8rem, 3.2vw, 2.6rem);
+  line-height: 1.08; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-formx__body { margin: 0 0 1.6rem; color: var(--ink-2); font-size: 1.04rem; max-width: 40ch; }
+/* Counters rather than bullets: these are answers to doubts, and a numbered
+   run reads as a sequence someone can hold in their head. */
+.yp-page .yp-formx__points { list-style: none; margin: 0; padding: 0; counter-reset: yp-fx; }
+.yp-page .yp-formx__points li {
+  counter-increment: yp-fx; position: relative;
+  padding: 0.7rem 0 0.7rem 2.5rem; border-top: 1px solid var(--line);
+  font-size: 0.95rem; color: var(--ink);
+}
+.yp-page .yp-formx__points li::before {
+  content: counter(yp-fx); position: absolute; left: 0; top: 0.62rem;
+  width: 1.6rem; height: 1.6rem; border-radius: 50%;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary); font-size: 0.78rem; font-weight: 700;
+}
+/* Sticks while the form is filled in, so the reasons to send it stay in view
+   rather than scrolling away above the fields. */
+.yp-page .yp-formx__copy { position: sticky; top: 2rem; min-width: 0; }
+.yp-page .yp-formx__form { min-width: 0; }
+@media (max-width: 880px) {
+  .yp-page .yp-formx__inner { grid-template-columns: 1fr; gap: 2.2rem; }
+  /* Sticky in one column would pin the copy over the fields. */
+  .yp-page .yp-formx__copy { position: static; }
+}
+
+/* ── Form on a card, over a tinted band ── */
+.yp-page .yp-formc {
+  background: var(--surface-2);
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+}
+.yp-page .yp-formc__inner { max-width: 40rem; margin: 0 auto; text-align: center; }
+.yp-page .yp-formc__eyebrow {
+  margin: 0 0 0.6rem; font-family: var(--font-mono);
+  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.11em;
+  text-transform: uppercase; color: var(--primary);
+}
+.yp-page .yp-formc__heading {
+  margin: 0 0 0.7rem; font-size: clamp(1.9rem, 3.4vw, 2.7rem);
+  line-height: 1.06; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-formc__body { margin: 0 auto 2rem; max-width: 44ch; color: var(--ink-2); font-size: 1.04rem; }
+.yp-page .yp-formc__card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 16px; padding: clamp(1.4rem, 3vw, 2.2rem);
+  box-shadow: 0 24px 50px -32px rgba(14, 20, 32, 0.4);
+  text-align: left;
+}
+
+/* ── Form with contact details beside it ── */
+.yp-page .yp-formd__inner {
+  width: 100%; max-width: var(--container); margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: grid; grid-template-columns: 1.3fr 0.85fr; gap: clamp(2rem, 5vw, 4rem);
+  align-items: start;
+}
+.yp-page .yp-formd__main { min-width: 0; }
+.yp-page .yp-formd__heading {
+  margin: 0 0 0.7rem; font-size: clamp(1.8rem, 3.2vw, 2.5rem);
+  line-height: 1.08; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-formd__body { margin: 0 0 1.8rem; color: var(--ink-2); font-size: 1.04rem; max-width: 46ch; }
+.yp-page .yp-formd__aside {
+  border: 1px solid var(--line); border-radius: 14px;
+  padding: 0.4rem 1.2rem; background: var(--surface);
+}
+.yp-page .yp-formd__rows { display: grid; }
+.yp-page .yp-formd__row {
+  display: grid; gap: 0.15rem; padding: 1rem 0; border-bottom: 1px solid var(--line);
+}
+.yp-page .yp-formd__row:last-child { border-bottom: 0; }
+/* A detail the site has not recorded resolves to nothing, and the row was left
+   showing PHONE with a blank beside it. Two shapes to catch: the bare value,
+   and the empty <a> that phone and email wrap theirs in. */
+.yp-page .yp-formd__row:has(> .yp-formd__value:empty),
+.yp-page .yp-formd__row:has(> .yp-formd__value > a:empty) { display: none; }
+.yp-page .yp-formd__label {
+  font-family: var(--font-mono); font-size: 0.68rem; font-weight: 600;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+}
+/* pre-line so opening hours keep the line per day they were written with. */
+.yp-page .yp-formd__value { font-size: 0.98rem; color: var(--ink); white-space: pre-line; }
+.yp-page .yp-formd__value a { color: var(--primary); text-decoration: none; }
+.yp-page .yp-formd__value a:hover { text-decoration: underline; text-underline-offset: 2px; }
+@media (max-width: 880px) {
+  .yp-page .yp-formd__inner { grid-template-columns: 1fr; gap: 2rem; }
+}
+
+/* ── Form with a photograph ── */
+.yp-page .yp-formp__inner {
+  width: 100%; max-width: var(--container); margin: 0 auto;
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+  display: grid; grid-template-columns: 1fr 1fr; gap: clamp(1.6rem, 4vw, 3.5rem);
+  align-items: stretch;
+}
+.yp-page .yp-formp__media { margin: 0; border-radius: 16px; overflow: hidden; min-height: 22rem; }
+.yp-page .yp-formp__img { margin: 0; height: 100%; }
+.yp-page .yp-formp__img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.yp-page .yp-formp__panel { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.yp-page .yp-formp__heading {
+  margin: 0 0 0.6rem; font-size: clamp(1.7rem, 3vw, 2.4rem);
+  line-height: 1.08; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-formp__body { margin: 0 0 1.6rem; color: var(--ink-2); font-size: 1.02rem; }
+@media (max-width: 880px) {
+  .yp-page .yp-formp__inner { grid-template-columns: 1fr; }
+  /* Form first: a photograph that pushes the fields off the first screen
+     costs enquiries, however good it is. */
+  .yp-page .yp-formp__media { order: 2; min-height: 14rem; }
+  .yp-page .yp-formp__panel { order: 1; }
+}
+
+/* ── Form on a dark band ── */
+.yp-page .yp-formb {
+  background: var(--ink);
+  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
+}
+.yp-page .yp-formb__inner { max-width: 38rem; margin: 0 auto; }
+.yp-page .yp-formb__heading {
+  margin: 0 0 0.6rem; color: #fff;
+  font-size: clamp(1.9rem, 3.4vw, 2.7rem);
+  line-height: 1.06; letter-spacing: -0.025em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-formb__body { margin: 0 0 1.9rem; color: rgba(255, 255, 255, 0.72); font-size: 1.04rem; }
+/*
+ * The FIELDS stay light on the dark ground. Inverting them too gives a dark
+ * box with pale text, which reads as disabled — people do not type into it.
+ * Only the label colour flips.
+ */
+.yp-page .yp-formb__form { --vwf-label: rgba(255, 255, 255, 0.86); --vwf-border: rgba(255, 255, 255, 0.22); }
+/* The preview's own caption and dashed outline: --muted on ink is unreadable,
+   and this is the one section where the placeholder sits on a dark ground. */
+.yp-page .yp-formb__form .yp-embed__ph { border-color: rgba(255, 255, 255, 0.28); }
+.yp-page .yp-formb__form .yp-embed__ph em { color: rgba(255, 255, 255, 0.6); }
+.yp-page .yp-formb__form .vibewp-form__control { background: #fff; color: var(--ink); }
+.yp-page .yp-formb__form .vibewp-form__control::placeholder { color: var(--muted); }

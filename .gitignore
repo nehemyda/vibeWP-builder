@@ -38,3 +38,8 @@ next-env.d.ts
 
 # Backup run log
 backups/backup.log
+
+# Subagent worktrees. Each is its own git repo; committing one embeds a
+# repository inside this one.
+.claude/worktrees/
+app/.claude/worktrees/

@@ -1,7 +1,13 @@
 import { parse } from "node-html-parser";
 import { SECTIONS } from "@/lib/sections";
 import { isOptionField, type SectionDefinition } from "./types";
-import { carryProps, describe, mountsForm } from "./carry-props";
+import {
+  carryProps,
+  describe,
+  mountsForm,
+  visibleStrings,
+  STRUCTURAL_FIELDS,
+} from "./carry-props";
 
 /**
  * The swap gate. Run with `npx tsx lib/sections/verify-carry.ts [keyPrefix]`.
@@ -44,25 +50,45 @@ const fail = (assertion: string, message: string) => {
 
 const textOf = (html: string) => parse(html).textContent;
 
-const ATTRIBUTE_ONLY = new Set([
-  "url",
-  "alt",
-  "href",
-  "variant",
-  "kind",
-  "featured",
-  "id",
-  "formToken",
-]);
 
-function visibleStrings(value: unknown, key?: string): string[] {
-  if (key && ATTRIBUTE_ONLY.has(key)) return [];
-  if (typeof value === "string") return value.trim().length > 3 ? [value.trim()] : [];
-  if (Array.isArray(value)) return value.flatMap((v) => visibleStrings(v, key));
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return Object.entries(value as Props).flatMap(([k, v]) => visibleStrings(v, k));
+/**
+ * A sample made to look like props that have actually lived on a site.
+ *
+ * Samples are clean; stored props are not, and the difference hid a real
+ * defect. searchPhoto() records the credit alongside the file
+ * (lib/images/pexels.ts), and WordPress adds an attachment id and dimensions,
+ * so a hero on a client's site holds six more keys than any sample — none of
+ * which render. The removal test read those as content that had vanished and
+ * threw the photograph away on every hero swap, while all 2,754 sample pairs
+ * passed.
+ */
+function asStored(props: Props): Props {
+  const out: Props = {};
+  for (const [key, value] of Object.entries(props)) {
+    out[key] = decorate(value);
   }
-  return [];
+  return out;
+}
+
+function decorate(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(decorate);
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const record = value as Props;
+    if (typeof record.url === "string") {
+      return {
+        ...record,
+        id: 33,
+        width: 940,
+        height: 650,
+        photographer: "Kate Filatova",
+        photographerUrl: "https://www.pexels.com/@kate-filatova-1861817299",
+      };
+    }
+    const inner: Props = {};
+    for (const [k, v] of Object.entries(record)) inner[k] = decorate(v);
+    return inner;
+  }
+  return value;
 }
 
 /** The target's own sample for anything the swap could not fill. */
@@ -95,7 +121,15 @@ for (const [placement, group] of byPlacement) {
     for (const to of group) {
       pairs += 1;
       const label = `${from.key} → ${to.key}`;
-      const frozen = deepFreeze(structuredClone(from.sample) as Props);
+      /*
+       * The source, shaped the way stored props really are, and a pristine copy
+       * of it. Every assertion below compares against THIS rather than against
+       * `from.sample`: comparing against the clean sample made the decoration
+       * itself look like a mutation, 728 times.
+       */
+      const stored = asStored(structuredClone(from.sample) as Props);
+      const reference = structuredClone(stored);
+      const frozen = deepFreeze(stored);
 
       /* 1. Purity — the client previews with this and the server swaps with it.
        *    If the two calls disagreed, the client would be shown one design and
@@ -110,7 +144,7 @@ for (const [placement, group] of byPlacement) {
         continue;
       }
       if (JSON.stringify(a) !== JSON.stringify(b)) fail("purity", `${label} not deterministic`);
-      if (JSON.stringify(frozen) !== JSON.stringify(from.sample)) {
+      if (JSON.stringify(frozen) !== JSON.stringify(reference)) {
         fail("purity", `${label} mutated its input`);
       }
 
@@ -130,6 +164,14 @@ for (const [placement, group] of byPlacement) {
        *    price list turning into bare headings. */
       const text = textOf(html);
       for (const [field, value] of Object.entries(props)) {
+        /*
+         * A setting's VALUE is a name, not copy. "default" or "airy" is never
+         * meant to appear on the page, so looking for it there reports every
+         * section as having lost content. carry-props' own ghost check exempts
+         * options for the same reason; this is its second copy.
+         */
+        const spec = to.fields[field];
+        if (spec && isOptionField(spec)) continue;
         const strings = visibleStrings(value, field);
         const lost = strings.filter((s) => !text.includes(s));
         if (lost.length) {
@@ -149,7 +191,7 @@ for (const [placement, group] of byPlacement) {
         if (key === "formToken") continue;
         if (!(key in to.fields)) fail("accounting", `${label} carried undeclared ${key}`);
       }
-      for (const [key, value] of Object.entries(from.sample as Props)) {
+      for (const [key, value] of Object.entries(reference)) {
         if (describe(value).kind === "nil") continue;
         const spec = from.fields[key];
         if (spec && isOptionField(spec)) continue;
@@ -201,7 +243,8 @@ for (const [placement, group] of byPlacement) {
        * cards — without a magic number.
        */
       for (const [field, spec] of Object.entries(to.fields)) {
-        if (isOptionField(spec)) continue;
+        // Structural fields are deliberately never carried; see carry-props.
+        if (STRUCTURAL_FIELDS.has(field) || isOptionField(spec)) continue;
         if (describe(padded[field]).kind === "nil") {
           vacuousPadded += 1;
           fail("non-vacuity", `${label} leaves ${field} empty even after padding`);
@@ -248,7 +291,7 @@ for (const [placement, group] of byPlacement) {
        *    the same key, in its token form — this is the phone number that the
        *    naive implementation deleted. */
       for (const field of ["phone", "email", "address", "hours"]) {
-        const mine = (from.sample as Props)[field];
+        const mine = reference[field];
         if (typeof mine !== "string" || !/\{\{[a-z_]+\}\}/.test(mine)) continue;
         if (!(field in to.fields)) continue;
         if (isOptionField(to.fields[field])) continue;
@@ -258,7 +301,7 @@ for (const [placement, group] of byPlacement) {
       }
 
       /* 10. Form continuity — the handle follows the form and nothing else. */
-      const withToken = { ...(from.sample as Props), formToken: "tok_test_1234" };
+      const withToken = { ...reference, formToken: "tok_test_1234" };
       const t = carryProps(from, withToken, to);
       if (mountsForm(from) && mountsForm(to) && t.props.formToken !== "tok_test_1234") {
         fail("form", `${label} dropped the form token between two form sections`);
@@ -273,7 +316,7 @@ for (const [placement, group] of byPlacement) {
       if (from.key === to.key) {
         for (const [field, spec] of Object.entries(to.fields)) {
           if (isOptionField(spec)) continue;
-          const mine = (from.sample as Props)[field];
+          const mine = reference[field];
           if (describe(mine).kind === "nil") continue;
           // Compared by value, not by key order: projection rebuilds each
           // entry from the target's sorted key set, so {label, href} comes

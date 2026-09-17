@@ -5,6 +5,10 @@ import type { SectionDefinition } from "./types";
 export type TestimonialsProps = {
   heading?: string;
   items?: Array<{ quote: string; name: string; role?: string }>;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 const text = (el: HTMLElement | null): string => (el ? el.textContent.trim() : "");
@@ -29,6 +33,27 @@ export const Testimonials: SectionDefinition<TestimonialsProps> = {
         name: { type: "text", label: "Who said it" },
         role: { type: "text", label: "Their role or location" },
       },
+    },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: the heading sits outside
+     * .yp-quotes__grid with no shared ancestor, so toGutenberg wraps them
+     * together in a NEW element (.yp-quotes__inner) — the same fix
+     * content-gallery needed.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The heading and quotes stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the heading and quotes.",
+      choices: ["contained", "full"],
+      default: "contained",
     },
   },
 
@@ -70,10 +95,20 @@ export const Testimonials: SectionDefinition<TestimonialsProps> = {
       })
       .join("");
 
-    return group(
+    const rootClass = [
       "yp-quotes",
-      (p.heading ? heading(p.heading, 2, "yp-quotes__heading") : "") +
-        group("yp-quotes__grid", items),
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(
+      rootClass,
+      group(
+        "yp-quotes__inner",
+        (p.heading ? heading(p.heading, 2, "yp-quotes__heading") : "") +
+          group("yp-quotes__grid", items),
+      ),
       "section",
     );
   },
@@ -81,8 +116,11 @@ export const Testimonials: SectionDefinition<TestimonialsProps> = {
   fromGutenberg(root) {
     const el = root.querySelector(".yp-quotes");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
 
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-quotes__heading")),
       items: el
         .querySelectorAll(".yp-quotes__item")

@@ -2,7 +2,14 @@ import { group, heading, details } from "@/lib/wp/blocks";
 import { text } from "./shared";
 import type { SectionDefinition } from "./types";
 
-export type FaqGroupedProps = { heading?: string; groups?: Array<{ title: string; items?: Array<{ question: string; answer: string }> }> };
+export type FaqGroupedProps = {
+  heading?: string;
+  groups?: Array<{ title: string; items?: Array<{ question: string; answer: string }> }>;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
+};
 
 /**
  * Questions grouped under topic headings.
@@ -20,7 +27,35 @@ export const FaqGrouped: SectionDefinition<FaqGroupedProps> = {
   rootClass: "yp-faqg",
   fields: {
     heading: { type: "text", label: "Section heading", maxChars: 60 },
-    groups: { type: "list", label: "Topics", hint: "Two to four topics", of: { title: { type: "text", label: "Topic" }, items: { type: "text", label: "Questions in it" } } },
+    groups: { type: "list", label: "Topics", hint: "Two to four topics", of: { title: { type: "text", label: "Topic" }, items: {
+          type: "list",
+          label: "Questions in it",
+          of: {
+            question: { type: "text", label: "Question" },
+            answer: { type: "text", label: "Answer" },
+          },
+        } } },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: the heading sits outside
+     * .yp-faqg__groups with no shared ancestor, so toGutenberg wraps them
+     * together in a NEW element (.yp-faqg__inner) — the same fix
+     * content-gallery needed.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The heading and topics stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the heading and topics.",
+      choices: ["contained", "full"],
+      default: "contained",
+    },
   },
   aiPrompt: "Group by the customer's concern — Ordering, Delivery, Weddings, Payment — not by internal department. Two to four topics, three or four questions each. Invent no prices or policies.",
   sample: {
@@ -37,12 +72,26 @@ export const FaqGrouped: SectionDefinition<FaqGroupedProps> = {
         heading(g.title, 3, "yp-faqg__group-title") +
         group("yp-faqg__list", (g.items ?? []).filter((i) => i?.question).map((i) => details(i.question, i.answer ?? "", "yp-faqg__item")).join("")),
       )).join("");
-    return group("yp-faqg", (p.heading ? heading(p.heading, 2, "yp-faqg__heading") : "") + group("yp-faqg__groups", groups), "section");
+    const rootClass = [
+      "yp-faqg",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(
+      rootClass,
+      group("yp-faqg__inner", (p.heading ? heading(p.heading, 2, "yp-faqg__heading") : "") + group("yp-faqg__groups", groups)),
+      "section",
+    );
   },
   fromGutenberg(root) {
     const el = root.querySelector(".yp-faqg");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-faqg__heading")),
       groups: el.querySelectorAll(".yp-faqg__group").map((g) => ({
         title: text(g.querySelector(".yp-faqg__group-title")),

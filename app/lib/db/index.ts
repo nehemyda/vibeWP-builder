@@ -21,7 +21,32 @@ let instance: Db | undefined;
  */
 function getDb(): Db {
   if (!instance) {
-    const client = postgres(process.env.DATABASE_URL ?? "", { prepare: false });
+    /*
+     * `prepare: false` because DATABASE_URL points at Supabase's pooler on
+     * 6543, which runs in TRANSACTION mode: a connection is handed to a
+     * different client between statements, so prepared statements cannot
+     * survive and named ones error.
+     *
+     * `idle_timeout` exists for the other half of that arrangement, and its
+     * absence is a real bug rather than a tuning choice. The pooler drops an
+     * idle client connection on its own schedule; postgres.js defaults to
+     * holding sockets forever, so a long-lived process eventually hands a
+     * query a socket the far end closed minutes ago and the query fails with
+     * nothing useful attached. It presents as "the database is down" while a
+     * fresh script — which opens a new connection — works perfectly, which is
+     * exactly how a dev server that had been up for 22 hours started failing
+     * every query against `sites` while the database sat at 8 of its 60
+     * connections.
+     *
+     * Closing them from this side first means a socket is never older than
+     * the pooler tolerates.
+     */
+    const client = postgres(process.env.DATABASE_URL ?? "", {
+      prepare: false,
+      idle_timeout: 20,
+      max: 10,
+      connect_timeout: 10,
+    });
     instance = drizzle(client, { schema });
   }
   return instance;

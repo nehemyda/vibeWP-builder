@@ -9,6 +9,10 @@ export type FormDetailsProps = {
   email?: string;
   hours?: string;
   formToken?: string;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 const text = (el: HTMLElement | null): string => (el ? el.textContent.trim() : "");
@@ -39,6 +43,26 @@ export const FormDetails: SectionDefinition<FormDetailsProps> = {
     phone: { type: "text", label: "Phone" },
     email: { type: "text", label: "Email" },
     hours: { type: "text", label: "Opening hours" },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Works here for the identical structural reason:
+     * .yp-formd__inner already wraps everything under the root with nothing
+     * else emitted alongside it.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The form and details stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the form and details.",
+      choices: ["contained", "full"],
+      default: "contained",
+    },
   },
 
   aiPrompt:
@@ -83,8 +107,16 @@ export const FormDetails: SectionDefinition<FormDetailsProps> = {
       .filter(Boolean)
       .join("");
 
-    return group(
+    const rootClass = [
       "yp-formd",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return group(
+      rootClass,
       group(
         "yp-formd__inner",
         group("yp-formd__main", left) +
@@ -97,6 +129,7 @@ export const FormDetails: SectionDefinition<FormDetailsProps> = {
   fromGutenberg(root) {
     const el = root.querySelector(".yp-formd");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     const rowValue = (label: string) =>
       el
         .querySelectorAll(".yp-formd__row")
@@ -105,6 +138,8 @@ export const FormDetails: SectionDefinition<FormDetailsProps> = {
         ?.textContent.trim() ?? "";
 
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-formd__heading")),
       body: text(el.querySelector(".yp-formd__body")),
       phone: rowValue("Phone"),

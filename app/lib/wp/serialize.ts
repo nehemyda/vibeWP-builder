@@ -1,4 +1,9 @@
 import { parse } from "node-html-parser";
+import { styleClassesFor, styleFromClasses } from "@/lib/design/section-style";
+import { applyElementStyles, elementStylesFromHtml } from "@/lib/design/element-style";
+import { applyPartVisibility, partVisibilityFromHtml } from "@/lib/design/part-visibility";
+import { applyPartOrder, partOrderFromHtml, PART_ORDER_FIELD } from "@/lib/design/part-order";
+import { applyPartWidth, partWidthFromHtml } from "@/lib/design/part-size";
 import { getSectionByNodeType, SECTIONS } from "@/lib/sections";
 import { esc, escAttr } from "./blocks";
 import { defaultSpan, staticFormMarkup } from "@/lib/forms/static-markup";
@@ -42,12 +47,25 @@ type PageSchema = { schemaVersion?: string; nodes?: SchemaNode[] };
  * which also means an older client can render a schema written by a newer
  * deploy without erroring.
  */
-export function schemaToGutenberg(schema: unknown): string {
+export function schemaToGutenberg(
+  schema: unknown,
+  /**
+   * Stamps each section's outermost element with `data-vibewp-node="<index>"`.
+   *
+   * FOR THE BUILDER CANVAS ONLY, and opt-in so the export path cannot pick it
+   * up by accident — a stray attribute in a client's WordPress content would
+   * outlive us. Nothing else identifies a node in the rendered markup: node
+   * `id`s are assigned only by add_section, so a generated page has none, and
+   * matching on the root class is ambiguous the moment a page holds two
+   * sections of the same design.
+   */
+  opts?: { markNodes?: boolean },
+): string {
   const nodes = (schema as PageSchema)?.nodes;
   if (!Array.isArray(nodes)) return "";
 
   return nodes
-    .map((node) => {
+    .map((node, index) => {
       const section = getSectionByNodeType(node?.type);
       if (!section) return "";
       /*
@@ -57,19 +75,118 @@ export function schemaToGutenberg(schema: unknown): string {
        * Skipped rather than thrown so one mistaken node can't fail an export.
        */
       if (section.placement && section.placement !== "page") return "";
-      return section.toGutenberg(node.props ?? {});
+      let html = section.toGutenberg(node.props ?? {});
+      /*
+       * The section's own style settings, as utility classes on its root.
+       *
+       * Applied here rather than in 62 toGutenberg bodies: a multiplier means
+       * the same thing in every design, so there is nothing per-section to
+       * decide. The class sets a scale token, and every size in the stylesheet
+       * already reads that token with a fallback — so scoping it to one
+       * section needs no per-section CSS either.
+       */
+      const styleClasses = styleClassesFor(node.props);
+      if (styleClasses) html = addClasses(html, styleClasses);
+      // Element overrides target their own class token rather than the root,
+      // so they land at the same specificity as the rule they override.
+      html = applyElementStyles(html, node.props);
+      html = applyPartVisibility(html, node.props);
+      html = applyPartWidth(html, node.props);
+      /*
+       * Last, so it moves blocks that already carry their classes. Ordering
+       * before the class passes would leave their regexes matching markup
+       * that had since been rearranged — same classes, different places.
+       */
+      html = applyPartOrder(html, node.props);
+      return opts?.markNodes ? markElement(html, "data-vibewp-node", String(index)) : html;
     })
     .filter(Boolean)
     .join("\n\n");
 }
 
 /**
+ * Appends classes to the first element's `class` attribute.
+ *
+ * Same reasoning as markElement about which element is first, and the same
+ * assertion in verify.ts covers it. Unlike markElement this DOES reach the
+ * export, deliberately: a style the client chose has to travel with their
+ * content, and a class is the one carrier that survives the WordPress block
+ * editor — `className` is what a static block's save() emits.
+ */
+export function addClasses(html: string, classes: string): string {
+  /*
+   * BOTH the block comment and the element, or the block is invalid.
+   *
+   * core/group's save() rebuilds the element's class from the `className`
+   * attribute in the comment — `wp-block-group ` plus that value. Writing the
+   * utility classes into the HTML alone leaves the two disagreeing, so
+   * WordPress regenerates different markup from what is stored, block
+   * validation fails, and every styled section shows "this block contains
+   * unexpected or invalid content" in wp-admin. One click of Attempt Block
+   * Recovery then strips the styling.
+   *
+   * Which is the failure a class was chosen to avoid in the first place, so
+   * getting it wrong here would have been quietly self-defeating. verify.ts
+   * asserts the two agree for all 62 sections.
+   */
+  let out = html;
+
+  const comment = out.match(/^\s*<!--\s*wp:[a-z0-9/-]+\s+(\{.*?\})\s*-->/);
+  if (comment) {
+    const attrs = comment[1];
+    const patched = /"className"\s*:\s*"([^"]*)"/.test(attrs)
+      ? attrs.replace(/"className"\s*:\s*"([^"]*)"/, (_, had: string) =>
+          `"className":${JSON.stringify(`${had} ${classes}`.trim())}`)
+      : `${attrs.slice(0, -1)}${attrs === "{}" ? "" : ","}"className":${JSON.stringify(classes)}}`;
+    out = out.replace(attrs, patched);
+  }
+
+  const at = out.search(/<[a-zA-Z][\w-]*/);
+  if (at < 0) return out;
+  const tagEnd = out.indexOf(">", at);
+  if (tagEnd < 0) return out;
+  const tag = out.slice(at, tagEnd);
+  const existing = tag.match(/\sclass="([^"]*)"/);
+  if (!existing) {
+    return out.slice(0, tagEnd) + ` class="${escAttr(classes)}"` + out.slice(tagEnd);
+  }
+  const merged = `${existing[1]} ${classes}`.trim();
+  return out.slice(0, at) + tag.replace(/\sclass="[^"]*"/, ` class="${escAttr(merged)}"`) + out.slice(tagEnd);
+}
+
+/**
+ * Adds an attribute to the FIRST element in a section's markup.
+ *
+ * The first `<` in the string is always the section's own root element: the
+ * Gutenberg block comment that precedes it carries its attributes as JSON, and
+ * a class name cannot contain an angle bracket. Asserted for all 62 sections in
+ * verify.ts rather than trusted, because a section that silently failed to be
+ * stamped would be a section the client cannot click.
+ */
+export function markElement(html: string, attr: string, value: string): string {
+  return html.replace(/<([a-zA-Z][\w-]*)/, (_, tag: string) => `<${tag} ${attr}="${escAttr(value)}"`);
+}
+
+/**
  * Serializes a section for a template part (header/footer), where page-content
  * placement rules do not apply.
  */
-export function sectionToTemplatePart(nodeType: string, props: unknown): string {
+export function sectionToTemplatePart(
+  nodeType: string,
+  props: unknown,
+  /**
+   * Stamps `data-vibewp-chrome`, for the same reason page nodes are stamped
+   * and with the same opt-in. A click on the header has to route to
+   * swap_chrome: the header is a template part shared by every page, not a
+   * node on this one, and treating it as a page section is how a change to it
+   * silently does nothing.
+   */
+  opts?: { mark?: "header" | "footer" },
+): string {
   const section = getSectionByNodeType(nodeType);
-  return section ? section.toGutenberg(props ?? {}) : "";
+  if (!section) return "";
+  const html = section.toGutenberg(props ?? {});
+  return opts?.mark ? markElement(html, "data-vibewp-chrome", opts.mark) : html;
 }
 
 /**
@@ -470,7 +587,33 @@ export function gutenbergToSchema(html: string): PageSchema | null {
     if (!section.fromGutenberg) continue;
     const props = section.fromGutenberg(root);
     if (props) {
-      nodes.push({ id: `n_${section.key}`, type: section.nodeType, props });
+      /*
+       * The style settings come back off the root's class list, here rather
+       * than in 62 parsers — the same one place they were written.
+       *
+       * Without this they would be destroyed on every pull from WordPress:
+       * this function rebuilds each node's props from scratch, so a setting no
+       * parser reads simply stops existing. That is why formToken had to go
+       * into a data attribute, and it is the reason section styling is carried
+       * by a class at all.
+       */
+      const rootEl = root.querySelector(`.${section.rootClass}`);
+      const style = rootEl ? styleFromClasses(rootEl.getAttribute("class") ?? "") : {};
+      const elementStyle = rootEl ? elementStylesFromHtml(rootEl.outerHTML) : {};
+      const partVisibility = rootEl ? partVisibilityFromHtml(rootEl.outerHTML) : {};
+      const partWidth = rootEl ? partWidthFromHtml(rootEl.outerHTML) : {};
+      /*
+       * The order is read from the sequence the blocks are in, which IS the
+       * fact — nothing had to be stamped into the client's exported content
+       * for a reorder to survive a pull from WordPress.
+       */
+      const order = rootEl ? partOrderFromHtml(rootEl.outerHTML) : "";
+      const partOrder = order.includes(",") ? { [PART_ORDER_FIELD]: order } : {};
+      nodes.push({
+        id: `n_${section.key}`,
+        type: section.nodeType,
+        props: { ...props, ...style, ...elementStyle, ...partVisibility, ...partWidth, ...partOrder },
+      });
     }
   }
 

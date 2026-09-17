@@ -84,6 +84,7 @@ export const HeroBanner: SectionDefinition<HeroBannerProps> = {
           "yp-hero-banner__media",
           image(p.image.url, requireAlt(p.image.alt, p.heading), "yp-hero-banner__frame", {
             id: p.image.id,
+            title: p.image.title,
             width: p.image.width,
             height: p.image.height,
           }),

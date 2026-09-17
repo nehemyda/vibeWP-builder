@@ -8,6 +8,10 @@ export type HeroPatternProps = {
   body?: string;
   actions?: Action[];
   image?: SectionImage;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -40,6 +44,28 @@ export const HeroPattern: SectionDefinition<HeroPatternProps> = {
       of: { label: { type: "text", label: "Label" }, href: { type: "link", label: "Links to" } },
     },
     image: { type: "image", label: "Photo", hint: "Portrait or square works; it overlaps the panel" },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Works here for the identical structural reason:
+     * .yp-hero-pattern__grid already wraps everything under the root with
+     * nothing else emitted alongside it. Separate from the panel's own
+     * dot-grid tint, which stays exactly as designed either way — this adds
+     * a wash to the ROW behind the whole section, not the panel itself.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The panel and photo stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the panel and photo.",
+      choices: ["contained", "full"],
+      default: "contained",
+    },
   },
 
   aiPrompt:
@@ -83,14 +109,23 @@ export const HeroPattern: SectionDefinition<HeroPatternProps> = {
           "yp-hero-pattern__media",
           image(p.image.url, requireAlt(p.image.alt, p.heading), "yp-hero-pattern__frame", {
             id: p.image.id,
+            title: p.image.title,
             width: p.image.width,
             height: p.image.height,
           }),
         )
       : "";
 
-    return group(
+    const rootClass = [
       "yp-hero-pattern",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return group(
+      rootClass,
       group("yp-hero-pattern__grid", group("yp-hero-pattern__panel", copy) + media),
       "section",
     );
@@ -99,8 +134,11 @@ export const HeroPattern: SectionDefinition<HeroPatternProps> = {
   fromGutenberg(root) {
     const el = root.querySelector(".yp-hero-pattern");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     const img = parseImage(el, ".yp-hero-pattern__frame");
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       eyebrow: text(el.querySelector(".yp-hero-pattern__eyebrow")),
       heading: text(el.querySelector(".yp-hero-pattern__heading")),
       body: text(el.querySelector(".yp-hero-pattern__body")),

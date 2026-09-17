@@ -1,18 +1,24 @@
 "use server";
 
-import { eq, and } from "drizzle-orm";
+import { plainText } from "@/lib/wp/richtext";
+import { eq, and, isNull } from "drizzle-orm";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
-import { sites, sitePages, formDefinitions } from "@/lib/db/schema";
+import { sites, sitePages, formDefinitions, mediaAssets } from "@/lib/db/schema";
 import { canEditSite } from "@/app/actions/sites";
 import { savePageSchemaAction } from "@/app/actions/pages";
 import { getAiProviderSettings } from "@/lib/ai-provider-settings";
-import { loadBusinessContext, contactFactsFor, applyContactFacts } from "@/lib/ai/business-context";
+import {
+  loadBusinessContext,
+  contactFactsFor,
+  pinContactFacts,
+} from "@/lib/ai/business-context";
 import { generatePageWithGemini } from "@/lib/ai/generate-page";
 import { fillSectionImages } from "@/lib/ai/section-images";
 import { planEdit } from "@/lib/ai/plan-edit";
 import { loadBuilderMessagesAction } from "@/app/actions/builder-chat";
-import { applyOp, type EditOp, type PageSchema } from "@/lib/sections/edit-ops";
+import { applyOp, indexOfSection, type EditOp, type PageSchema } from "@/lib/sections/edit-ops";
+import { carryProps, mountsForm } from "@/lib/sections/carry-props";
 import { sectionsForPlan } from "@/lib/sections/resolve";
 import { getSectionByKey, getSectionByNodeType } from "@/lib/sections";
 import { isOptionField } from "@/lib/sections/types";
@@ -102,8 +108,316 @@ export async function applyEditAction(opts: {
   }
 }
 
+/**
+ * One change from the canvas, where the operation is already known.
+ *
+ * The client picked a design from a panel, or pressed an arrow. There is
+ * nothing to interpret, so nothing is sent to a language model: this validates
+ * what was asked and hands it to the same machinery chat uses.
+ *
+ * VALIDATED HERE, not trusted. It arrives from a browser, so the design must
+ * exist and be allowed on this site's plan, and the operation must be one the
+ * canvas is actually able to ask for — a hand-written request naming
+ * `regenerate_page` or `edit_form` must not find a way in through the panel.
+ */
+export async function applyCanvasOpAction(opts: {
+  siteId: string;
+  slug: string;
+  op: CanvasOp;
+}): Promise<EditResult> {
+  const { siteId, slug, op } = opts;
+
+  if (!CANVAS_OPS.includes(op.kind)) {
+    return { ok: false, message: "That isn't a change the canvas can make." };
+  }
+
+  /*
+   * A sentence describing what happened, for the revision log and — where a
+   * swap has to write new copy — for the generation prompt. Built here rather
+   * than sent by the browser, so it always matches the operation performed.
+   */
+  const instruction = describeCanvasOp(op);
+
+  let chosenOp: unknown = op;
+  const record = (result: EditResult) => {
+    void logEdit({
+      siteId,
+      slug,
+      instruction,
+      op: chosenOp,
+      outcome: result.ok ? "ok" : "refused",
+      message: result.message,
+      source: "canvas",
+    });
+    return result;
+  };
+
+  try {
+    return record(await runEdit({ siteId, slug, instruction, op }, (chosen) => { chosenOp = chosen; }));
+  } catch (err) {
+    void logEdit({
+      siteId,
+      slug,
+      instruction,
+      op: chosenOp,
+      outcome: "error",
+      message: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      source: "canvas",
+    });
+    throw err;
+  }
+}
+
+/**
+ * The operations the canvas may ask for.
+ *
+ * An allow-list rather than the whole EditOp union: every one of these is
+ * something the client can point at, and the ones left out — regenerating a
+ * page, editing a form's fields, rewriting copy — have their own interfaces
+ * where they can be confirmed properly.
+ */
+/**
+ * Paste, resolved server-side.
+ *
+ * Reads the SOURCE page — always within this site, and behind the same
+ * canEditSite gate as every other write — turns it into a self-contained op,
+ * and hands that to the ordinary canvas path. So pasting shares the revision
+ * log, the refusal messages and the publish flow with everything else, and
+ * the browser still cannot post a section of its own invention.
+ */
+export async function applyCanvasPasteAction(opts: {
+  siteId: string;
+  slug: string;
+  op: CanvasPasteOp;
+}): Promise<EditResult> {
+  const { siteId, slug, op } = opts;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated.");
+  if (!(await canEditSite(user.id, siteId))) {
+    throw new Error("You don't have access to this site.");
+  }
+
+  const source = await db.query.sitePages.findFirst({
+    where: and(eq(sitePages.siteId, siteId), eq(sitePages.slug, op.fromSlug)),
+  });
+  if (!source) {
+    return { ok: false, message: "The page you copied from isn't there any more." };
+  }
+  const node = ((source.schemaJson ?? {}) as PageSchema).nodes?.[op.fromIndex];
+  if (!node) {
+    // The source page changed after the copy — a section was removed or moved.
+    return { ok: false, message: "What you copied isn't on that page any more. Copy it again." };
+  }
+
+  if (op.kind === "paste_section") {
+    return applyCanvasOpAction({
+      siteId,
+      slug,
+      op: { kind: "paste_section", node, afterIndex: op.afterIndex } as CanvasOp,
+    });
+  }
+
+  /*
+   * Style only: the declared settings, not the copy. Reading them from the
+   * source's own definition is what stops "copy style" quietly carrying the
+   * headline across with it.
+   */
+  const def = getSectionByNodeType(node.type);
+  const style: Record<string, string> = {};
+  for (const [key, spec] of Object.entries(def?.fields ?? {})) {
+    if (!isOptionField(spec)) continue;
+    const value = (node.props as Record<string, unknown> | undefined)?.[key];
+    if (typeof value === "string") style[key] = value;
+  }
+  if (Object.keys(style).length === 0) {
+    return { ok: false, message: "That section has no style settings to copy." };
+  }
+  return applyCanvasOpAction({
+    siteId,
+    slug,
+    op: { kind: "paste_style", index: op.index, style } as CanvasOp,
+  });
+}
+
+/**
+ * Putting one of the site's own images into a section.
+ *
+ * The browser sends WHICH picture, by its id in this site's library, and
+ * never a URL. The action resolves it from the database, so a page can only
+ * ever point at a file we put in the bucket ourselves — and only at one
+ * belonging to the site being edited.
+ */
+export async function setSectionImageAction(opts: {
+  siteId: string;
+  slug: string;
+  /** How the section is named, as every other canvas op names it. */
+  section: string;
+  /** Dotted path from imagePaths, e.g. "items.2.image". */
+  path: string;
+  assetId: string;
+}): Promise<EditResult> {
+  const { siteId, slug, section, path, assetId } = opts;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated.");
+  if (!(await canEditSite(user.id, siteId))) {
+    throw new Error("You don't have access to this site.");
+  }
+
+  const asset = await db.query.mediaAssets.findFirst({
+    where: and(
+      eq(mediaAssets.id, assetId),
+      eq(mediaAssets.siteId, siteId),
+      isNull(mediaAssets.deletedAt),
+    ),
+  });
+  if (!asset) return { ok: false, message: "That picture isn't in your library any more." };
+
+  return applyCanvasOpAction({
+    siteId,
+    slug,
+    op: {
+      kind: "set_image",
+      section,
+      path,
+      image: {
+        url: asset.url,
+        /*
+         * The library's alt travels with the picture. An empty one is left
+         * empty rather than filled from the old image's: alt describes THIS
+         * photograph, and carrying the previous description over is worse
+         * than none at all.
+         */
+        alt: asset.alt ?? "",
+        width: asset.width ?? undefined,
+        height: asset.height ?? undefined,
+        photographer: asset.photographer ?? undefined,
+        photographerUrl: asset.photographerUrl ?? undefined,
+      },
+    } as CanvasOp,
+  });
+}
+
+export type CanvasOp =
+  | Extract<EditOp, { kind: "swap_section" }>
+  | Extract<EditOp, { kind: "move_section" }>
+  | Extract<EditOp, { kind: "remove_section" }>
+  | Extract<EditOp, { kind: "add_section" }>
+  | Extract<EditOp, { kind: "swap_chrome" }>
+  /*
+   * Only ever reaches a PAGE section from the canvas. A header's settings are
+   * intercepted earlier in runEdit and written to the site row, and that branch
+   * validates less strictly than applyOp does — no isOptionField guard, no
+   * choices check — so the style panel deliberately offers nothing on chrome
+   * and everything here lands on the strict path.
+   */
+  | Extract<EditOp, { kind: "set_option" }>
+  /* Typed on the page. No model involved — a path and a string. */
+  | Extract<EditOp, { kind: "set_text" }>
+  /* Duplicating in place. Index-addressed; see the op's own note. */
+  | Extract<EditOp, { kind: "set_image" }>
+  | Extract<EditOp, { kind: "move_part" }>
+  | Extract<EditOp, { kind: "remove_part" }>
+  | Extract<EditOp, { kind: "duplicate_section" }>
+  | Extract<EditOp, { kind: "paste_section" }>
+  | Extract<EditOp, { kind: "paste_style" }>;
+
+/**
+ * Pasting, which the canvas asks for differently from how applyOp performs it.
+ *
+ * The browser sends WHERE the thing was copied from — a page and a position —
+ * and never the section itself. The action reads that page under the same
+ * ownership check as any other write and resolves the node server-side.
+ *
+ * Accepting a node from the browser would mean accepting whatever props it
+ * chose to send, into a page that is then published to a live WordPress site.
+ * A reference cannot carry a payload.
+ */
+export type CanvasPasteOp =
+  | { kind: "paste_section"; fromSlug: string; fromIndex: number; afterIndex: number | null }
+  | { kind: "paste_style"; fromSlug: string; fromIndex: number; index: number };
+
+const CANVAS_OPS: CanvasOp["kind"][] = [
+  "set_option",
+  "set_text",
+  "swap_section",
+  "move_section",
+  "remove_section",
+  "add_section",
+  "swap_chrome",
+  "set_image",
+  "move_part",
+  "remove_part",
+  "duplicate_section",
+  "paste_section",
+  "paste_style",
+];
+
+function describeCanvasOp(op: CanvasOp): string {
+  const name = (key: string) => getSectionByKey(key)?.name ?? key;
+  switch (op.kind) {
+    case "swap_section":
+      return `Changed the ${op.section} to the ${name(op.design)}`;
+    case "swap_chrome":
+      return `Changed the ${op.slot} to the ${name(op.section)}`;
+    case "move_section":
+      return `Moved the ${op.section}`;
+    case "remove_section":
+      return `Removed the ${op.section}`;
+    case "add_section":
+      return `Added the ${name(op.section)}`;
+    case "set_option":
+      return `Set ${op.option} to ${op.value} on the ${op.section}`;
+    case "set_text":
+      // Truncated: this becomes the revision's reason, and a whole paragraph
+      // of body copy in a history list is unreadable.
+      return `Edited the ${op.section} — "${op.value.slice(0, 60)}${op.value.length > 60 ? "…" : ""}"`;
+    /*
+     * These three name a POSITION rather than a section, because that is all
+     * the click carried. applyOp knows which section sits there and says so in
+     * its own describe, which is what the client is shown.
+     */
+    case "set_image":
+      return `Changed a picture in the ${op.section}`;
+    case "move_part":
+      return `Reordered the ${op.section}`;
+    case "remove_part":
+      return `Removed the ${op.part} from the ${op.section}`;
+    case "duplicate_section":
+      return `Duplicated the section at position ${op.index + 1}`;
+    case "paste_section":
+      return `Pasted a ${getSectionByNodeType(op.node.type)?.name ?? "section"}`;
+    case "paste_style":
+      return `Pasted a style onto the section at position ${op.index + 1}`;
+  }
+}
+
 async function runEdit(
-  opts: { siteId: string; slug: string; instruction: string },
+  opts: {
+    siteId: string;
+    slug: string;
+    instruction: string;
+    /**
+     * The operation to perform, when the caller already knows it.
+     *
+     * Supplied by the canvas, where the client has picked a design from a
+     * panel or pressed an arrow. Asking a language model to work out what
+     * "move this down one" means, from a button whose whole purpose is to mean
+     * exactly that, would add a second or two, a Gemini call and a chance of
+     * being wrong to an action that has none of those today.
+     *
+     * Everything AFTER planning is shared deliberately: the form repair, the
+     * contact facts, the revision, the message. A second path would drift.
+     */
+    op?: EditOp;
+  },
   noteOp: (op: unknown) => void,
 ): Promise<EditResult> {
   const { siteId, slug, instruction } = opts;
@@ -192,7 +506,9 @@ async function runEdit(
   const available = await sectionsForPlan(site?.plan ?? "starter");
 
   let op: EditOp;
-  try {
+  if (opts.op) {
+    op = opts.op;
+  } else try {
     op = await planEdit({
       apiKey: settings.geminiApiKey,
       instruction,
@@ -454,7 +770,7 @@ async function runEdit(
     }
 
     // Real contact details beat anything written about them.
-    props = applyContactFacts(props, resolved.definition.fields, contactFactsFor(business));
+    props = pinContactFacts(props, resolved.definition.fields, contactFactsFor(business));
 
     const next = { type: resolved.definition.nodeType, props };
     await writeChromeWithHistory({
@@ -488,7 +804,9 @@ async function runEdit(
       const def = getSectionByNodeType(n.type);
       const headingProp = (n.props as Record<string, unknown> | undefined)?.heading;
       const want = op.section.trim().toLowerCase();
-      return [n.type, def?.key, def?.name, typeof headingProp === "string" ? headingProp : undefined]
+      // plainText: a client naming a section says its words, not its markup.
+      // A bolded heading would otherwise never match anything they could type.
+      return [n.type, def?.key, def?.name, typeof headingProp === "string" ? plainText(headingProp) : undefined]
         .some((name) => name?.trim().toLowerCase() === want);
     });
     if (at < 0) return { ok: false, message: `I couldn't find a "${op.section}" section on this page.` };
@@ -550,8 +868,137 @@ async function runEdit(
     };
   }
 
-  // Content is only needed when a section is being added or rewritten.
+  // Content is only needed when a section is being added, rewritten or swapped.
   let newProps: Record<string, unknown> | undefined;
+  /** Content the new design cannot hold, so the reply can say what went. */
+  let swapDropped: string[] = [];
+
+  if (op.kind === "swap_section") {
+    const design = available.find((s) => s.key === op.design);
+    if (!design) return { ok: false, message: "I don't have a design like that to switch to." };
+    if (design.definition.placement && design.definition.placement !== "page") {
+      return {
+        ok: false,
+        message: `The ${design.name} belongs in the site's header or footer, not on the page.`,
+      };
+    }
+
+    const nodes = schema.nodes ?? [];
+    const at = indexOfSection(nodes, op.section);
+    if (at < 0) return { ok: false, message: plainRefusal(`There's no ${op.section} on this page.`) };
+
+    const current = getSectionByNodeType(nodes[at].type);
+    if (!current) {
+      return { ok: false, message: "I don't recognise that section well enough to change it." };
+    }
+    if (nodes[at].type === design.definition.nodeType) {
+      return { ok: false, message: `That section is already the ${design.name.toLowerCase()}.` };
+    }
+
+    /*
+     * The client's words move across first, and this is the whole feature. See
+     * lib/sections/carry-props.ts for why it is not a matter of copying
+     * matching keys.
+     */
+    const carried = carryProps(
+      current,
+      (nodes[at].props ?? {}) as Record<string, unknown>,
+      design.definition,
+    );
+    newProps = { ...carried.props };
+    /*
+     * Named in the CLIENT's language, and from the section they are leaving —
+     * the new design has no field for what it cannot hold, which is exactly
+     * why it was dropped, so its own labels are no help here.
+     */
+    swapDropped = carried.dropped
+      .map((path) => (current.fields[path.split(".")[0]]?.label ?? path.split(".")[0]).toLowerCase())
+      .filter((label, i, all) => all.indexOf(label) === i);
+
+    /*
+     * Only what could not be carried is written, and only when there is
+     * something to write. A hero into another hero needs no model at all —
+     * generating anyway would spend a call to replace copy we already had, and
+     * quietly reword a headline the client may have edited by hand.
+     */
+    const wholeFieldsMissing = carried.missing.filter((path) => !path.includes("."));
+    const nestedMissing = carried.missing.filter((path) => path.includes("."));
+
+    if (wholeFieldsMissing.length || nestedMissing.length) {
+      try {
+        const written = await generatePageWithGemini({
+          apiKey: settings.geminiApiKey,
+          plan: [{ job: "The section being restyled", section: design }],
+          business,
+          /*
+           * TWO things go in, and both are needed.
+           *
+           * The carried copy, so the new fields match the tone of the ones
+           * that stayed — without it the model wrote a fresh section in its own
+           * voice beside sentences the client had written.
+           *
+           * And the content the OLD design held, so a field that could not be
+           * reshaped is rebuilt from the client's own words rather than
+           * invented. Asked to group a flat FAQ, the model was shown only the
+           * heading — the questions had been refused for want of topic names —
+           * so it wrote five plausible new questions and quietly replaced the
+           * five the client had. On-topic, and not theirs.
+           */
+          instruction:
+            `${instruction}\n\nThis section already says the following, and it must not change:\n` +
+            `${JSON.stringify(newProps, null, 2)}\n\n` +
+            `Before this change the section held the content below. REUSE these words — ` +
+            `rearrange, regroup or shorten them to fit, but do not invent replacements ` +
+            `for content that is already here:\n${JSON.stringify(nodes[at].props ?? {}, null, 2)}\n\n` +
+            `Write ONLY these: ${carried.missing.join(", ")}.`,
+          pageTitle: page.title ?? slug,
+        });
+        const fresh = written[design.key] as Record<string, unknown> | undefined;
+        if (fresh) {
+          for (const field of wholeFieldsMissing) {
+            if (fresh[field] !== undefined) newProps[field] = fresh[field];
+          }
+          /*
+           * A sub-field of entries that carried — a caption for a row that
+           * kept its photograph. Paired by position, which is the only pairing
+           * available, and only ever written where the carried entry has a gap.
+           */
+          for (const path of nestedMissing) {
+            const [field, key] = path.split(".");
+            const mine = newProps[field];
+            const theirs = fresh[field];
+            if (!Array.isArray(mine) || !Array.isArray(theirs)) continue;
+            newProps[field] = mine.map((entry, i) => {
+              if (!entry || typeof entry !== "object") return entry;
+              const row = entry as Record<string, unknown>;
+              if (row[key] !== undefined && row[key] !== "") return row;
+              const donor = theirs[i] as Record<string, unknown> | undefined;
+              return donor?.[key] === undefined ? row : { ...row, [key]: donor[key] };
+            });
+          }
+        }
+      } catch (err) {
+        /*
+         * Fails OPEN. The carried content is already correct and complete for
+         * everything that mapped, so a swap that keeps the client's words and
+         * lacks one new line beats refusing the change outright.
+         */
+        console.error("Swap content generation failed, carrying what we have:", err);
+      }
+    }
+
+    newProps = await fillSectionImages({ section: design.definition, props: newProps, business });
+    newProps = pinContactFacts(newProps, design.definition.fields, contactFactsFor(business));
+
+    /* A design that mounts a form needs a form behind it. */
+    if (mountsForm(design.definition) && typeof newProps.formToken !== "string") {
+      const token = await ensureSiteForm(siteId, business.businessName, instruction);
+      if (!token) {
+        return { ok: false, message: "I couldn't create the form just now. Try again in a moment." };
+      }
+      newProps.formToken = token;
+    }
+  }
 
   if (op.kind === "add_section" || op.kind === "rewrite_section") {
     const key = op.kind === "add_section" ? op.section : (getSectionByNodeType(op.section)?.key ?? op.section);
@@ -584,8 +1031,7 @@ async function runEdit(
     });
 
     // Real contact details beat anything written about them.
-    newProps = applyContactFacts(newProps, resolved.definition.fields, contactFactsFor(business));
-
+    newProps = pinContactFacts(newProps, resolved.definition.fields, contactFactsFor(business));
     /*
      * A form added by chat needs a real form behind it.
      *
@@ -644,9 +1090,14 @@ async function runEdit(
 
   if (op.kind === "rewrite_section") {
     const nodes = [...(schema.nodes ?? [])];
-    const at = nodes.findIndex(
-      (n) => n.type?.toLowerCase() === op.section.toLowerCase(),
-    );
+    /*
+     * The shared matcher, which knows a section by its node type, its registry
+     * key, its display name AND its own heading. This compared node types
+     * alone, so "rewrite the What our customers say bit" — the planner's own
+     * preferred way of naming a section — resolved to nothing here while
+     * working everywhere else.
+     */
+    const at = indexOfSection(nodes, op.section);
     if (at < 0) return { ok: false, message: `There's no ${op.section} on this page.` };
     nodes[at] = { ...nodes[at], props: newProps ?? nodes[at].props };
     next = { ...schema, nodes };
@@ -680,6 +1131,18 @@ async function runEdit(
     described = describe.replace(/the Contact form/i, `the ${formName}`);
   }
 
+  /*
+   * A swap that lost something says so, in the client's language.
+   *
+   * Reporting "Changed the split hero to the centred hero." while silently
+   * deleting the photograph is the failure this whole feature was built to
+   * avoid — carry-props.ts knows exactly what went, and it would be strange to
+   * compute that and not mention it.
+   */
+  if (op.kind === "swap_section" && swapDropped.length) {
+    described += ` This design has no ${listWords(swapDropped)} — say "undo" if you want that back.`;
+  }
+
   return {
     ok: true,
     message: `${described} The page now has ${count} section${count === 1 ? "" : "s"}. Say "undo" to put it back.`,
@@ -698,4 +1161,10 @@ async function formNameFor(token: string): Promise<string> {
     where: eq(formDefinitions.embedToken, token),
   });
   return form?.name ?? "form";
+}
+
+/** "a, b and c" — for naming what a swap could not keep. */
+function listWords(words: string[]): string {
+  if (words.length <= 1) return words[0] ?? "";
+  return `${words.slice(0, -1).join(", ")} or ${words[words.length - 1]}`;
 }

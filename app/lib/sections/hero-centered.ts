@@ -9,6 +9,10 @@ export type HeroCenteredProps = {
   actions?: Action[];
   /** A short line under the buttons — "No deposit · Free quotes · 12 years". */
   trustLine?: string;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -44,6 +48,28 @@ export const HeroCentered: SectionDefinition<HeroCenteredProps> = {
       hint: "Separate claims with ·",
       maxChars: 90,
     },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: this section's own
+     * max-width already lives on the root, not on .yp-hero-centered__inner
+     * (that carries an unrelated 46rem typographic column, centred inside
+     * whatever width the root allows). So "full" overrides the root's own
+     * rule directly instead of a descendant wrapper's — see the CSS.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The headline column stays the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the headline column stays centred and no wider.",
+      choices: ["contained", "full"],
+      default: "contained",
+    },
   },
 
   aiPrompt:
@@ -73,13 +99,23 @@ export const HeroCentered: SectionDefinition<HeroCenteredProps> = {
       .filter(Boolean)
       .join("");
 
-    return group("yp-hero-centered", group("yp-hero-centered__inner", inner), "section");
+    const rootClass = [
+      "yp-hero-centered",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(rootClass, group("yp-hero-centered__inner", inner), "section");
   },
 
   fromGutenberg(root) {
     const el = root.querySelector(".yp-hero-centered");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       eyebrow: text(el.querySelector(".yp-hero-centered__eyebrow")),
       heading: text(el.querySelector(".yp-hero-centered__heading")),
       body: text(el.querySelector(".yp-hero-centered__body")),

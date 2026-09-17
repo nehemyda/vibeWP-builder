@@ -7,6 +7,10 @@ export type FormSplitProps = {
   body?: string;
   points?: string[];
   formToken?: string;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 const text = (el: HTMLElement | null): string => (el ? el.textContent.trim() : "");
@@ -38,6 +42,26 @@ export const FormSplit: SectionDefinition<FormSplitProps> = {
       hint: "Three at most — answer a doubt, don't list features",
       of: { text: { type: "text", label: "Point" } },
     },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Works here for the identical structural reason:
+     * .yp-formx__inner already wraps everything under the root with nothing
+     * else emitted alongside it.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The copy and form stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the copy and form.",
+      choices: ["contained", "full"],
+      default: "contained",
+    },
   },
 
   aiPrompt:
@@ -59,8 +83,16 @@ export const FormSplit: SectionDefinition<FormSplitProps> = {
       .filter(Boolean)
       .join("");
 
-    return group(
+    const rootClass = [
       "yp-formx",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return group(
+      rootClass,
       group(
         "yp-formx__inner",
         group("yp-formx__copy", left) + group("yp-formx__form", htmlBlock(formMount(p.formToken))),
@@ -72,7 +104,10 @@ export const FormSplit: SectionDefinition<FormSplitProps> = {
   fromGutenberg(root) {
     const el = root.querySelector(".yp-formx");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-formx__heading")),
       body: text(el.querySelector(".yp-formx__body")),
       points: el.querySelectorAll(".yp-formx__points li").map((li) => li.textContent.trim()),

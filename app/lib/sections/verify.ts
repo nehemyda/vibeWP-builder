@@ -1,8 +1,13 @@
+import { SCREENS, fieldFor } from "@/lib/design/part-visibility";
+import { schemaToGutenberg, gutenbergToSchema } from "@/lib/wp/serialize";
+import { imagePaths } from "@/lib/design/image-map";
 import { parse, type HTMLElement } from "node-html-parser";
 import { SECTIONS } from "@/lib/sections";
-import { sectionPreviewMarkup } from "@/lib/wp/serialize";
+import { sectionPreviewMarkup, markElement, addClasses } from "@/lib/wp/serialize";
+import { allStyleClasses } from "@/lib/design/section-style";
+import { ELEMENT_ROLES, allElementClasses } from "@/lib/design/element-style";
 import { readThemeCss, findCollapsingAutoFitGrids } from "@/lib/sections/css-audit";
-import { contactFactsFor, applyContactFacts } from "@/lib/ai/business-context";
+import { contactFactsFor, pinContactFacts } from "@/lib/ai/business-context";
 import { defaultHours } from "@/lib/business/hours";
 
 /**
@@ -148,7 +153,42 @@ for (const s of targets) {
   if (previewText.length < floor) fail(`${s.key}: preview nearly empty (${previewText.length} chars)`);
 
   /*
-   * 8. A contact fact cannot take the section down.
+   * 8. The canvas can identify it.
+   *
+   * schemaToGutenberg stamps data-vibewp-node on each section's outermost
+   * element so a click in the preview can be traced back to a schema node. A
+   * section that failed to be stamped would be one the client cannot select —
+   * invisible, and only in the builder — so it is asserted rather than assumed.
+   */
+  const marked = markElement(html, "data-vibewp-node", "7");
+  const rootTag = parse(marked).querySelector(`.${s.rootClass}`);
+  if (marked === html) fail(`${s.key}: cannot be stamped for selection`);
+  else if (rootTag?.getAttribute("data-vibewp-node") !== "7") {
+    fail(`${s.key}: selection stamp landed outside .${s.rootClass}`);
+  }
+
+  /*
+   * 9. A style class keeps the block valid.
+   *
+   * core/group rebuilds the element's class from the `className` in the block
+   * comment, so the two must agree exactly or WordPress regenerates different
+   * markup from what is stored and marks the section as containing unexpected
+   * content — the failure a class was chosen to avoid. Asserted rather than
+   * trusted, because it is invisible until someone opens wp-admin.
+   */
+  if (!isTemplatePart) {
+    const styled = addClasses(html, "u-space--lg");
+    const inComment = styled.match(/"className":"([^"]*)"/)?.[1];
+    const inElement = styled.match(/<[a-z]+[^>]*\sclass="([^"]*)"/)?.[1];
+    if (!inComment?.includes("u-space--lg")) {
+      fail(`${s.key}: a style class never reached the block comment`);
+    } else if (!inElement?.endsWith(inComment)) {
+      fail(`${s.key}: block comment and element class disagree — WordPress would reject it`);
+    }
+  }
+
+  /*
+   * 10. A contact fact cannot take the section down.
    *
    * The three fact-writers checked only that a section declared `hours`, not
    * what type it declared, so the string "{{hours}}" was written into the two
@@ -171,7 +211,7 @@ for (const s of targets) {
       fail(`${s.key}: toGutenberg threw on ${field}="{{${field}}}" — ${(err as Error).message}`);
     }
 
-    const written = applyContactFacts(s.sample as Record<string, unknown>, s.fields, SAMPLE_FACTS);
+    const written = pinContactFacts(s.sample as Record<string, unknown>, s.fields, SAMPLE_FACTS);
     try {
       s.toGutenberg(written as never);
     } catch (err) {
@@ -184,13 +224,126 @@ for (const s of targets) {
   console.log(`  ${s.key.padEnd(20)} ${html.length} bytes, ${emitted.size} classes, preview ${previewText.length} chars`);
 }
 
-// 9. registry hygiene across ALL sections
+// 11. registry hygiene across ALL sections
 const keys = new Set<string>(), nodes = new Set<string>(), roots = new Set<string>();
 for (const s of SECTIONS) {
   if (keys.has(s.key)) fail(`duplicate key ${s.key}`); keys.add(s.key);
   if (nodes.has(s.nodeType)) fail(`duplicate nodeType ${s.nodeType}`); nodes.add(s.nodeType);
   if (roots.has(s.rootClass)) fail(`duplicate rootClass ${s.rootClass}`); roots.add(s.rootClass);
 }
+/*
+ * Every style utility resolves to a real rule. A control that emits a class
+ * the stylesheet does not define is a control that silently does nothing.
+ */
+console.log("\n== section style utilities ==");
+for (const cls of allStyleClasses()) {
+  if (!new RegExp(`\\.${cls.replace(/[-]/g, "\\-")}(?![\\w-])`).test(css)) {
+    fail(`style utility .${cls} is emitted but never styled`);
+  }
+}
+for (const cls of allElementClasses()) {
+  if (!new RegExp(`\\.${cls.replace(/[-]/g, "\\-")}(?![\\w-])`).test(css)) {
+    fail(`element utility .${cls} is emitted but never styled`);
+  }
+}
+console.log(`  ${allStyleClasses().length + allElementClasses().length} utilities, all styled`);
+
+/*
+ * Every role exclusion still names a class that exists.
+ *
+ * `.yp-logos__heading` is excluded because it is a 0.74rem uppercase caption
+ * wearing the heading suffix — offering it the display-heading control would
+ * turn a caption into a headline. If that class is ever renamed, the exclusion
+ * silently stops protecting anything, and the only symptom is a caption that
+ * suddenly obeys a control it should not.
+ */
+console.log("\n== element role exclusions ==");
+for (const role of ELEMENT_ROLES) {
+  for (const cls of role.except) {
+    if (!new RegExp(`\\.${cls.replace(/[-]/g, "\\-")}(?![\\w-])`).test(css)) {
+      fail(`${role.key} excludes .${cls}, which no longer exists in the stylesheet`);
+    }
+  }
+  // And the role has to match something, or it is a control that reaches nothing.
+  const matches = css.match(new RegExp(role.match.source, "g")) ?? [];
+  const real = matches.filter((m) => !role.except.includes(m));
+  if (real.length === 0) fail(`element role "${role.key}" matches no class in the stylesheet`);
+  else console.log(`  ${role.key.padEnd(10)} ${new Set(real).size} classes, ${role.except.length} excluded`);
+}
+
+/*
+ * Every photograph a section holds must be REACHABLE BY PATH.
+ *
+ * The export copies images into the client's media library by walking these
+ * paths, and it used to walk only props.image — so a gallery's three photos,
+ * and six more across three other families, were never copied and stayed
+ * pointing at Pexels on live sites. A section that starts keeping an image
+ * somewhere new must not be able to reintroduce that silently.
+ */
+/*
+ * Hiding a part must survive a pull from WordPress.
+ *
+ * gutenbergToSchema rebuilds every prop from the markup, so a setting no
+ * parser reads is destroyed on every sync — the client would find everything
+ * they had hidden visible again, with no event to explain it. And the hide
+ * classes have to land in BOTH the Gutenberg comment and the element, or core
+ * regenerates one from the other and calls the block invalid in wp-admin.
+ */
+console.log("\n== part visibility round-trips ==");
+{
+  const def = SECTIONS.find((x) => x.key === "hero-duotone")!;
+  // Every subset of the three screens, so a combination cannot be the one
+  // that fails to read back.
+  for (let mask = 0; mask < 8; mask += 1) {
+    const on = SCREENS.filter((_, i) => mask & (1 << i));
+    const props: Record<string, unknown> = { ...(def.sample as object) };
+    for (const screen of on) props[fieldFor("heading", screen.key)] = true;
+
+    const html = schemaToGutenberg({ nodes: [{ id: "n1", type: def.nodeType, props }] } as never);
+    for (const screen of on) {
+      if (!html.includes(screen.cls)) fail(`hiding from ${screen.key} emitted no class`);
+      // Both the comment and the element, or core calls the block invalid.
+      const comment = /"className":"([^"]*yp-hero-duotone__heading[^"]*)"/.exec(html)?.[1] ?? "";
+      const element = /<h1 class="([^"]*yp-hero-duotone__heading[^"]*)"/.exec(html)?.[1] ?? "";
+      if (!comment.includes(screen.cls) || !element.includes(screen.cls)) {
+        fail(`${screen.cls} is not on both the comment and the element`);
+      }
+    }
+
+    const back = gutenbergToSchema(html);
+    if (!back) {
+      fail("the section did not parse back at all");
+      continue;
+    }
+    const got = back.nodes?.[0]?.props as Record<string, unknown>;
+    for (const screen of SCREENS) {
+      const expected = on.includes(screen);
+      const actual = got?.[fieldFor("heading", screen.key)] === true;
+      if (expected !== actual) fail(`hidden-from-${screen.key} read back as ${actual}`);
+    }
+    if (schemaToGutenberg(back as never) !== html) fail(`subset ${mask} did not round-trip`);
+  }
+  console.log("  all 8 combinations of the three screens, emitted and read back");
+}
+
+console.log("\n== photographs reachable by path ==");
+{
+  let found = 0;
+  let sectionsWithImages = 0;
+  for (const section of SECTIONS) {
+    const paths = imagePaths(section.sample as Record<string, unknown>);
+    if (!paths.length) continue;
+    sectionsWithImages += 1;
+    found += paths.length;
+    for (const { path, image } of paths) {
+      if (!image.url) fail(`${section.key}: image at ${path} has no url`);
+    }
+  }
+  // A floor rather than an exact count, so adding a section is not a failure.
+  if (found < 19) fail(`only ${found} photographs reachable; 19 were before`);
+  else console.log(`  ${found} photographs across ${sectionsWithImages} sections`);
+}
+
 console.log(`\n== registry: ${SECTIONS.length} sections, keys/nodeTypes/rootClasses all unique ==`);
 console.log(fails === 0 ? "\nALL GATES PASS" : `\n${fails} FAILURE(S)`);
 

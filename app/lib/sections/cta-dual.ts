@@ -2,7 +2,14 @@ import { group, heading, paragraph, buttons } from "@/lib/wp/blocks";
 import { text, type Action } from "./shared";
 import type { SectionDefinition } from "./types";
 
-export type CtaDualProps = { heading?: string; options?: Array<{ title: string; body: string; actions?: Action[] }> };
+export type CtaDualProps = {
+  heading?: string;
+  options?: Array<{ title: string; body: string; actions?: Action[] }>;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
+};
 
 /**
  * Two side-by-side paths, each with its own button.
@@ -22,7 +29,34 @@ export const CtaDual: SectionDefinition<CtaDualProps> = {
   rootClass: "yp-ctadual",
   fields: {
     heading: { type: "text", label: "Section heading", maxChars: 55 },
-    options: { type: "list", label: "Paths", hint: "Exactly two", of: { title: { type: "text", label: "Path name" }, body: { type: "text", label: "Who it's for" }, actions: { type: "text", label: "Its button" } } },
+    options: { type: "list", label: "Paths", hint: "Exactly two", of: { title: { type: "text", label: "Path name" }, body: { type: "text", label: "Who it's for" }, actions: {
+        type: "list",
+        label: "Its button",
+        of: {
+          label: { type: "text", label: "Label" },
+          href: { type: "link", label: "Links to" },
+        },
+      } } },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Works here for the identical structural reason:
+     * .yp-ctadual__inner already wraps everything under the root, heading
+     * included, with nothing else emitted alongside it.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The heading and paths stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the heading and paths.",
+      choices: ["contained", "full"],
+      default: "contained",
+    },
   },
   aiPrompt: "Exactly two paths, genuinely different — not the same action worded twice. Each says WHO it is for, so the visitor can self-select in one read.",
   sample: {
@@ -39,12 +73,22 @@ export const CtaDual: SectionDefinition<CtaDualProps> = {
         o.body ? paragraph(o.body, "yp-ctadual__body") : "",
         o.actions?.length ? buttons(o.actions, "yp-ctadual__actions") : "",
       ].filter(Boolean).join(""))).join("");
-    return group("yp-ctadual", group("yp-ctadual__inner", (p.heading ? heading(p.heading, 2, "yp-ctadual__heading") : "") + group("yp-ctadual__grid", opts)), "section");
+    const rootClass = [
+      "yp-ctadual",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(rootClass, group("yp-ctadual__inner", (p.heading ? heading(p.heading, 2, "yp-ctadual__heading") : "") + group("yp-ctadual__grid", opts)), "section");
   },
   fromGutenberg(root) {
     const el = root.querySelector(".yp-ctadual");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-ctadual__heading")),
       options: el.querySelectorAll(".yp-ctadual__option").map((o) => {
         const acts: Action[] = [];
