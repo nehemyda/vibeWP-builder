@@ -53,10 +53,28 @@ export default async function AdminBillingPage({
               <input type="hidden" name="planId" value={plan.id} />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span className={shell.idBadge}>{plan.key}</span>
-                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem" }}>
-                  <input type="checkbox" name="isActive" defaultChecked={plan.isActive} />
-                  Active
-                </label>
+                <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                  {/*
+                    What separates Vibe from Vibe WordPress. A site can only be
+                    in WordPress mode on a plan with this ticked, so it is the
+                    one control that decides which tier sells a real install.
+                  */}
+                  <label
+                    style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem" }}
+                    title="Sites on this plan may be provisioned into a real WordPress"
+                  >
+                    <input
+                      type="checkbox"
+                      name="includesWordpress"
+                      defaultChecked={plan.includesWordpress}
+                    />
+                    Includes WordPress
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem" }}>
+                    <input type="checkbox" name="isActive" defaultChecked={plan.isActive} />
+                    Active
+                  </label>
+                </div>
               </div>
               <div>
                 <label style={labelStyle}>Name</label>

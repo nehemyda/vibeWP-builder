@@ -646,3 +646,11 @@
   color: var(--muted);
   max-width: 62ch;
 }
+
+/* The delivery choice, closing the last intake step. Separated from the
+   palette grid above it so the two card rows do not read as one set. */
+.modeBlock {
+  margin-top: 1.4rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--line);
+}

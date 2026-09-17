@@ -190,6 +190,11 @@ async function main() {
           name: s.name,
           domain: s.domain,
           status: s.status,
+          /* Demo clients are the WordPress product: they carry a domain and
+             two of them are "live", which in WordPress mode means a real
+             install stands behind them. Leaving these on the "vibe" default
+             would seed live sites with nowhere to be live. */
+          mode: "wordpress" as const,
           plan: "scale",
         })
         .returning();
@@ -221,6 +226,7 @@ async function main() {
         name: "PIPEPRO Plumbing",
         domain: "pipepro.com",
         status: "live",
+        mode: "wordpress" as const,
         plan: "growth",
       })
       .returning();

@@ -639,6 +639,49 @@ export function IntakeForm({
                   Get in touch
                 </span>
               </div>
+
+              {/*
+                Asked once, on the first build only.
+
+                This form reopens from the toolbar as "Business details", and
+                mode is not a business detail — it decides whether a WordPress
+                install exists and is charged for. Offering it again beside the
+                phone number would make an expensive, one-way choice look like
+                a typo fix. Changing it later is its own deliberate action.
+              */}
+              {isFirstBuild && (
+                <div className={styles.modeBlock}>
+                  <p className={styles.legend}>Where your site lives</p>
+                  <p className={styles.legendHint}>
+                    You can move to WordPress later. Everything you build here comes with you.
+                  </p>
+
+                  <div className={styles.palettes}>
+                    <button
+                      type="button"
+                      className={`${styles.palette} ${data.mode === "vibe" ? styles.paletteOn : ""}`}
+                      onClick={() => set("mode", "vibe")}
+                      aria-pressed={data.mode === "vibe"}
+                    >
+                      <span className={styles.paletteName}>Vibe</span>
+                      <span className={styles.paletteDesc}>
+                        We host it. Your site goes live on our platform, and you can point your own domain at it. No extra charge.
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.palette} ${data.mode === "wordpress" ? styles.paletteOn : ""}`}
+                      onClick={() => set("mode", "wordpress")}
+                      aria-pressed={data.mode === "wordpress"}
+                    >
+                      <span className={styles.paletteName}>Vibe WordPress</span>
+                      <span className={styles.paletteDesc}>
+                        You get a real WordPress install of your own, editable in wp-admin and yours to take anywhere. Billed monthly.
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

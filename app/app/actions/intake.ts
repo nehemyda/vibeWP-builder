@@ -3,7 +3,7 @@
 import { eq, and } from "drizzle-orm";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
-import { sites, businessProfiles } from "@/lib/db/schema";
+import { sites, businessProfiles, type SiteMode } from "@/lib/db/schema";
 import { canEditSite } from "@/app/actions/sites";
 import { logActivity } from "@/lib/activity";
 import { profiles } from "@/lib/db/schema";
@@ -60,6 +60,8 @@ export type IntakeData = {
   seoKeywords: string;
   paletteKey: string;
   colors: PaletteColors;
+  /** Vibe or Vibe WordPress. Only settable on the first build — see saveIntakeAction. */
+  mode: SiteMode;
 };
 
 export type IntakeState = {
@@ -139,6 +141,7 @@ export async function loadIntakeAction(siteId: string): Promise<IntakeState> {
     completed: Boolean(site.intakeCompletedAt),
     facts: contactFactsFor(await buildContext(siteId)),
     data: {
+      mode: site.mode,
       businessName: site.name ?? "",
       logoUrl: profile?.logoUrl ?? "",
       phone: profile?.phoneNumber ?? "",
@@ -193,6 +196,22 @@ export async function saveIntakeAction(opts: {
   const hours = parseHours(data.hours) ?? defaultHours();
 
   /*
+   * Mode is settable on the FIRST build and never again.
+   *
+   * This form reopens from the toolbar as "Business details", so treating mode
+   * like any other field would let someone flip a provisioned WordPress site to
+   * Vibe by editing their phone number — orphaning the install and the charge
+   * behind it. Moving between modes is a deliberate, billed action, not a side
+   * effect of saving a form.
+   */
+  const site = await db.query.sites.findFirst({ where: eq(sites.id, siteId) });
+  const mode: SiteMode | undefined = site?.intakeCompletedAt
+    ? undefined
+    : data.mode === "wordpress"
+      ? "wordpress"
+      : "vibe";
+
+  /*
    * The logo is written into an <img src> on the client's live site, so it is
    * validated here rather than trusted. Only raster image data URLs are kept:
    * SVG is deliberately excluded because an SVG can carry script, and this
@@ -217,6 +236,7 @@ export async function saveIntakeAction(opts: {
         name,
         brandPaletteKey: palette.key,
         brandColors: colors,
+        ...(mode ? { mode } : {}),
         intakeCompletedAt: new Date(),
         lastEditedAt: new Date(),
       })

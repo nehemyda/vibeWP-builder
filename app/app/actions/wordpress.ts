@@ -28,6 +28,7 @@ import {
   setSiteLogo,
 } from "@/lib/wp/local-driver";
 import { logActivity } from "@/lib/activity";
+import { wordpressEntitlement } from "@/lib/billing";
 
 /**
  * The name of whoever actually performed the action.
@@ -95,7 +96,13 @@ export type ExportResult =
    * from a plain error so the caller can offer Pull or Overwrite rather than
    * just reporting failure.
    */
-  | { ok: false; blocked: true; error: string; pages: Array<{ slug: string; state: string }> };
+  | { ok: false; blocked: true; error: string; pages: Array<{ slug: string; state: string }> }
+  /**
+   * Refused because this site is not entitled to WordPress — it is a Vibe
+   * site, or its plan does not include one. Distinct from a plain error
+   * because the answer is a decision to make, not a fault to report.
+   */
+  | { ok: false; upgrade: true; error: string; upgradeTo: string[] };
 
 /**
  * Export to WordPress.
@@ -117,6 +124,19 @@ export async function exportToWordPressAction(
   force = false,
 ): Promise<ExportResult> {
   const { user, site } = await requireSiteAccess(smbId);
+
+  /*
+   * Entitlement before tooling.
+   *
+   * Deliberately the first check after access: a client who is not buying
+   * WordPress should be told that, not told our PHP binary is missing. This
+   * is the single chokepoint for every provision and every push, which is
+   * why the paywall is here and nowhere else.
+   */
+  const entitled = await wordpressEntitlement(site);
+  if (!entitled.allowed) {
+    return { ok: false, upgrade: true, error: entitled.reason, upgradeTo: entitled.upgradeTo };
+  }
 
   const available = await driverAvailable();
   if (!available.ok) {
@@ -496,11 +516,23 @@ export type PublishResult = { ok: true; url: string } | { ok: false; error: stri
 /**
  * Publish — flips the site from draft to live.
  *
- * Deliberately requires an export first: marking a site live when no
- * WordPress exists behind it would be a lie.
+ * For a WordPress site this deliberately requires an export first: marking a
+ * site live when no WordPress exists behind it would be a lie.
+ *
+ * The same rule is why a Vibe site cannot be published YET. "Live" has to
+ * mean a visitor can reach it, and platform hosting does not serve anything
+ * until the public renderer lands. Refusing is the honest answer; flipping
+ * the flag would put a Live badge on a site with no address.
  */
 export async function publishSiteAction(smbId: string): Promise<PublishResult> {
   const { user, site } = await requireSiteAccess(smbId);
+
+  if (site.mode === "vibe") {
+    return {
+      ok: false,
+      error: "Vibe hosting isn't serving sites yet, so there's nowhere for this to go live.",
+    };
+  }
 
   const installation = await db.query.siteInstallations.findFirst({
     where: eq(siteInstallations.siteId, site.id),

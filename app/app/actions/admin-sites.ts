@@ -9,6 +9,12 @@ import { requirePermission } from "@/lib/auth/require-permission";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/activity";
 import { planKeyOf } from "@/lib/billing";
+import type { SiteMode } from "@/lib/db/schema";
+
+/** Only the two real modes; anything else is a stale or forged form post. */
+function modeOf(raw: FormDataEntryValue | null): SiteMode {
+  return String(raw ?? "") === "wordpress" ? "wordpress" : "vibe";
+}
 
 function str(formData: FormData, key: string): string | null {
   const v = String(formData.get(key) ?? "").trim();
@@ -23,6 +29,7 @@ export async function createSiteAction(formData: FormData) {
   const domain = String(formData.get("domain") ?? "").trim();
   // Canonical key, not whatever a stale form post happens to submit.
   const plan = planKeyOf(String(formData.get("plan") ?? "")) || "starter";
+  const mode = modeOf(formData.get("mode"));
   const agencyId = String(formData.get("agencyId") ?? "").trim();
   const ownerFullName = String(formData.get("ownerFullName") ?? "").trim();
   const ownerEmail = String(formData.get("ownerEmail") ?? "").trim();
@@ -61,6 +68,7 @@ export async function createSiteAction(formData: FormData) {
       name,
       domain: domain || null,
       plan,
+      mode,
       status: "draft",
     })
     .returning();

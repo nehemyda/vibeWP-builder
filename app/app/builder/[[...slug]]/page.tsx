@@ -194,6 +194,7 @@ export default async function BuilderPage({
       backPath={backPath}
       backLabel={backLabel}
       siteName={site.name}
+      mode={site.mode}
       initialSchema={initialSchema}
       initialIntake={initialIntake}
       previewFacts={previewFacts}

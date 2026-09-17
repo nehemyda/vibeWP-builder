@@ -19,6 +19,7 @@ import {
   type HistoryState,
 } from "@/app/actions/pages";
 import { detectIntent } from "@/lib/page-intent";
+import type { SiteMode } from "@/lib/db/schema";
 import {
   schemaToGutenberg,
   sectionToTemplatePart,
@@ -192,6 +193,7 @@ export function BuilderApp({
   backPath,
   backLabel,
   siteName,
+  mode,
   initialSchema,
   initialChrome,
   initialIntake,
@@ -212,6 +214,14 @@ export function BuilderApp({
   backPath: string;
   backLabel: string;
   siteName: string;
+  /**
+   * Vibe, or Vibe WordPress.
+   *
+   * Decides whether this builder has a WordPress half at all: the export and
+   * wp-admin controls, the sync banner, the edit-lock cover and the two timers
+   * behind them are all meaningless for a site we host ourselves.
+   */
+  mode: SiteMode;
   /** The stored schema for the page shown on load, so the canvas paints every section. */
   initialSchema: Record<string, unknown> | null;
   /** The site's header and footer, so the canvas frames the page as the live site does. */
@@ -339,13 +349,14 @@ export function BuilderApp({
 
   /** Re-reads the WordPress comparison. */
   const refreshSync = useCallback(async () => {
+    if (mode === "vibe") return; // Nothing to reconcile with.
     try {
       const result = await detectSyncAction(smbId);
       if (result.ok) setSyncReport(result.pages);
     } catch {
       // Detection is advisory; a failure must not stop someone editing.
     }
-  }, [smbId]);
+  }, [smbId, mode]);
 
   /*
    * Detect on open, as the chosen sync model requires.
@@ -430,10 +441,14 @@ export function BuilderApp({
    */
   const locked = locks.length > 0;
   useEffect(() => {
+    /* No WordPress, no editor, no lock. The action short-circuits for a Vibe
+       site anyway; not starting the timer is what stops a round trip every
+       twenty seconds for an answer that cannot change. */
+    if (mode === "vibe") return;
     void checkLocks();
     const timer = setInterval(() => void checkLocks(), locked ? 5_000 : 20_000);
     return () => clearInterval(timer);
-  }, [checkLocks, locked]);
+  }, [checkLocks, locked, mode]);
 
   // Closes the site menu on any click elsewhere, the behaviour every menu has.
   useEffect(() => {
@@ -988,6 +1003,9 @@ export function BuilderApp({
         );
         setSyncDismissed(false);
         await refreshSync();
+      } else if ("upgrade" in result) {
+        // A decision, not a fault — so it is not worded as a failure.
+        say(result.error);
       } else {
         say(`Couldn't export: ${result.error}`);
       }
@@ -1176,68 +1194,76 @@ export function BuilderApp({
             action here, and burying it a click deep alongside three routine
             ones would make it easier to reach by accident than on purpose.
           */}
-          <div className={styles.menuWrap} ref={siteMenuRef}>
-            <button
-              type="button"
-              className={styles.btn}
-              onClick={() => setSiteMenuOpen((v) => !v)}
-              aria-haspopup="menu"
-              aria-expanded={siteMenuOpen}
-              disabled={busy !== null}
-            >
-              {busy === "wpadmin"
-                ? "Opening…"
-                : busy === "export"
-                  ? "Exporting…"
-                  : "Preview"}{" "}
-              ▾
-            </button>
-            {siteMenuOpen && (
-              <div className={styles.menu} role="menu">
-                {wpUrl && (
-                  <a
-                    className={styles.menuItem}
-                    role="menuitem"
-                    href={wpUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={() => setSiteMenuOpen(false)}
-                  >
-                    View site ↗
-                  </a>
-                )}
-                {wpUrl && (
+          {/*
+            The whole menu is WordPress: view the install, open wp-admin,
+            push to it. A Vibe site has none of those, and an "Export to
+            WordPress" item that always refuses would be worse than no menu —
+            the canvas beside it already IS the preview.
+          */}
+          {mode === "wordpress" && (
+            <div className={styles.menuWrap} ref={siteMenuRef}>
+              <button
+                type="button"
+                className={styles.btn}
+                onClick={() => setSiteMenuOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={siteMenuOpen}
+                disabled={busy !== null}
+              >
+                {busy === "wpadmin"
+                  ? "Opening…"
+                  : busy === "export"
+                    ? "Exporting…"
+                    : "Preview"}{" "}
+                ▾
+              </button>
+              {siteMenuOpen && (
+                <div className={styles.menu} role="menu">
+                  {wpUrl && (
+                    <a
+                      className={styles.menuItem}
+                      role="menuitem"
+                      href={wpUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => setSiteMenuOpen(false)}
+                    >
+                      View site ↗
+                    </a>
+                  )}
+                  {wpUrl && (
+                    <button
+                      type="button"
+                      className={styles.menuItem}
+                      role="menuitem"
+                      onClick={() => {
+                        setSiteMenuOpen(false);
+                        void onOpenWpAdmin();
+                      }}
+                    >
+                      WP Admin ↗
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={styles.menuItem}
                     role="menuitem"
+                    /*
+                     * Must NOT be `onClick={onExport}`: React would pass the click
+                     * event as the `force` argument, and a MouseEvent is truthy —
+                     * so every ordinary click would bypass the overwrite guard.
+                     */
                     onClick={() => {
                       setSiteMenuOpen(false);
-                      void onOpenWpAdmin();
+                      void onExport(false);
                     }}
                   >
-                    WP Admin ↗
+                    Export to WordPress
                   </button>
-                )}
-                <button
-                  type="button"
-                  className={styles.menuItem}
-                  role="menuitem"
-                  /*
-                   * Must NOT be `onClick={onExport}`: React would pass the click
-                   * event as the `force` argument, and a MouseEvent is truthy —
-                   * so every ordinary click would bypass the overwrite guard.
-                   */
-                  onClick={() => {
-                    setSiteMenuOpen(false);
-                    void onExport(false);
-                  }}
-                >
-                  Export to WordPress
-                </button>
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          )}
           <button
             type="button"
             className={`${styles.btn} ${styles.btnPrimary}`}

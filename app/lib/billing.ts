@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { plans, agencyPlanPrices } from "@/lib/db/schema";
+import { plans, agencyPlanPrices, type SiteMode } from "@/lib/db/schema";
 
 type Plan = typeof plans.$inferSelect;
 
@@ -65,6 +65,86 @@ export function planLabel(
     .filter(Boolean)
     .map((w) => w[0].toUpperCase() + w.slice(1))
     .join(" ");
+}
+
+/**
+ * Whether a site may use WordPress, and why not when it may not.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THIS IS THE ONLY GATE, AND WHY IT LIVES HERE
+ *
+ * Provisioning a WordPress is the one thing this platform does that costs
+ * real money and real disk. Everything else — generating, editing, previewing
+ * — is free in both modes, so the paywall sits on that single action rather
+ * than on the builder, and a client can build their whole site before
+ * deciding whether to pay for one.
+ *
+ * Two independent conditions, kept distinct because their fixes differ:
+ *
+ *   MODE  — a Vibe site has no WordPress by definition. The fix is to switch
+ *           the site, not to sell a bigger plan.
+ *   PLAN  — a WordPress site whose plan does not include WordPress. The fix
+ *           is a plan change. Reachable by an admin downgrading a live site,
+ *           so it must refuse rather than assume.
+ *
+ * In lib/billing.ts because plan keys are stored inconsistently enough that
+ * every comparison has to go through planKeyOf — the bug that made
+ * sectionsForPlan gate nothing was a gate written outside this file.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+/** "Growth, Scale or Agency" — not "Growth or Scale or Agency". */
+function orList(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
+}
+
+export type WordpressEntitlement =
+  | { allowed: true }
+  | {
+      allowed: false;
+      /** Which condition failed, so a caller can word its own message. */
+      because: "mode" | "plan";
+      /** A sentence fit to show a client. */
+      reason: string;
+      /** Plan names that would allow it. Empty when no plan sells WordPress. */
+      upgradeTo: string[];
+    };
+
+export async function wordpressEntitlement(site: {
+  plan: string;
+  mode: SiteMode;
+}): Promise<WordpressEntitlement> {
+  const catalogue = await db.select().from(plans);
+  const upgradeTo = catalogue
+    .filter((p) => p.includesWordpress && p.isActive)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((p) => p.name);
+
+  if (site.mode !== "wordpress") {
+    return {
+      allowed: false,
+      because: "mode",
+      reason:
+        "This is a Vibe site, hosted by us — there's no WordPress behind it. " +
+        "Switch it to Vibe WordPress to get one.",
+      upgradeTo,
+    };
+  }
+
+  const plan = catalogue.find((p) => p.key === planKeyOf(site.plan));
+  if (!plan?.includesWordpress) {
+    const named = plan?.name ?? planLabel(site.plan);
+    return {
+      allowed: false,
+      because: "plan",
+      reason: upgradeTo.length
+        ? `WordPress isn't included on the ${named} plan. It's available on ${orList(upgradeTo)}.`
+        : `WordPress isn't included on the ${named} plan.`,
+      upgradeTo,
+    };
+  }
+
+  return { allowed: true };
 }
 
 export function formatCents(cents: number): string {

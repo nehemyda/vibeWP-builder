@@ -55,6 +55,11 @@ export type SyncReport =
 export async function detectSyncAction(smbId: string): Promise<SyncReport> {
   const { site } = await requireSiteAccess(smbId);
 
+  // A Vibe site has no WordPress, so there is nothing to compare against.
+  // Answered before the query rather than after, because the builder polls
+  // this and an install that cannot exist should cost nothing to rule out.
+  if (site.mode === "vibe") return { ok: true, pages: [] };
+
   const installation = await db.query.siteInstallations.findFirst({
     where: eq(siteInstallations.siteId, site.id),
   });
@@ -309,6 +314,10 @@ export type EditLockReport =
  */
 export async function detectEditLocksAction(smbId: string): Promise<EditLockReport> {
   const { site } = await requireSiteAccess(smbId);
+
+  // No WordPress, so nobody can be editing in one. This is the hot path —
+  // polled every five seconds while locked — so a Vibe site exits first.
+  if (site.mode === "vibe") return { ok: true, locks: [] };
 
   const installation = await db.query.siteInstallations.findFirst({
     where: eq(siteInstallations.siteId, site.id),

@@ -4,6 +4,7 @@ import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { BusinessDetailsFields } from "@/components/dashboard/BusinessDetailsFields";
 import { createAgencySiteAction } from "@/app/actions/agency-sites";
 import { PlanSelect } from "@/components/dashboard/PlanSelect";
+import { SiteModeSelect } from "@/components/dashboard/SiteModeSelect";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
 import { agencyNav } from "../../../nav";
 
@@ -76,6 +77,18 @@ export default async function AgencyNewSitePage({
               </label>
               <PlanSelect defaultValue={agency.plan} style={inputStyle} />
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="mode" style={labelStyle}>
+              Delivery
+            </label>
+            <SiteModeSelect style={inputStyle} />
+            <p className={shell.rowSub} style={{ marginTop: "0.4rem" }}>
+              Vibe sites run on our hosting at no extra charge. Vibe WordPress
+              provisions a real WordPress the client owns, and is billed monthly
+              on a plan that includes it.
+            </p>
           </div>
 
           <div style={{ border: "1px solid var(--line)", borderRadius: 12, padding: "1rem" }}>

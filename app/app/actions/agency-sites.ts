@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { profiles, sites, sitePages, businessProfiles } from "@/lib/db/schema";
+import { profiles, sites, sitePages, businessProfiles, type SiteMode } from "@/lib/db/schema";
 import { generateSmbId } from "@/lib/ids";
 import { requireAgency } from "@/lib/auth/require-agency";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -20,6 +20,11 @@ function str(formData: FormData, key: string): string | null {
  * they get their own dashboard scoped to just this one site, same as any
  * directly-signed-up SMB owner.
  */
+/** Only the two real modes; anything else is a stale or forged form post. */
+function modeOf(raw: FormDataEntryValue | null): SiteMode {
+  return String(raw ?? "") === "wordpress" ? "wordpress" : "vibe";
+}
+
 export async function createAgencySiteAction(formData: FormData) {
   const { user, profile: actor, agency } = await requireAgency();
   if (!agency) redirect("/agency");
@@ -29,6 +34,7 @@ export async function createAgencySiteAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const domain = String(formData.get("domain") ?? "").trim();
   const plan = planKeyOf(String(formData.get("plan") ?? "")) || planKeyOf(agency.plan);
+  const mode = modeOf(formData.get("mode"));
   const ownerFullName = String(formData.get("ownerFullName") ?? "").trim();
   const ownerEmail = String(formData.get("ownerEmail") ?? "").trim();
 
@@ -59,6 +65,7 @@ export async function createAgencySiteAction(formData: FormData) {
       name,
       domain: domain || null,
       plan,
+      mode,
       status: "draft",
     })
     .returning();

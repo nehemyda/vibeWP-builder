@@ -26,6 +26,21 @@ export const siteStatusEnum = pgEnum("site_status", [
   "trial",
 ]);
 
+/**
+ * How a site is delivered.
+ *
+ * "vibe"      — served by this platform. No WordPress exists for it.
+ * "wordpress" — provisioned into a real WordPress the client owns.
+ *
+ * Separate from `plan` because it is a product choice, not a price tier: it
+ * decides which machinery a site uses, and the plan decides whether that
+ * machinery is paid for. Separate from `status` because a site in either mode
+ * can be draft or live.
+ */
+export const siteModeEnum = pgEnum("site_mode", ["vibe", "wordpress"]);
+
+export type SiteMode = (typeof siteModeEnum.enumValues)[number];
+
 /** active = normal. suspended = temporarily locked out, recoverable. archived = read-only, recoverable. deleted = soft-deleted, hidden everywhere, recoverable. */
 export const agencyStatusEnum = pgEnum("agency_status", [
   "active",
@@ -90,6 +105,14 @@ export const sites = pgTable("sites", {
   name: text("name").notNull(),
   domain: text("domain"),
   status: siteStatusEnum("status").notNull().default("draft"),
+  /**
+   * Vibe, or Vibe WordPress — chosen when the site is created.
+   *
+   * Defaults to "vibe": a site with no WordPress behind it is the honest
+   * description of every site before it is exported, and making the paid
+   * mode the thing someone opts into keeps the charge deliberate.
+   */
+  mode: siteModeEnum("mode").notNull().default("vibe"),
   plan: text("plan").notNull().default("starter"),
   /**
    * What this specific client is billed per month, overriding whatever the
@@ -534,6 +557,15 @@ export const plans = pgTable("plans", {
   priceMonthlyCents: integer("price_monthly_cents").notNull().default(0),
   /** JSON array of feature strings, editable as one-per-line in the admin UI. */
   features: jsonb("features").$type<string[]>().notNull().default([]),
+  /**
+   * Whether this plan may run a site in WordPress mode.
+   *
+   * Lives on the plan rather than being hardcoded so which tier sells
+   * WordPress is editable at /admin/billing, like every other plan field.
+   * The recurring charge is the plan's own price — there is no separate
+   * WordPress fee to keep in step.
+   */
+  includesWordpress: boolean("includes_wordpress").notNull().default(false),
   siteLimit: integer("site_limit"),
   seatLimit: integer("seat_limit"),
   isActive: boolean("is_active").notNull().default(true),

@@ -18,6 +18,7 @@ export async function updatePlanAction(formData: FormData) {
   const seatLimitRaw = String(formData.get("seatLimit") ?? "").trim();
   const featuresRaw = String(formData.get("features") ?? "");
   const isActive = formData.get("isActive") === "on";
+  const includesWordpress = formData.get("includesWordpress") === "on";
   if (!planId || !name) redirect("/admin/billing");
 
   const features = featuresRaw
@@ -34,6 +35,7 @@ export async function updatePlanAction(formData: FormData) {
       seatLimit: seatLimitRaw ? Number(seatLimitRaw) : null,
       features,
       isActive,
+      includesWordpress,
       updatedAt: new Date(),
     })
     .where(eq(plans.id, planId));
