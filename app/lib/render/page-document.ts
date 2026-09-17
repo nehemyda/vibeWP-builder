@@ -143,8 +143,16 @@ export function renderSiteDocument(opts: {
   canonical?: string | null;
   /** Set for anything that must not be indexed — an unpublished preview, say. */
   noindex?: boolean;
+  /**
+   * Extra <head> markup, already escaped by whoever built it.
+   *
+   * Social tags and structured data, kept out of this function because what a
+   * page claims about a business is not a property of how it is assembled —
+   * and because a WordPress site gets the same claims from PHP instead.
+   */
+  head?: string;
 }): string {
-  const { body, title, description, colors, lang = "en", canonical, noindex } = opts;
+  const { body, title, description, colors, lang = "en", canonical, noindex, head } = opts;
   const palette = palettePresetCss(colors);
 
   return `<!doctype html>
@@ -157,6 +165,7 @@ export function renderSiteDocument(opts: {
   }${canonical ? `\n<link rel="canonical" href="${escAttr(canonical)}">` : ""}${
     noindex ? '\n<meta name="robots" content="noindex, nofollow">' : ""
   }
+${head ? `\n${head}` : ""}
 <link rel="stylesheet" href="/api/theme/sections.css">
 <style>
   html, body { margin: 0; padding: 0; }

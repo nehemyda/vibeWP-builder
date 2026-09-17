@@ -63,6 +63,96 @@ export function subdomainFromHost(rawHost: string | null | undefined): string | 
   return SUBDOMAIN.test(sub) ? sub : null;
 }
 
+/**
+ * The app's own address, from NEXT_PUBLIC_APP_URL.
+ *
+ * Custom-domain routing needs to know which host is US, because its rule is
+ * "anything that is not ours belongs to a client". Without an explicit answer
+ * that rule would swallow every request — so when this is unset, custom
+ * domains are simply off, and the dashboard keeps working.
+ */
+export function appHost(): string | null {
+  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim().toLowerCase();
+  if (!raw) return null;
+  try {
+    return new URL(raw).host.replace(/:\d+$/, "");
+  } catch {
+    return raw.replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/:\d+$/, "") || null;
+  }
+}
+
+/** A domain as we store and compare it: no scheme, no port, no path, lowercase. */
+export function normalizeDomain(raw: string | null | undefined): string | null {
+  const host = (raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/.*$/, "")
+    .replace(/:\d+$/, "")
+    .replace(/\.$/, "");
+
+  return DOMAIN.test(host) ? host : null;
+}
+
+/**
+ * At least two labels, so "localhost" or a bare word is never taken for a
+ * domain, and a final label containing a letter, so an IP address is not.
+ *
+ * A bare IP would only ever 404 — no site has one as its domain — but reading
+ * one as a client's website means a health check or a direct-to-origin request
+ * gets answered by the site renderer instead of the app.
+ */
+export const DOMAIN =
+  /^(?=.{4,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z0-9-]*[a-z][a-z0-9-]*$/;
+
+/**
+ * The two spellings of one custom domain.
+ *
+ * A client types "acme.com" into Settings and then points www.acme.com at us
+ * as well, because that is what registrars and their customers both do.
+ * Serving one and 404ing the other would read as the site being broken half
+ * the time, so a lookup tries both and the canonical link decides which one
+ * search engines are told about.
+ */
+export function domainVariants(domain: string): string[] {
+  const bare = domain.replace(/^www\./, "");
+  return bare === domain ? [domain, `www.${domain}`] : [domain, bare];
+}
+
+/**
+ * How a request's Host should be answered.
+ *
+ * "app"       — our own dashboard, builder and API. Session refresh applies.
+ * "subdomain" — a Vibe site at <key>.<VIBEWP_SITES_HOST>.
+ * "domain"    — a host that is not ours, so it is a client's own domain and
+ *               the renderer resolves it against sites.domain.
+ *
+ * Custom domains require appHost() to be configured; without it every
+ * unrecognised Host — including a bare IP, a preview URL or a proxy's own
+ * name — would be mistaken for a client's site.
+ */
+export type HostRoute =
+  | { kind: "app" }
+  | { kind: "subdomain"; key: string }
+  | { kind: "domain"; key: string };
+
+export function routeForHost(rawHost: string | null | undefined): HostRoute {
+  const sub = subdomainFromHost(rawHost);
+  if (sub) return { kind: "subdomain", key: sub };
+
+  const app = appHost();
+  const host = (rawHost ?? "").trim().toLowerCase().replace(/:\d+$/, "");
+  if (!app || !host) return { kind: "app" };
+
+  /* Our own host, and the bare hosting host — example.com itself is marketing,
+     not a site called "". */
+  const sites = sitesHost()?.replace(/:\d+$/, "");
+  if (host === app || host === `www.${app}` || (sites && host === sites)) return { kind: "app" };
+
+  const domain = normalizeDomain(host);
+  return domain ? { kind: "domain", key: domain } : { kind: "app" };
+}
+
 /** What a subdomain may be. Also what a stored one is validated against. */
 export const SUBDOMAIN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 

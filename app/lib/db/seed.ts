@@ -224,7 +224,10 @@ async function main() {
         ownerType: "smb",
         ownerUserId: smbOwnerId,
         name: "PIPEPRO Plumbing",
-        domain: "pipepro.com",
+        /* Distinct from the agency-managed PIPEPRO above. A domain is now an
+           ADDRESS — custom-domain routing resolves an incoming Host against
+           it — so two demo sites sharing one is a question with no answer. */
+        domain: "pipepro.co.uk",
         status: "live",
         mode: "wordpress" as const,
         plan: "growth",

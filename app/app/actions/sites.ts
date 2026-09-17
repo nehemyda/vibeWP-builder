@@ -8,6 +8,7 @@ import { profiles, agencies, agencyMembers, sites, sitePages } from "@/lib/db/sc
 import { roleHomePath } from "@/lib/role-redirect";
 import { generateSmbId } from "@/lib/ids";
 import { logActivity } from "@/lib/activity";
+import { normalizeDomain } from "@/lib/render/hosting";
 
 export async function canEditSite(userId: string, siteId: string) {
   const actor = await db.query.profiles.findFirst({ where: eq(profiles.id, userId) });
@@ -179,7 +180,13 @@ export async function updateSiteSettingsAction(formData: FormData) {
 
   const siteId = String(formData.get("siteId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
-  const domain = String(formData.get("domain") ?? "").trim();
+  /*
+   * Stored the way a Host header arrives: lowercase, no scheme, no port, no
+   * path. Custom-domain routing compares the two directly, so "https://Acme.com/"
+   * typed into Settings has to become "acme.com" here or the site would never
+   * be found at the address its owner just entered.
+   */
+  const domain = normalizeDomain(String(formData.get("domain") ?? ""));
   const redirectTo = String(formData.get("redirectTo") ?? "/dashboard");
   if (!siteId || !name) redirect(redirectTo);
 
@@ -188,7 +195,7 @@ export async function updateSiteSettingsAction(formData: FormData) {
   const actor = await db.query.profiles.findFirst({ where: eq(profiles.id, user.id) });
   await db
     .update(sites)
-    .set({ name, domain: domain || null })
+    .set({ name, domain })
     .where(eq(sites.id, siteId));
   await logActivity({
     actorUserId: user.id,

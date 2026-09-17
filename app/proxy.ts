@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
-import { subdomainFromHost } from "@/lib/render/hosting";
+import { routeForHost } from "@/lib/render/hosting";
 
 /**
  * Paths that must keep meaning the same on every host.
@@ -20,15 +20,24 @@ export async function proxy(request: NextRequest) {
    * touches the session refresh below: there is nothing to authenticate, and a
    * public page must not vary on whether some cookie happens to be present.
    *
-   * Inert unless VIBEWP_SITES_HOST is set — subdomainFromHost returns null —
-   * so on a deployment with no wildcard DNS this whole branch does not exist.
+   * Subdomains need VIBEWP_SITES_HOST; custom domains additionally need
+   * NEXT_PUBLIC_APP_URL, because "anything that is not ours belongs to a
+   * client" is only safe once something says which host is ours. With neither
+   * configured routeForHost answers "app" every time and this branch does not
+   * exist.
    */
-  const subdomain = subdomainFromHost(request.headers.get("host"));
+  const route = routeForHost(request.headers.get("host"));
   const path = request.nextUrl.pathname;
 
-  if (subdomain && !SHARED_PREFIXES.some((p) => path === p || path.startsWith(p))) {
+  if (route.kind !== "app" && !SHARED_PREFIXES.some((p) => path === p || path.startsWith(p))) {
     const url = request.nextUrl.clone();
-    url.pathname = `/hosted/${subdomain}${path === "/" ? "" : path}`;
+    /*
+     * The key is a subdomain OR a whole custom host, and the renderer tells
+     * them apart. Resolving a host to a site needs the database, and Proxy is
+     * explicitly not for data fetching — so this decides only whose request it
+     * is, not which site answers it.
+     */
+    url.pathname = `/hosted/${route.key}${path === "/" ? "" : path}`;
 
     /*
      * Tells the renderer this request arrived at the site's own address, so

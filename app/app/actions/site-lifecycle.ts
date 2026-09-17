@@ -16,8 +16,13 @@ import {
   formSubmissions,
   leads,
   businessProfiles,
+  plans,
+  profiles,
 } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
+import { planKeyOf } from "@/lib/billing";
+import { logActivity } from "@/lib/activity";
+import { exportToWordPressAction } from "@/app/actions/wordpress";
 
 /**
  * Restoring and permanently removing a soft-deleted site.
@@ -138,4 +143,92 @@ export async function restoreSiteFormAction(smbId: string): Promise<void> {
 
 export async function purgeSiteFormAction(smbId: string): Promise<void> {
   await purgeSiteAction(smbId);
+}
+
+/**
+ * Moves a Vibe site to Vibe WordPress.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THIS IS THE ONLY WAY MODE CHANGES
+ *
+ * Mode is asked once, at intake, and ignored by every save afterwards — a
+ * client fixing a typo in their phone number must not be able to orphan a
+ * provisioned install and the monthly charge behind it. This is the
+ * deliberate act that was carved out instead: it names what it costs, moves
+ * the site, and provisions the WordPress in the same breath.
+ *
+ * ONE WAY ONLY. Going back would mean deciding what happens to an install the
+ * client has been editing in wp-admin, and there is no answer to that which
+ * is not somebody losing work. Until there is, downgrading is a conversation
+ * with support rather than a button.
+ *
+ * WHAT DOES NOT MOVE: the content. Pages, header, footer, forms and leads are
+ * all platform-side and unchanged by this — which is the whole argument for
+ * letting someone start on Vibe and decide later.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export type UpgradeResult =
+  | { ok: true; url: string; provisioned: boolean }
+  | { ok: false; error: string };
+
+export async function upgradeSiteToWordPressAction(
+  smbId: string,
+  planKey: string,
+): Promise<UpgradeResult> {
+  const { user, site } = await requireSiteAccess(smbId);
+
+  if (site.mode === "wordpress") {
+    return { ok: false, error: "This site is already a Vibe WordPress site." };
+  }
+
+  /*
+   * The plan has to be one that actually sells WordPress, and it is checked
+   * BEFORE the mode is written — otherwise a refused upgrade would leave the
+   * site stranded in WordPress mode with no install and no way back.
+   */
+  const catalogue = await db.select().from(plans);
+  const chosen = catalogue.find((p) => p.key === planKeyOf(planKey));
+  if (!chosen?.includesWordpress || !chosen.isActive) {
+    const offered = catalogue
+      .filter((p) => p.includesWordpress && p.isActive)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((p) => p.name);
+    return {
+      ok: false,
+      error: offered.length
+        ? `That plan doesn't include WordPress. Choose ${offered.join(", ")}.`
+        : "No plan currently includes WordPress.",
+    };
+  }
+
+  await db
+    .update(sites)
+    .set({ mode: "wordpress", plan: chosen.key, lastEditedAt: new Date() })
+    .where(eq(sites.id, site.id));
+
+  await logActivity({
+    actorUserId: user.id,
+    actorName: (await db.query.profiles.findFirst({ where: eq(profiles.id, user.id) }))?.fullName ?? "Unknown",
+    action: "site.mode_changed",
+    targetType: "site",
+    targetId: site.id,
+    targetLabel: site.name,
+    metadata: { from: "vibe", to: "wordpress", plan: chosen.key },
+  });
+
+  /*
+   * The existing export, unchanged. It reads the same schema it always did,
+   * so there is nothing to migrate — and running it here means the upgrade
+   * finishes with a WordPress the client can open, rather than with a flag
+   * set and a second button to find.
+   */
+  const result = await exportToWordPressAction(smbId);
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: `Switched to Vibe WordPress, but the install didn't finish: ${result.error} Try exporting again.`,
+    };
+  }
+
+  return { ok: true, url: result.url, provisioned: result.provisioned };
 }
