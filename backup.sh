@@ -54,6 +54,35 @@ TSX="$APP/node_modules/.bin/tsx"
   || fail "database dump failed (see $LOG)"
 log "database dumped"
 
+# --- 1b. archive the media store ---------------------------------------------
+# Published Vibe sites serve their photographs from VIBEWP_MEDIA_ROOT. After a
+# publish the page schema points at OUR copy, so losing that directory loses a
+# client's images — the Pexels address is kept alongside as sourceUrl, which
+# makes recovery a re-fetch rather than a redraw, but only for stock photos.
+#
+# Committed as one gzipped tar rather than loose files: git is a poor home for
+# binaries and a worse one for thousands of them. The size guard is the point
+# at which that stops being a reasonable trade — a repo is not object storage,
+# and crossing it is the signal to swap the media store's driver (see
+# lib/media/store.ts) rather than to raise the limit.
+MEDIA_ROOT="${VIBEWP_MEDIA_ROOT:-${VIBEWP_SITES_ROOT:-$HOME/vibewp-sites}/_media}"
+MEDIA_MAX_MB=200
+
+if [ -d "$MEDIA_ROOT" ]; then
+  MEDIA_MB=$(du -sm "$MEDIA_ROOT" 2>/dev/null | cut -f1)
+  if [ "${MEDIA_MB:-0}" -gt "$MEDIA_MAX_MB" ]; then
+    log "WARNING: media store is ${MEDIA_MB}MB (limit ${MEDIA_MAX_MB}MB) — NOT backed up."
+    log "         Move media to object storage, or raise MEDIA_MAX_MB knowingly."
+  else
+    mkdir -p "$REPO/backups"
+    tar -czf "$REPO/backups/media.tar.gz" -C "$(dirname "$MEDIA_ROOT")" "$(basename "$MEDIA_ROOT")" \
+      || fail "media archive failed"
+    log "media archived (${MEDIA_MB:-0}MB)"
+  fi
+else
+  log "no media store at $MEDIA_ROOT — nothing to archive"
+fi
+
 # --- 2. stage ----------------------------------------------------------------
 git add -A
 

@@ -7,6 +7,7 @@ import { resolveBrandColors } from "@/lib/brand/palettes";
 import { loadBusinessContext, contactFactsFor } from "@/lib/ai/business-context";
 import { composePageBody, pageTitle, renderSiteDocument } from "@/lib/render/page-document";
 import { SUBDOMAIN, vibeSiteUrl } from "@/lib/render/hosting";
+import { storedLogoUrl } from "@/lib/media/adopt";
 import type { ChromeSection } from "@/lib/render/page-document";
 
 /**
@@ -94,11 +95,18 @@ export async function GET(request: Request, ctx: { params: Promise<{ siteKey: st
     hasLogo: Boolean(profile?.logoUrl),
   });
 
+  /*
+   * The logo as a file, if publish has taken it in. Falling back to the stored
+   * data URL keeps a logo changed since the last publish visible — heavier
+   * than it should be, but present, which a 404 would not be.
+   */
+  const logoUrl = (await storedLogoUrl(site.id, profile?.logoUrl)) ?? profile?.logoUrl ?? undefined;
+
   const withChrome = withPreviewPlaceholders(body, {
     target: "live",
     businessName: site.name,
     facts,
-    logoUrl: profile?.logoUrl ?? undefined,
+    logoUrl,
     pages: pages.map((p) => ({ slug: p.slug, title: pageTitle(p.slug, p.title) })),
   });
 

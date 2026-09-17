@@ -1,9 +1,9 @@
 "use server";
 
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { sites, sitePages, siteInstallations, profiles } from "@/lib/db/schema";
+import { sites, sitePages, siteInstallations, profiles, businessProfiles } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
 import { requireAlt } from "@/lib/wp/blocks";
 import { withStaticForms } from "@/lib/forms/inject";
@@ -30,6 +30,7 @@ import {
 import { logActivity } from "@/lib/activity";
 import { wordpressEntitlement } from "@/lib/billing";
 import { sitesHost, subdomainFrom, vibeSiteUrl } from "@/lib/render/hosting";
+import { adoptLogo, adoptSchemaImages } from "@/lib/media/adopt";
 
 /**
  * The name of whoever actually performed the action.
@@ -548,6 +549,35 @@ async function publishVibeSite(
     return { ok: false, error: "There's no content to publish yet — build a page first." };
   }
 
+  /*
+   * Take the photographs before going live.
+   *
+   * Generated content stores the Pexels CDN URL it was found at, so without
+   * this every visitor to every published Vibe site would be fetching images
+   * from a third party we do not control — the same dependency export removes
+   * by sideloading into the media library. A photograph that cannot be
+   * fetched keeps its original URL rather than failing the publish.
+   *
+   * Only at publish, which means an image added by chat afterwards stays on
+   * Pexels until the next one. Doing it on every save would put a network
+   * fetch in the path of every edit, and the fix is simply to publish again.
+   * How many pages moved is recorded on the activity entry below.
+   */
+  let adopted = 0;
+  for (const p of pages) {
+    const { changed, schema } = await adoptSchemaImages(site.id, p.schemaJson);
+    if (!changed) continue;
+    await db.update(sitePages).set({ schemaJson: schema }).where(eq(sitePages.id, p.id));
+    adopted += 1;
+  }
+
+  /* The logo becomes a file too — see adoptLogo. The stored data URL is left
+     alone because the canvas and `wp media import` both need the bytes. */
+  const profile = await db.query.businessProfiles.findFirst({
+    where: and(eq(businessProfiles.ownerId, site.id), eq(businessProfiles.ownerType, "site")),
+  });
+  await adoptLogo(site.id, profile?.logoUrl);
+
   let subdomain = site.vibeSubdomain;
   if (!subdomain) {
     subdomain = await claimSubdomain(site);
@@ -569,7 +599,7 @@ async function publishVibeSite(
     targetType: "site",
     targetId: site.id,
     targetLabel: site.name,
-    metadata: { url, mode: "vibe" },
+    metadata: { url, mode: "vibe", pagesWithAdoptedImages: adopted },
   });
 
   return { ok: true, url };
