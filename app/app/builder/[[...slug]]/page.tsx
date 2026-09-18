@@ -17,10 +17,10 @@ import type { FormPreviewField } from "@/lib/wp/serialize";
 import { loadIntakeState } from "@/lib/intake-state";
 import { getPlatformSettings } from "@/lib/platform-settings";
 import { vibeSiteUrl } from "@/lib/render/hosting";
+import { resolveTokens } from "@/lib/design/resolve";
 import { pageTitle } from "@/lib/render/page-document";
 import { formDefinitions } from "@/lib/db/schema";
 import { sectionsForPlan } from "@/lib/sections/resolve";
-import { sanitiseTokens } from "@/lib/design/tokens";
 import { BuilderApp } from "./BuilderApp";
 
 /**
@@ -249,7 +249,7 @@ export default async function BuilderPage({
       // Sanitised on the way out as well as in: a value that was valid when it
       // was stored can fall outside a range we later narrow, and the canvas
       // should show what the exported site will show.
-      initialDesignTokens={sanitiseTokens(site.designTokens)}
+      initialDesignTokens={resolveTokens(platform.designTokens, site.designTokens)}
       siteId={site.id}
       smbId={site.smbId ?? ""}
       initialPages={allPages.map((p) => ({

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { palettePresetCss } from "@/lib/render/page-document";
-import { tokensToCss, type DesignTokens } from "@/lib/design/tokens";
+import { rootVariablesCss } from "@/lib/render/page-document";
+import { type DesignTokens } from "@/lib/design/tokens";
 import { ELEMENT_ROLES } from "@/lib/design/element-style";
 import { textPaths } from "@/lib/design/text-map";
 import { plainText, readRichTextDom } from "@/lib/wp/richtext";
@@ -498,8 +498,9 @@ export function PreviewFrame({
    * inline layout CSS. Without the class the stylesheet matches nothing.
    */
   /* Shared with the live renderer, so the canvas and a served page cannot
-     disagree about a client's colours. See lib/render/page-document.ts. */
-  const paletteCss = palettePresetCss(colors);
+     disagree about a client's design. The whole :root is built in one place —
+     see rootVariablesCss in lib/render/page-document.ts. */
+  const rootVars = rootVariablesCss({ colors, tokens: designTokens ?? {} });
 
   const doc = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -520,8 +521,7 @@ export function PreviewFrame({
   html { overflow: hidden; }
   body { background: #fff; }
   :root {
-    ${paletteCss}
-    ${tokensToCss(designTokens ?? {})}
+    ${rootVars}
   }
 </style>
 </head><body class="yp-page" data-vibewp-preview>${html}</body></html>`;

@@ -3,9 +3,13 @@
 import { eq } from "drizzle-orm";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
-import { sites } from "@/lib/db/schema";
+import { sites, platformSettings } from "@/lib/db/schema";
 import { canEditSite } from "@/app/actions/sites";
-import { sanitiseTokens, type DesignTokens } from "@/lib/design/tokens";
+import { DESIGN_TOKENS, sanitiseTokens, type DesignTokens } from "@/lib/design/tokens";
+import { requirePermission } from "@/lib/auth/require-permission";
+import { getPlatformSettings } from "@/lib/platform-settings";
+import { logActivity } from "@/lib/activity";
+import { redirect } from "next/navigation";
 
 /**
  * Saves the site's hand-set design values.
@@ -41,4 +45,53 @@ export async function saveDesignTokensAction(opts: {
     .where(eq(sites.id, opts.siteId));
 
   return { ok: true, tokens };
+}
+
+/**
+ * Saves the PLATFORM's design defaults — the layer under every site.
+ *
+ * Separate from saveDesignTokensAction, and not a parameter on it, because the
+ * two differ in who may call them and what they reach. A site's tokens are
+ * checked against canEditSite; these are checked against being an
+ * administrator, and a mistake here moves every site on the platform rather
+ * than one.
+ *
+ * Sanitised the same way and for the same reason: these reach a public
+ * stylesheet, and the form is not the only thing that can call a server
+ * action. A value equal to the stylesheet's own default is stored as absent,
+ * so the platform never pins itself against a stylesheet that may improve.
+ */
+export async function savePlatformDesignAction(formData: FormData) {
+  const { profile: actor } = await requirePermission("settings.manage");
+
+  const raw: Record<string, number> = {};
+  for (const spec of DESIGN_TOKENS) {
+    const v = formData.get(spec.name);
+    if (v === null) continue;
+    const n = Number(v);
+    if (Number.isFinite(n)) raw[spec.name] = n;
+  }
+
+  /* An explicit reset has to be able to reach null, which dragging cannot:
+     every slider sitting at its default is indistinguishable from "unset". */
+  const reset = formData.get("reset") === "1";
+  const tokens = reset ? null : sanitiseTokens(raw);
+
+  const settings = await getPlatformSettings();
+  await db
+    .update(platformSettings)
+    .set({ designTokens: tokens, updatedAt: new Date() })
+    .where(eq(platformSettings.id, settings.id));
+
+  await logActivity({
+    actorUserId: actor.id,
+    actorName: actor.fullName,
+    action: "platform.design_changed",
+    targetType: "platform",
+    targetId: settings.id,
+    targetLabel: "Global design",
+    metadata: { tokens: tokens ?? {}, reset },
+  });
+
+  redirect("/admin/design?saved=1");
 }

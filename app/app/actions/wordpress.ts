@@ -7,7 +7,6 @@ import { db } from "@/lib/db";
 import { sites, sitePages, siteInstallations, profiles, businessProfiles } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
 import { requireAlt } from "@/lib/wp/blocks";
-import { sanitiseTokens } from "@/lib/design/tokens";
 import { withStaticForms } from "@/lib/forms/inject";
 import { schemaToGutenberg, sectionToTemplatePart, withSiteLogo } from "@/lib/wp/serialize";
 import { resolveBrandColors } from "@/lib/brand/palettes";
@@ -32,6 +31,8 @@ import {
 import { logActivity } from "@/lib/activity";
 import { wordpressEntitlement } from "@/lib/billing";
 import { sitesHost, vibeSiteUrl } from "@/lib/render/hosting";
+import { resolveTokens } from "@/lib/design/resolve";
+import { getPlatformSettings } from "@/lib/platform-settings";
 import { claimVibeSubdomain } from "@/lib/render/claim-subdomain";
 import { adoptLogo, adoptSchemaImages } from "@/lib/media/adopt";
 
@@ -387,9 +388,14 @@ export async function exportToWordPressAction(
       await writeThemePalette({
         installPath: installation.installPath,
         colors: resolveBrandColors(site.brandPaletteKey, site.brandColors),
-        // Sanitised again on the way out: a value stored when a range was
-        // wider must not reach a published stylesheet now that it is narrower.
-        tokens: sanitiseTokens(site.designTokens),
+        /*
+         * The RESOLVED values, platform defaults under the site's own.
+         * WordPress has no notion of our platform layer and needs none — it
+         * receives the answer, not the arithmetic. Sanitised inside
+         * resolveTokens, so a value stored when a range was wider cannot
+         * reach a published stylesheet now that it is narrower.
+         */
+        tokens: resolveTokens((await getPlatformSettings()).designTokens, site.designTokens),
       });
     } catch (err) {
       // Non-fatal: the theme's own defaults are a working palette.

@@ -751,6 +751,15 @@ export const platformSettings = pgTable("platform_settings", {
    * so they must be the real targets for this platform's hosting — never a
    * placeholder, which would send a live domain to the wrong server.
    */
+  /**
+   * Platform-wide design defaults, as DESIGN_TOKENS values.
+   *
+   * The layer between the stylesheet's own fallbacks and a site's own
+   * overrides — see resolveTokens in lib/design/resolve.ts. Null means "use
+   * what the stylesheet does", which is what every site rendered before this
+   * column existed.
+   */
+  designTokens: jsonb("design_tokens"),
   hostingIpv4: text("hosting_ipv4"),
   hostingCname: text("hosting_cname"),
   updatedAt: timestamp("updated_at", { withTimezone: true })

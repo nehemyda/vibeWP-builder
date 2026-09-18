@@ -1,4 +1,5 @@
 import { schemaToGutenberg, sectionToTemplatePart, withSiteLogo } from "@/lib/wp/serialize";
+import { tokensToCss, type DesignTokens } from "@/lib/design/tokens";
 
 /**
  * One page, assembled the same way for the canvas and for a visitor.
@@ -122,6 +123,38 @@ export function palettePresetCss(colors: Record<string, string> | null | undefin
     .join("\n    ");
 }
 
+/**
+ * Everything that goes in the document's `:root`.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THE WHOLE BLOCK, NOT JUST THE PALETTE
+ *
+ * The palette was shared here and the design tokens were not, so each surface
+ * assembled its own `:root`. The canvas emitted both, export wrote both into
+ * theme.json, and the live renderer emitted only the palette — a client could
+ * drag the style panel, watch the builder change, watch their exported
+ * WordPress change, and see nothing on their published Vibe site.
+ *
+ * writeThemePalette's comment already named this failure for WordPress:
+ * "the site would publish at the theme's defaults while the preview showed
+ * the client's choices — the exact divergence the shared-stylesheet
+ * architecture exists to prevent." It was true of Vibe too, because half the
+ * block was shared and half was copied.
+ *
+ * So the unit is the block, not the palette. A surface added later gets both
+ * or neither, and cannot get one.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export function rootVariablesCss(opts: {
+  colors?: Record<string, string> | null;
+  /** Already sanitised — see sanitiseTokens, and the note in renderSiteDocument. */
+  tokens?: DesignTokens | null;
+}): string {
+  return [palettePresetCss(opts.colors), tokensToCss(opts.tokens ?? {})]
+    .filter(Boolean)
+    .join("\n    ");
+}
+
 function escAttr(v: string): string {
   return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -146,6 +179,14 @@ export function renderSiteDocument(opts: {
   title: string;
   description?: string | null;
   colors?: Record<string, string> | null;
+  /**
+   * The client's hand-set design values, sanitised.
+   *
+   * Sanitised by the CALLER, on the way out, exactly as export does: a value
+   * stored while a range was wider must not reach a published stylesheet now
+   * that the range is narrower.
+   */
+  tokens?: DesignTokens | null;
   lang?: string;
   /**
    * The address this page should be indexed under.
@@ -166,8 +207,8 @@ export function renderSiteDocument(opts: {
    */
   head?: string;
 }): string {
-  const { body, title, description, colors, lang = "en", canonical, noindex, head } = opts;
-  const palette = palettePresetCss(colors);
+  const { body, title, description, colors, tokens, lang = "en", canonical, noindex, head } = opts;
+  const rootVars = rootVariablesCss({ colors, tokens });
 
   return `<!doctype html>
 <html lang="${escAttr(lang)}">
@@ -185,7 +226,7 @@ ${head ? `\n${head}` : ""}
   html, body { margin: 0; padding: 0; }
   body { background: #fff; }
   :root {
-    ${palette}
+    ${rootVars}
   }
 </style>
 </head>

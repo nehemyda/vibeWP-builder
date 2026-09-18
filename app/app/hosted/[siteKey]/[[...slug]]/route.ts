@@ -4,6 +4,8 @@ import { sites, sitePages, businessProfiles, siteInstallations } from "@/lib/db/
 import { withPreviewPlaceholders } from "@/lib/wp/serialize";
 import { withStaticForms } from "@/lib/forms/inject";
 import { resolveBrandColors } from "@/lib/brand/palettes";
+import { resolveTokens } from "@/lib/design/resolve";
+import { getPlatformSettings } from "@/lib/platform-settings";
 import { loadBusinessContext, contactFactsFor } from "@/lib/ai/business-context";
 import { composePageBody, pageTitle, renderSiteDocument } from "@/lib/render/page-document";
 import { SUBDOMAIN, domainVariants, normalizeDomain, vibeSiteUrl } from "@/lib/render/hosting";
@@ -247,6 +249,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ siteKey: st
     title,
     description,
     colors: resolveBrandColors(site.brandPaletteKey, site.brandColors),
+    /* Platform defaults, then the site's own — see resolveTokens. Both are
+       sanitised there, so a value stored when a range was wider cannot reach
+       a published stylesheet now that it is narrower. */
+    tokens: resolveTokens((await getPlatformSettings()).designTokens, site.designTokens),
     canonical: pageCanonical,
     noindex: !viaHost || page.noIndex,
     head,
