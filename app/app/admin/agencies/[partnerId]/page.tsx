@@ -6,6 +6,8 @@ import { requireRole } from "@/lib/auth/require-role";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { Pagination } from "@/components/dashboard/Pagination";
 import { CopyableText } from "@/components/dashboard/CopyableText";
+import { Chip } from "@/components/dashboard/Chip";
+import { DashboardIcon, DeleteIcon, ViewIcon } from "@/components/dashboard/ActionIcons";
 import { ConfirmSubmitButton } from "@/components/dashboard/ConfirmSubmitButton";
 import { BusinessDetailsFields } from "@/components/dashboard/BusinessDetailsFields";
 import { PlanSelect } from "@/components/dashboard/PlanSelect";
@@ -306,7 +308,18 @@ export default async function AgencyDetailPage({
                       <CopyableText value={site.name}>
                         <div className={shell.rowName}>{site.name}</div>
                       </CopyableText>
-                      <div className={shell.rowSub}>{site.domain ?? "not yet published"}</div>
+                      <div className={shell.rowSub}>
+                        {site.domain ?? "not yet published"}
+                        <Chip
+                          title={
+                            site.mode === "wordpress"
+                              ? "Runs on its own WordPress install"
+                              : "Hosted by us"
+                          }
+                        >
+                          {site.mode === "wordpress" ? "VibeWP" : "Vibe"}
+                        </Chip>
+                      </div>
                     </td>
                     <td>
                       <span className={`${shell.pill} ${shell[pill.cls]}`}>{pill.label}</span>
@@ -318,16 +331,14 @@ export default async function AgencyDetailPage({
                           className={`${shell.btn} ${shell.btnSmall}`}
                           href={`/admin/agencies/${agency.partnerId}/sites/${site.smbId}`}
                         >
+                          <ViewIcon />
                           View
                         </a>
-                        <a
-                          className={`${shell.btn} ${shell.btnSmall}`}
-                          href={`/builder/${agency.partnerId}/${site.smbId}`}
-                        >
-                          Open in builder
-                        </a>
+                        {/* No "Open in builder": View opens the site's own
+                            page, which links into the builder. */}
                         <form action={startImpersonationAction.bind(null, site.ownerUserId)}>
                           <button type="submit" className={`${shell.btn} ${shell.btnSmall}`}>
+                            <DashboardIcon />
                             Dashboard
                           </button>
                         </form>
@@ -336,6 +347,7 @@ export default async function AgencyDetailPage({
                             confirmMessage={`Delete ${site.name}? This hides it but keeps all leads and builder content — recoverable.`}
                             className={`${shell.btn} ${shell.btnSmall}`}
                           >
+                            <DeleteIcon />
                             Delete
                           </ConfirmSubmitButton>
                         </form>

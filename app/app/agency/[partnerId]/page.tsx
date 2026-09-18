@@ -9,6 +9,8 @@ import { daysAgo } from "@/lib/time";
 import { planKeyOf, planLabel } from "@/lib/billing";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CopyableText } from "@/components/dashboard/CopyableText";
+import { Chip } from "@/components/dashboard/Chip";
+import { DashboardIcon, ViewIcon } from "@/components/dashboard/ActionIcons";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
 import styles from "../agency.module.css";
 import { agencyNav } from "../nav";
@@ -208,25 +210,24 @@ export default async function AgencyDashboardPage({
                               billed identically; the only difference is whose
                               dashboard it is, so that is what the label says.
                             */}
-                            {site.ownerUserId === user.id && (
-                              <span
-                                style={{
-                                  marginLeft: "0.5rem",
-                                  padding: "0.1rem 0.4rem",
-                                  borderRadius: 999,
-                                  border: "1px solid var(--line, #dbdee3)",
-                                  fontSize: "0.68rem",
-                                  fontWeight: 600,
-                                  color: "var(--muted, #79808f)",
-                                  verticalAlign: "middle",
-                                }}
-                              >
-                                Your site
-                              </span>
-                            )}
+                            {site.ownerUserId === user.id && <Chip>Your site</Chip>}
                           </div>
                           <div className={shell.rowSub}>
                             {site.domain ?? "not yet published"}
+                            {/*
+                              Beside the domain because that is what it
+                              qualifies: whether this address is served by us
+                              or by a WordPress the client owns.
+                            */}
+                            <Chip
+                              title={
+                                site.mode === "wordpress"
+                                  ? "Runs on its own WordPress install"
+                                  : "Hosted by us"
+                              }
+                            >
+                              {site.mode === "wordpress" ? "VibeWP" : "Vibe"}
+                            </Chip>
                           </div>
                         </div>
                       </div>
@@ -243,14 +244,12 @@ export default async function AgencyDashboardPage({
                         className={`${shell.btn} ${shell.btnSmall}`}
                         href={`${basePath}/sites/${site.smbId}`}
                       >
+                          <ViewIcon />
                           View
                         </Link>
-                        <a
-                          className={`${shell.btn} ${shell.btnSmall}`}
-                          href={`/builder/${agency.partnerId}/${site.smbId}`}
-                        >
-                          Open in builder
-                        </a>
+                        {/* No "Open in builder": View opens the site's own
+                            page, which links into the builder. Same reasoning
+                            as the full client list. */}
                         {/*
                           Every site has a dashboard. A client's needs
                           impersonation; one you own is a plain link, now that
@@ -262,11 +261,13 @@ export default async function AgencyDashboardPage({
                             className={`${shell.btn} ${shell.btnSmall}`}
                             href={`/dashboard/${partnerId}/${site.smbId}`}
                           >
+                            <DashboardIcon />
                             Dashboard
                           </a>
                         ) : (
                           <form action={startImpersonationAction.bind(null, site.ownerUserId)}>
                             <button type="submit" className={`${shell.btn} ${shell.btnSmall}`}>
+                              <DashboardIcon />
                               Dashboard
                             </button>
                           </form>

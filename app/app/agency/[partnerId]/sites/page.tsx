@@ -7,6 +7,14 @@ import { requireAgency } from "@/lib/auth/require-agency";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { Pagination } from "@/components/dashboard/Pagination";
 import { CopyableText } from "@/components/dashboard/CopyableText";
+import { Chip } from "@/components/dashboard/Chip";
+import {
+  DashboardIcon,
+  DeleteIcon,
+  PurgeIcon,
+  RestoreIcon,
+  ViewIcon,
+} from "@/components/dashboard/ActionIcons";
 import { ConfirmSubmitButton } from "@/components/dashboard/ConfirmSubmitButton";
 import { startImpersonationAction } from "@/app/actions/impersonation";
 import { deleteSiteAction } from "@/app/actions/sites";
@@ -156,25 +164,27 @@ export default async function AgencySitesPage({
                               billed identically; the only difference is whose
                               dashboard it is, so that is what the label says.
                             */}
-                            {site.ownerUserId === user.id && (
-                              <span
-                                style={{
-                                  marginLeft: "0.5rem",
-                                  padding: "0.1rem 0.4rem",
-                                  borderRadius: 999,
-                                  border: "1px solid var(--line, #dbdee3)",
-                                  fontSize: "0.68rem",
-                                  fontWeight: 600,
-                                  color: "var(--muted, #79808f)",
-                                  verticalAlign: "middle",
-                                }}
-                              >
-                                Your site
-                              </span>
-                            )}
+                            {site.ownerUserId === user.id && <Chip>Your site</Chip>}
                           </div>
                           </CopyableText>
-                          <div className={shell.rowSub}>{site.domain ?? "not yet published"}</div>
+                          <div className={shell.rowSub}>
+                            {site.domain ?? "not yet published"}
+                            {/*
+                              Beside the domain because that is what it
+                              qualifies: whether this address is served by us
+                              or by a WordPress the client owns. On the name
+                              above it would read as a second brand.
+                            */}
+                            <Chip
+                              title={
+                                site.mode === "wordpress"
+                                  ? "Runs on its own WordPress install"
+                                  : "Hosted by us"
+                              }
+                            >
+                              {site.mode === "wordpress" ? "VibeWP" : "Vibe"}
+                            </Chip>
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -188,14 +198,19 @@ export default async function AgencySitesPage({
                         className={`${shell.btn} ${shell.btnSmall}`}
                         href={`${basePath}/sites/${site.smbId}`}
                       >
+                          <ViewIcon />
                           View
                         </Link>
-                        <a
-                          className={`${shell.btn} ${shell.btnSmall}`}
-                          href={`/builder/${agency.partnerId}/${site.smbId}`}
-                        >
-                          Open in builder
-                        </a>
+                        {/*
+                          No "Open in builder" here.
+                          
+                          It was shown on the Deleted tab too, where the
+                          builder refuses the site anyway — an action offered
+                          in a row where it cannot work. And on the Active tab
+                          it only saved a click: View opens the site's own
+                          page, which links into the builder. Five buttons in a
+                          row is the cost; a shortcut is not worth it.
+                        */}
                         {/*
                           Every site has a dashboard. A client's needs
                           impersonation; one you own is a plain link, now that
@@ -207,11 +222,13 @@ export default async function AgencySitesPage({
                             className={`${shell.btn} ${shell.btnSmall}`}
                             href={`/dashboard/${partnerId}/${site.smbId}`}
                           >
+                            <DashboardIcon />
                             Dashboard
                           </a>
                         ) : (
                           <form action={startImpersonationAction.bind(null, site.ownerUserId)}>
                             <button type="submit" className={`${shell.btn} ${shell.btnSmall}`}>
+                              <DashboardIcon />
                               Dashboard
                             </button>
                           </form>
@@ -220,6 +237,7 @@ export default async function AgencySitesPage({
                           <>
                             <form action={restoreSiteFormAction.bind(null, site.smbId ?? "")}>
                               <button type="submit" className={`${shell.btn} ${shell.btnSmall}`}>
+                                <RestoreIcon />
                                 Restore
                               </button>
                             </form>
@@ -232,6 +250,7 @@ export default async function AgencySitesPage({
                                 confirmMessage={`Permanently delete ${site.name}? Its pages, form submissions, builder history and settings are destroyed. This cannot be undone.`}
                                 className={`${shell.btn} ${shell.btnSmall}`}
                               >
+                                <PurgeIcon />
                                 Delete permanently
                               </ConfirmSubmitButton>
                             </form>
@@ -242,6 +261,7 @@ export default async function AgencySitesPage({
                               confirmMessage={`Delete ${site.name}? This hides it but keeps all leads and builder content — you can restore it from the Deleted tab.`}
                               className={`${shell.btn} ${shell.btnSmall}`}
                             >
+                              <DeleteIcon />
                               Delete
                             </ConfirmSubmitButton>
                           </form>

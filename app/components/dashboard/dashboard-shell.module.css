@@ -186,9 +186,19 @@
   color: #fff;
   border-color: var(--ink);
 }
+/*
+ * The compact button, used for every action that sits inside a table row.
+ *
+ * Tightened when row actions gained icons: a glyph plus a label in the old
+ * padding made a five-button row wide enough to crowd the content it acts on.
+ * The gap narrows with it, since 0.4rem between a 13px icon and 12px text
+ * reads as a space rather than a pairing.
+ */
 .btnSmall {
-  padding: 0.4rem 0.8rem;
-  font-size: 0.8rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  gap: 0.3rem;
+  border-radius: 8px;
 }
 
 /* ---- stat cards ---- */
