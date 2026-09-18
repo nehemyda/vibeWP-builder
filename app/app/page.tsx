@@ -1,8 +1,39 @@
 import Link from "next/link";
+import { eq } from "drizzle-orm";
 import styles from "./page.module.css";
 import { startBuildingAction } from "./actions/sites";
+import { createClient } from "@/lib/supabase/server";
+import { db } from "@/lib/db";
+import { profiles } from "@/lib/db/schema";
+import { roleHomePath } from "@/lib/role-redirect";
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  /*
+   * The nav has to know whether anyone is signed in.
+   *
+   * It used to offer "Log in" and "Get started" unconditionally, so a signed-in
+   * client reading the marketing page was invited to sign in again — and while
+   * an admin was impersonating someone, the page argued with the banner
+   * directly above it, which said whose account they were in.
+   *
+   * Impersonation swaps the session rather than tagging it, so getUser() is
+   * already the impersonated person and roleHomePath sends them where THEY
+   * belong. Nothing here has to know impersonation exists.
+   *
+   * The prompt box below was always session-aware — startBuildingAction either
+   * starts a draft or bounces to /register. This is the rest of that.
+   */
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const home = user
+    ? roleHomePath(
+        (await db.query.profiles.findFirst({ where: eq(profiles.id, user.id) }))?.role ?? "smb_owner",
+      )
+    : null;
+
   return (
     <>
       <div className={styles.mesh} />
@@ -20,12 +51,20 @@ export default function LandingPage() {
             <a href="#">Pricing</a>
           </div>
           <div className={styles.navActions}>
-            <a className={styles.btnGhost} href="/login">
-              Log in
-            </a>
-            <a className={styles.btnSolid} href="/register">
-              Get started
-            </a>
+            {home ? (
+              <a className={styles.btnSolid} href={home}>
+                Go to dashboard
+              </a>
+            ) : (
+              <>
+                <a className={styles.btnGhost} href="/login">
+                  Log in
+                </a>
+                <a className={styles.btnSolid} href="/register">
+                  Get started
+                </a>
+              </>
+            )}
           </div>
         </nav>
 
