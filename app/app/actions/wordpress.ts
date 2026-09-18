@@ -4,7 +4,7 @@
 import { imagePaths, writeImage } from "@/lib/design/image-map";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { sites, sitePages, siteInstallations, profiles, businessProfiles } from "@/lib/db/schema";
+import { sites, sitePages, siteInstallations, profiles, businessProfiles, platformPlugins } from "@/lib/db/schema";
 import { requireSiteAccess } from "@/lib/auth/require-site-access";
 import { requireAlt } from "@/lib/wp/blocks";
 import { withStaticForms } from "@/lib/forms/inject";
@@ -20,6 +20,7 @@ import {
   upsertPage,
   driverAvailable,
   ensureSiteServing,
+  ensureSitePlugins,
   createAdminLoginUrl,
   sideloadImage,
   syncTheme,
@@ -114,7 +115,21 @@ async function sideloadSchemaImages(
 }
 
 export type ExportResult =
-  | { ok: true; url: string; provisioned: boolean; pageUrl: string }
+  | {
+      ok: true;
+      url: string;
+      provisioned: boolean;
+      pageUrl: string;
+      /**
+       * Plugins on the checklist that could not be installed.
+       *
+       * Carried on a SUCCESSFUL export deliberately: the site published, and
+       * losing it over a plugin would be the worse trade — but afterwards
+       * "did not install" and "installed" look identical, so this is the only
+       * moment anyone can be told.
+       */
+      pluginFailures?: Array<{ name: string; reason: string }>;
+    }
   | { ok: false; error: string }
   /**
    * Refused because WordPress holds edits this push would destroy. Distinct
@@ -333,6 +348,61 @@ export async function exportToWordPressAction(
     }
 
     /*
+     * The platform's plugin checklist.
+     *
+     * After the server is up and before any content is pushed, so a fresh
+     * install has its SEO and security plugins in place by the time a client
+     * first opens wp-admin. Runs on every export, not only at provision — see
+     * ensureSitePlugins for why.
+     */
+    const checklist = await db
+      .select()
+      .from(platformPlugins)
+      .where(eq(platformPlugins.isActive, true))
+      .orderBy(platformPlugins.sortOrder);
+
+    /*
+     * Skipped entirely when this install already has exactly this checklist.
+     *
+     * The skip is the difference between a feature and a tax. Applying the
+     * list is one wp-cli call per row, and wp-cli on a site carrying a
+     * firewall and a page cache takes tens of seconds per call because each
+     * invocation boots WordPress with them loaded — measured at 130s to
+     * re-apply four rows that were already there. Nobody would accept that on
+     * every export, and the alternative of only ever applying at provision
+     * would mean a plugin added later never reaching sites that already exist.
+     *
+     * The signature covers what would actually change an install: which
+     * plugins, and whether each is activated.
+     */
+    const signature = checklist.map((p) => `${p.slug}:${p.autoActivate ? 1 : 0}`).join(",");
+    const needsPlugins = checklist.length > 0 && installation.pluginsSignature !== signature;
+
+    const pluginReport = needsPlugins
+      ? await ensureSitePlugins({
+          installPath: installation.installPath,
+          plugins: checklist.map((p) => ({
+            slug: p.slug,
+            name: p.name,
+            autoActivate: p.autoActivate,
+          })),
+        })
+      : { installed: [], failed: [] };
+
+    /*
+     * Recorded only when every row landed. A partial apply must be retried on
+     * the next export rather than remembered as done — otherwise one plugin
+     * that failed while wordpress.org was unreachable would be missing
+     * permanently, and nothing would ever look for it again.
+     */
+    if (needsPlugins && pluginReport.failed.length === 0) {
+      await db
+        .update(siteInstallations)
+        .set({ pluginsSignature: signature })
+        .where(eq(siteInstallations.siteId, site.id));
+    }
+
+    /*
      * Business details into WordPress options.
      *
      * The theme resolves {{phone}} and friends from these at render time, so
@@ -513,7 +583,13 @@ export async function exportToWordPressAction(
       metadata: { pageUrl: pushed.url, provisioned },
     });
 
-    return { ok: true, url: installation.url ?? "", provisioned, pageUrl: pushed.url };
+    return {
+      ok: true,
+      url: installation.url ?? "",
+      provisioned,
+      pageUrl: pushed.url,
+      ...(pluginReport.failed.length ? { pluginFailures: pluginReport.failed } : {}),
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (installation) {

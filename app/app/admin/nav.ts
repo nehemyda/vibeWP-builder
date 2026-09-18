@@ -25,7 +25,7 @@ export const ADMIN_NAV: NavGroup[] = [
     items: [
       { icon: "🎨", label: "Section library", href: "/admin/sections" },
       { icon: "🎛", label: "Global design", href: "/admin/design" },
-      { icon: "🔌", label: "Plugin checklist", href: "/admin/plugins", soon: true },
+      { icon: "🔌", label: "Plugin checklist", href: "/admin/plugins" },
     ],
   },
   {

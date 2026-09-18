@@ -1327,6 +1327,18 @@ export function BuilderApp({
             ? `Installed WordPress and pushed your homepage. It's live at ${result.pageUrl}`
             : `Updated your WordPress site at ${result.pageUrl}`,
         );
+        /*
+         * A plugin that would not install does not fail the export — the site
+         * published. But afterwards there is nothing to distinguish "not
+         * installed" from "installed", so this is the only moment anyone can
+         * be told.
+         */
+        if (result.pluginFailures?.length) {
+          say(
+            `Couldn't install ${result.pluginFailures.map((p) => p.name).join(", ")}. ` +
+              "Your site is published; add them from wp-admin, or try exporting again.",
+          );
+        }
         await refreshSync();
       } else if ("blocked" in result) {
         /*

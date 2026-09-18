@@ -368,6 +368,22 @@ export const siteInstallations = pgTable("site_installations", {
   adminUser: text("admin_user"),
   /** Set when provisioning fails, so the UI can explain rather than hang. */
   lastError: text("last_error"),
+  /**
+   * A fingerprint of the plugin checklist this install already has.
+   *
+   * Not decoration — it is what keeps the checklist off the critical path.
+   * Applying it means one `wp plugin install` per row, and wp-cli on a site
+   * carrying Wordfence and a page cache takes tens of seconds PER CALL,
+   * because every invocation boots WordPress with them loaded. Measured on a
+   * real install: four rows took 74s the first time and 130s the second,
+   * added to every export, to do nothing.
+   *
+   * So the work is skipped entirely while this matches the current checklist.
+   * A site still picks up a NEW plugin on its next export — the fingerprint
+   * changes — which is the behaviour that made running on every export right
+   * in the first place.
+   */
+  pluginsSignature: text("plugins_signature"),
   lastExportedAt: timestamp("last_exported_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -738,6 +754,51 @@ export const smtpSettings = pgTable("smtp_settings", {
 });
 
 /** Singleton row (there's only ever one) holding platform-wide settings. */
+/**
+ * Plugins installed into every WordPress a client is given.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY A TABLE AND NOT A LIST IN CODE
+ *
+ * Which plugins a client's site should carry is a policy decision that
+ * changes with what the platform sells and what it has been burned by. A
+ * constant means a deploy to add a backup plugin — the same argument the plan
+ * catalogue and the section registry already settled: structure in code,
+ * policy in the database.
+ *
+ * WHAT IS DELIBERATELY NOT HERE
+ *
+ * No version. wp-cli takes the current one; a pinned matrix is a maintenance
+ * burden with no reader until something breaks.
+ *
+ * No per-plan or per-site condition. WooCommerce would need one — it changes
+ * what a site IS, and activating it everywhere puts a shop on a plumber's
+ * website — and that is worth designing rather than smuggling in as a nullable
+ * column nothing reads yet.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export const platformPlugins = pgTable("platform_plugins", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /**
+   * The wordpress.org slug, which is what `wp plugin install` takes.
+   *
+   * Only free directory plugins can be installed from one. A paid plugin —
+   * WP Rocket, Yoast Premium — needs a licence key per install and cannot be
+   * fetched this way, so a row for one is documentation, not automation.
+   */
+  slug: text("slug").notNull().unique(),
+  /** What an administrator calls it. wp-cli does not need this; the screen does. */
+  name: text("name").notNull(),
+  /** Why it is on the list at all, so the next administrator need not guess. */
+  purpose: text("purpose"),
+  isActive: boolean("is_active").notNull().default(true),
+  /** Activate after installing, or leave it installed and dormant. */
+  autoActivate: boolean("auto_activate").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const platformSettings = pgTable("platform_settings", {
   id: uuid("id").primaryKey().defaultRandom(),
   platformName: text("platform_name").notNull().default("VibeWP"),

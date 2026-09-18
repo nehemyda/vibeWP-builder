@@ -233,6 +233,93 @@ export async function isServerHealthy(port: number): Promise<boolean> {
  * It cannot make that old URL REDIRECT anywhere: that would mean editing a
  * client's own install, which is theirs. Silence is the honest answer.
  */
+/**
+ * The part of a failed wp-cli run worth showing someone.
+ *
+ * execFile's own message is "Command failed: <the entire command line>",
+ * which says nothing about what went wrong and leaks binary paths into a
+ * message a client may read. wp-cli puts the real complaint on stderr —
+ * "Warning: The 'x' plugin could not be found." — so that is what is kept.
+ */
+function wpErrorReason(err: unknown): string {
+  const stderr = typeof (err as { stderr?: unknown })?.stderr === "string"
+    ? ((err as { stderr: string }).stderr)
+    : "";
+
+  const line = stderr
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => /^(error|warning):/i.test(l));
+
+  if (line) return line.slice(0, 200);
+  return (stderr.split("\n").find((l) => l.trim()) ?? "Install failed.").trim().slice(0, 200);
+}
+
+export type PluginToInstall = { slug: string; name: string; autoActivate: boolean };
+
+export type PluginInstallReport = {
+  installed: string[];
+  /** Name and reason, for a message someone can act on. */
+  failed: Array<{ name: string; reason: string }>;
+};
+
+/**
+ * Puts the platform's plugin checklist onto one install.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THIS RUNS ON EVERY EXPORT, NOT ONLY AT PROVISION
+ *
+ * A checklist applied once at provision describes new sites only. Add a backup
+ * plugin next month and every site that already exists silently never gets it,
+ * while the admin screen claims otherwise. Running each time means the list is
+ * true of every site the next time anyone pushes to it.
+ *
+ * `wp plugin install` is a no-op for something already present, so the repeat
+ * costs a wp-cli call per plugin on a list of four.
+ *
+ * WHY NOTHING IS EVER UNINSTALLED
+ *
+ * Taking a row off the checklist stops new installs. It does not remove the
+ * plugin from sites that have it: deactivating a client's firewall because an
+ * administrator tidied a list is not a consequence anyone would predict, and
+ * the install is theirs. Same rule as the WordPress directory itself, which
+ * soft-delete already follows.
+ *
+ * WHY A FAILURE IS RETURNED RATHER THAN THROWN
+ *
+ * This reaches out to wordpress.org, so it WILL fail — an offline machine, a
+ * renamed slug, a plugin pulled from the directory. A site with its content
+ * and no SEO plugin is a working site; losing the whole export over one is the
+ * worse trade, and the same posture writeThemePalette already takes. But
+ * silence is not the answer either: afterwards, "did not install" and
+ * "installed" look identical, so the caller gets both lists and says so.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export async function ensureSitePlugins(opts: {
+  installPath: string;
+  plugins: PluginToInstall[];
+}): Promise<PluginInstallReport> {
+  const { installPath, plugins } = opts;
+  const report: PluginInstallReport = { installed: [], failed: [] };
+
+  for (const plugin of plugins) {
+    /* One at a time rather than one wp-cli call with every slug: a single
+       batch fails as a unit, and one plugin pulled from the directory would
+       take the other three with it. */
+    const args = ["plugin", "install", plugin.slug, `--path=${installPath}`];
+    if (plugin.autoActivate) args.push("--activate");
+
+    try {
+      await wp(args);
+      report.installed.push(plugin.slug);
+    } catch (err) {
+      report.failed.push({ name: plugin.name, reason: wpErrorReason(err) });
+    }
+  }
+
+  return report;
+}
+
 export async function stopSiteServing(port: number): Promise<void> {
   if (port > 0) await killListener(port);
 }

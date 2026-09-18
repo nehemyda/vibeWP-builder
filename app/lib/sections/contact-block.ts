@@ -25,14 +25,20 @@ const text = (el: HTMLElement | null): string => (el ? el.textContent.trim() : "
  * DELIBERATELY NOT A FORM
  *
  * A working contact form needs form handling, spam protection and email
- * delivery — which on WordPress means a plugin such as Contact Form 7, and
- * that is what the (unbuilt) plugin checklist is for. Emitting form markup
- * without any of that would produce a form that silently discards enquiries,
- * which is worse for the client than no form at all.
+ * delivery. Emitting form markup without any of that would produce a form
+ * that silently discards enquiries, which is worse for the client than no
+ * form at all.
  *
- * So this section publishes real contact details, which work immediately, and
- * a button. When the plugin checklist lands, a form variant can be added on
- * top of a shortcode that actually delivers mail.
+ * This section answers that by publishing real contact details, which work
+ * the moment the page does, and a button.
+ *
+ * It once said a mail plugin was the missing piece and the plugin checklist
+ * would supply it. That is no longer true: forms are ours now — a form
+ * definition, /api/forms/submit, embed.js and per-site SMTP — and
+ * withStaticForms injects a working one into exported WordPress that posts
+ * back to us. A site wanting a form here should use a form SECTION; it does
+ * not need Contact Form 7, and the checklist is for SEO, backups and
+ * security rather than for this.
  * ─────────────────────────────────────────────────────────────────────
  */
 export const ContactBlock: SectionDefinition<ContactBlockProps> = {
@@ -41,7 +47,7 @@ export const ContactBlock: SectionDefinition<ContactBlockProps> = {
   name: "Contact details",
   category: "Contact",
   description:
-    "Phone, email, address and opening hours, with a prompt to get in touch. Contact details rather than a form — a form needs a mail plugin to be real.",
+    "Phone, email, address and opening hours, with a prompt to get in touch. Contact details rather than a form — use a form section where a form is wanted.",
   rootClass: "yp-contact",
 
   fields: {
