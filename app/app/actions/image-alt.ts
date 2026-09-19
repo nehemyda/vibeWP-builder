@@ -13,6 +13,7 @@ import { imagePaths, writeImage, type ImageValue } from "@/lib/design/image-map"
 import { mediaAssets } from "@/lib/db/schema";
 import { isNull } from "drizzle-orm";
 import { getSectionByNodeType } from "@/lib/sections";
+import { safeFetch } from "@/lib/net/safe-fetch";
 
 /**
  * Alt text for every photograph on the site.
@@ -551,9 +552,16 @@ async function writeAlts(
  * not something a client's alt text should depend on.
  */
 async function fetchImage(url: string): Promise<{ bytes: Buffer; mimeType: string } | null> {
-  if (!/^https?:\/\//i.test(url)) return null;
+  /*
+   * Through the guard. The scheme test this used to do is the easy half — it
+   * stopped file:// and said nothing about http://169.254.169.254, which is
+   * the address that matters. The bytes here are then described by a model,
+   * so a reachable internal image was a way to have one read aloud.
+   */
+  const fetched = await safeFetch(url, { timeoutMs: 15_000 });
+  if (!fetched.ok) return null;
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+    const response = fetched.response;
     if (!response.ok) return null;
 
     const type = (response.headers.get("content-type") ?? "").split(";")[0].trim();

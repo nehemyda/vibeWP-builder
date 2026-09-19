@@ -1,4 +1,5 @@
 import { getSectionByNodeType } from "@/lib/sections";
+import { safeFetch } from "@/lib/net/safe-fetch";
 import { ALLOWED, findSiteMediaByBytes, putSiteMedia } from "./store";
 import type { FieldSpec } from "@/lib/sections/types";
 
@@ -47,10 +48,16 @@ const FETCH_TIMEOUT_MS = 20_000;
  */
 async function adoptUrl(siteId: string, url: string, alt?: string): Promise<string | null> {
   try {
-    const res = await fetch(url, {
-      redirect: "follow",
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    /*
+     * Through the guard, because this URL comes from a section's props and a
+     * section's props come from whoever edited the page. Unguarded, publishing
+     * a site was enough to make this server fetch any address a client named —
+     * including the ones that only answer from inside, like a cloud instance's
+     * own credentials endpoint or a client's local WordPress.
+     */
+    const fetched = await safeFetch(url, { timeoutMs: FETCH_TIMEOUT_MS });
+    if (!fetched.ok) return null;
+    const res = fetched.response;
     if (!res.ok) return null;
 
     const contentType = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
