@@ -32,6 +32,7 @@ import { FormDetails } from "./form-details";
 import { FormPhoto } from "./form-photo";
 import { FormBand } from "./form-band";
 import { FormEmbed } from "./form-embed";
+import { EmbedBlock } from "./embed-block";
 import { CtaBand } from "./cta-band";
 import { Faq } from "./faq";
 import { ContactBlock } from "./contact-block";
@@ -97,6 +98,7 @@ export { FormDetails } from "./form-details";
 export { FormPhoto } from "./form-photo";
 export { FormBand } from "./form-band";
 export { FormEmbed } from "./form-embed";
+export { EmbedBlock } from "./embed-block";
 export { CtaBand } from "./cta-band";
 export { Faq } from "./faq";
 export { ContactBlock } from "./contact-block";
@@ -154,6 +156,7 @@ const DEFINED: Array<SectionDefinition<any>> = [
   FormCard,
   FormSplit,
   FormEmbed,
+  EmbedBlock,
   HeaderSimple,
   HeaderCta,
   HeaderTopbar,

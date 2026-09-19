@@ -3842,3 +3842,71 @@ body.yp-page {
   max-width: var(--container); margin: 0 auto;
   padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
 }
+
+/* ============================================================
+   Embed — something from elsewhere, framed on the page
+
+   The Vibe answer to "can I add a plugin": a booking page, a map or a
+   video, each of which its owner already publishes at a URL. Uses the same
+   spacing and heading scale as every other section, so an embed sits in the
+   page rather than on top of it.
+   ============================================================ */
+.yp-page .yp-embedblock {
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+}
+.yp-page .yp-embedblock__heading {
+  margin: 0 0 0.6rem;
+  font-size: calc(clamp(1.7rem, 3vw, 2.4rem) * var(--yp-display-scale, 1));
+  line-height: 1.1; letter-spacing: -0.02em; font-weight: 800; text-wrap: balance;
+}
+.yp-page .yp-embedblock__body {
+  margin: 0 0 1.8rem; max-width: 46ch; color: var(--ink-2); font-size: calc(1.02rem * var(--yp-text-scale, 1));
+}
+.yp-page .yp-embedblock__frame {
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 10px);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.yp-page .yp-embedblock__frame iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+}
+
+/* ── The embed's stand-in in the builder canvas ──
+   A live iframe here would fetch a third party on every repaint and fight the
+   click-to-select bridge for the pointer. The canvas names what will appear
+   instead — the same trade the form mount makes, for the same reason. These
+   classes are emitted by withPreviewPlaceholders, never by toGutenberg, so
+   they never reach a published page. */
+.yp-page .yp-embedblock__frame--ph {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  justify-content: center;
+  min-height: 12rem;
+  padding: 1.4rem;
+  text-align: center;
+  background: var(--surface-2);
+}
+.yp-page .yp-embedblock__phname {
+  font-weight: 700;
+  font-size: calc(1rem * var(--yp-text-scale, 1));
+  color: var(--ink);
+  text-transform: capitalize;
+}
+.yp-page .yp-embedblock__phurl {
+  font-size: calc(0.85rem * var(--yp-text-scale, 1));
+  color: var(--ink-2);
+  word-break: break-all;
+  max-width: 44ch;
+}
+.yp-page .yp-embedblock__phnote {
+  font-size: calc(0.8rem * var(--yp-text-scale, 1));
+  color: var(--muted);
+}

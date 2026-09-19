@@ -7,6 +7,7 @@ import { applyPartWidth, partWidthFromHtml } from "@/lib/design/part-size";
 import { getSectionByNodeType, SECTIONS } from "@/lib/sections";
 import { esc, escAttr } from "./blocks";
 import { defaultSpan, staticFormMarkup } from "@/lib/forms/static-markup";
+import { embedProviderName } from "@/lib/embeds/providers";
 
 /**
  * Page-level conversion between stored schemas and Gutenberg markup.
@@ -523,6 +524,31 @@ export function withPreviewPlaceholders(
     .replace(
       /<div class="yp-embed__mount"[^>]*><\/div>\s*<script[^>]*><\/script>/g,
       (whole) => (live ? whole : `<div class="yp-embed__ph">${formPreview}</div>`),
+    )
+    /*
+     * The embed, named rather than loaded.
+     *
+     * A live iframe in the canvas would fetch a third party's page on every
+     * repaint, fight the click-to-select bridge for the pointer, and let
+     * somebody else's cookie banner appear inside the builder. None of that
+     * tells the client anything the provider's name does not.
+     *
+     * Only in the canvas. A served page frames the real thing.
+     */
+    .replace(
+      /<div class="yp-embedblock__frame"([^>]*)>[\s\S]*?<\/div>/g,
+      (whole, attrs: string) => {
+        if (live) return whole;
+        const provider = /data-embed-provider="([^"]*)"/.exec(attrs)?.[1] ?? "";
+        const url = /data-embed-url="([^"]*)"/.exec(attrs)?.[1] ?? "";
+        return (
+          `<div class="yp-embedblock__frame yp-embedblock__frame--ph"${attrs}>` +
+          `<span class="yp-embedblock__phname">${esc(embedProviderName(provider))}</span>` +
+          `<span class="yp-embedblock__phurl">${esc(url)}</span>` +
+          `<span class="yp-embedblock__phnote">Shown on the live site</span>` +
+          "</div>"
+        );
+      },
     )
     /*
      * Dropped on a live page rather than faked.
