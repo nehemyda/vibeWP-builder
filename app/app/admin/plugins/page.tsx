@@ -1,6 +1,6 @@
-import { asc } from "drizzle-orm";
+import { asc, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { platformPlugins } from "@/lib/db/schema";
+import { platformPlugins, sites } from "@/lib/db/schema";
 import { requireRole } from "@/lib/auth/require-role";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { savePluginAction } from "@/app/actions/plugins";
@@ -40,13 +40,30 @@ const inputStyle = {
 export default async function AdminPluginsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; unverified?: string }>;
 }) {
   const { profile } = await requireRole(["super_admin"]);
-  const { saved, error } = await searchParams;
+  const { saved, error, unverified } = await searchParams;
 
   const plugins = await db.select().from(platformPlugins).orderBy(asc(platformPlugins.sortOrder));
   const active = plugins.filter((p) => p.isActive).length;
+
+  /*
+   * How many sites this reaches, and how many it does not.
+   *
+   * A Vibe site has no WordPress, so it has no plugins and never will — the
+   * entitlement check refuses the export before this step is reached. An
+   * administrator looking at a checklist headed "every site" and then at a
+   * Vibe site with none of it would be right to think something had failed.
+   */
+  const [{ wordpress }] = await db
+    .select({ wordpress: sql<number>`count(*)::int` })
+    .from(sites)
+    .where(sql`${sites.deletedAt} is null and ${sites.mode} = 'wordpress'`);
+  const [{ vibe }] = await db
+    .select({ vibe: sql<number>`count(*)::int` })
+    .from(sites)
+    .where(sql`${sites.deletedAt} is null and ${sites.mode} = 'vibe'`);
 
   return (
     <DashboardShell
@@ -55,8 +72,14 @@ export default async function AdminPluginsPage({
       userName={profile.fullName}
       userRole="Super admin"
       title="Plugin checklist"
-      subtitle={`${active} of ${plugins.length} installed into every WordPress site`}
+      subtitle={`${active} of ${plugins.length} installed into each of the ${wordpress} Vibe WordPress sites`}
     >
+      {unverified && (
+        <div className={shell.panel} style={{ padding: "1rem", marginBottom: "1rem" }}>
+          Added, but wordpress.org could not be reached to confirm the slug. If it is wrong,
+          the install will fail at export and say so.
+        </div>
+      )}
       {saved && (
         <div className={shell.panel} style={{ padding: "1rem", marginBottom: "1rem", color: "var(--good)" }}>
           Saved. Sites pick this up on their next export.
@@ -66,7 +89,11 @@ export default async function AdminPluginsPage({
         <div className={shell.panel} style={{ padding: "1rem", marginBottom: "1rem", color: "#b3261e" }}>
           {error === "duplicate"
             ? "That slug is already on the list."
-            : "A wordpress.org slug and a name are both required."}
+            : error === "notfound"
+              ? "wordpress.org has no plugin with that slug. Check the last part of its directory URL — Yoast SEO, for instance, is \u201cwordpress-seo\u201d."
+              : error === "name"
+                ? "Couldn\u2019t read a name from wordpress.org for that slug, so please type one."
+                : "A wordpress.org slug is required."}
         </div>
       )}
 
@@ -77,6 +104,13 @@ export default async function AdminPluginsPage({
           uninstall anything from a site that already has it. Only free wordpress.org
           plugins can be installed from a slug: anything paid needs a licence key entered
           on the install itself.
+          {vibe > 0 && (
+            <>
+              {" "}
+              The {vibe} Vibe {vibe === 1 ? "site" : "sites"} we host {vibe === 1 ? "is" : "are"}{" "}
+              unaffected — they have no WordPress, so they have no plugins.
+            </>
+          )}
         </p>
       </div>
 
@@ -122,7 +156,7 @@ export default async function AdminPluginsPage({
           <p className={shell.rowSub} style={{ margin: 0 }}>
             The wordpress.org slug — the last part of its directory URL.
           </p>
-          <input name="name" required placeholder="Yoast SEO" style={inputStyle} />
+          <input name="name" placeholder="Yoast SEO — left blank, we read it from wordpress.org" style={inputStyle} />
           <textarea name="purpose" rows={2} placeholder="Why it is on the list" style={{ ...inputStyle, resize: "vertical" }} />
           <div style={{ display: "flex", gap: "1rem" }}>
             <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem" }}>
