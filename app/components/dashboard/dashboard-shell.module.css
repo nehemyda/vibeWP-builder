@@ -249,6 +249,16 @@
   border: 1px solid var(--line);
   border-radius: 14px;
   overflow: hidden;
+
+  /*
+   * The size of a row of content inside a panel, set once.
+   *
+   * A panel holds either a table or the activity feed, and the two sat side by
+   * side on the same screen at different sizes because the feed inherited the
+   * body size while .table set its own. Both now read this, so the next thing
+   * built to sit in a panel cannot quietly disagree with the table above it.
+   */
+  --row-text: 0.87rem;
 }
 .panelHead {
   display: flex;
@@ -268,7 +278,7 @@
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.87rem;
+  font-size: var(--row-text, 0.87rem);
 }
 .table th {
   text-align: left;
@@ -323,6 +333,33 @@
   font-weight: 600;
   margin-bottom: 0.3rem;
 }
+/*
+ * The activity feed.
+ *
+ * Not a <table> — each entry is one sentence and a time, not cells — but it
+ * sits in the same panel shape as one and has to line up with it. It used to
+ * carry these rules as inline styles, where it had copied .table td's padding
+ * and border and missed its font-size; that is the mismatch this replaces.
+ */
+.feed {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.feedRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: var(--row-text, 0.87rem);
+  padding: 0.85rem 1.3rem;
+  border-bottom: 1px solid var(--line);
+}
+/* Matches .table tr:last-child td — no rule under the last row in a panel. */
+.feedRow:last-child {
+  border-bottom: none;
+}
+
 .rowName {
   font-weight: 700;
 }

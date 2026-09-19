@@ -57,19 +57,9 @@ export function ActivityFeed({ entries }: { entries: Entry[] }) {
   }
 
   return (
-    <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+    <ul className={shell.feed}>
       {entries.map((e) => (
-        <li
-          key={e.id}
-          style={{
-            padding: "0.85rem 1.3rem",
-            borderBottom: "1px solid var(--line)",
-            display: "flex",
-            justifyContent: "space-between",
-            gap: "1rem",
-            flexWrap: "wrap",
-          }}
-        >
+        <li key={e.id} className={shell.feedRow}>
           <span>
             <strong>{e.actorName}</strong> {ACTION_LABEL[e.action] ?? e.action}
             {e.targetLabel ? <> — {e.targetLabel}</> : null}
