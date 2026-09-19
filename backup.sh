@@ -21,6 +21,11 @@ BRANCH="main"
 DRY_RUN=0
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=1
 
+# Local settings, outside the repo and outside git. Holds VIBEWP_MEDIA_REMOTE.
+# Sourced rather than assumed from the environment because cron has neither a
+# shell profile nor the variables an interactive session picks up.
+[ -f "$HOME/.vibewp-backup.conf" ] && . "$HOME/.vibewp-backup.conf"
+
 mkdir -p "$(dirname "$LOG")"
 log() { printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$LOG"; }
 fail() { log "FAILED: $*"; exit 1; }
@@ -53,12 +58,49 @@ export PATH="$(dirname "$NODE_BIN"):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/b
 # Tying it to "something to commit" would mean a mirror that failed yesterday
 # is never retried, because the failure itself changes nothing to commit.
 MEDIA_OK=1
+MEDIA_DIR="${VIBEWP_MEDIA_BACKUP_DIR:-$HOME/vibewp-backups/media}"
+
 mirror_media() {
   if ( cd "$APP" && "$NODE_BIN" "$TSX" lib/db/backup-media.ts "$@" ) >>"$LOG" 2>&1; then
     log "media: $(grep -E '^(\[dry run\] )?media:' "$LOG" | tail -1 | sed 's/^[^:]*media: //')"
   else
     MEDIA_OK=0
     log "media mirror FAILED (see $LOG)"
+  fi
+}
+
+# --- off-site ----------------------------------------------------------------
+# Pushes the local mirror somewhere that is not this machine.
+#
+# COPY, NOT SYNC, deliberately. sync makes the destination match the source,
+# deletions included — so pruning the local mirror would delete the off-site
+# copy too, which is the failure the mirror itself refuses to commit. copy only
+# ever adds. The remote grows; that is the point of it.
+#
+# The destination is named by VIBEWP_MEDIA_REMOTE (e.g. "b2:vibewp/media") and
+# rclone holds the credentials in its own config. Nothing secret reaches this
+# script or the repository.
+push_offsite() {
+  if ! command -v rclone >/dev/null 2>&1; then
+    MEDIA_OK=0
+    log "off-site FAILED: rclone is not installed"
+    return
+  fi
+
+  if [ -z "${VIBEWP_MEDIA_REMOTE:-}" ]; then
+    # Said on every run, on purpose. A backup that only exists on the machine
+    # it is backing up is the thing this whole step exists to fix, and it must
+    # never be possible to believe it is handled when it is not.
+    log "off-site: NOT CONFIGURED — media exists only on this machine"
+    log "          set VIBEWP_MEDIA_REMOTE in ~/.vibewp-backup.conf"
+    return
+  fi
+
+  if rclone copy "$MEDIA_DIR" "$VIBEWP_MEDIA_REMOTE" "$@" >>"$LOG" 2>&1; then
+    log "off-site: copied to $VIBEWP_MEDIA_REMOTE"
+  else
+    MEDIA_OK=0
+    log "off-site FAILED: rclone copy to $VIBEWP_MEDIA_REMOTE (see $LOG)"
   fi
 }
 
@@ -84,7 +126,13 @@ TSX="$APP/node_modules/.bin/tsx"
   || fail "database dump failed (see $LOG)"
 log "database dumped"
 
-if [ "$DRY_RUN" -eq 1 ]; then mirror_media --dry-run; else mirror_media; fi
+if [ "$DRY_RUN" -eq 1 ]; then
+  mirror_media --dry-run
+  push_offsite --dry-run
+else
+  mirror_media
+  push_offsite
+fi
 
 # --- 2. stage ----------------------------------------------------------------
 git add -A
