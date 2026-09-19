@@ -29,8 +29,27 @@ const REDACTED_MARKER = "__REDACTED__";
 /**
  * Parents before children, so the .sql can be replayed top to bottom without
  * tripping foreign keys. Any table not listed here is appended at the end.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY EVERY TABLE IS NOW NAMED, INCLUDING THE DULL ONES
+ *
+ * Inclusion was never the issue — the dump reads pg_tables and takes
+ * everything, so an unlisted table is still backed up. What it loses is its
+ * PLACE, and unlisted tables were appended in alphabetical order.
+ *
+ * Which was FK-safe, by coincidence. form_submissions references
+ * form_definitions and restored cleanly only because "form_d" sorts before
+ * "form_s"; lead_notes references form_submissions and survived on "l" after
+ * "f". Rename either table, or add one that sorts before its own parent, and
+ * the restore fails — on the day someone is restoring, which is the worst day
+ * to find out that the ordering was alphabetical rather than considered.
+ *
+ * So the list is now the whole schema. The cost is remembering to add a line
+ * when a table is added; the alternative is a backup whose restorability
+ * depends on spelling.
+ * ─────────────────────────────────────────────────────────────────────
  */
-const RESTORE_ORDER = [
+export const RESTORE_ORDER = [
   "profiles",
   "agencies",
   "agency_members",
@@ -48,6 +67,18 @@ const RESTORE_ORDER = [
   "ai_provider_settings",
   "platform_settings",
   "smtp_settings",
+  "platform_plugins",
+
+  /* Children of sites, and of each other. */
+  "site_installations",
+  "site_revisions",
+  "site_transfers",
+  "builder_messages",
+  "media_assets",
+  "page_revisions",
+  "form_definitions",
+  "form_submissions",
+  "lead_notes",
 ];
 
 function sqlLiteral(value: unknown): string {
@@ -144,7 +175,17 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+/*
+ * Only when this file is what was run.
+ *
+ * verify-backup-order.ts imports RESTORE_ORDER to check it against the real
+ * foreign keys, and an unguarded main() meant merely READING the order
+ * performed a backup — `npm run verify` would connect to the database and
+ * rewrite backups/ as a side effect of a static check.
+ */
+if (process.argv[1] && /backup-db\.ts$/.test(process.argv[1])) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
