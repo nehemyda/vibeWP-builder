@@ -41,7 +41,31 @@ const DEFAULT_PLUGINS = [
   {
     slug: "wordfence",
     name: "Wordfence Security",
-    purpose: "Firewall and malware scanning on a site we hand over and stop watching.",
+    purpose:
+      "Firewall and malware scanning on a site we hand over and stop watching. " +
+      "INSTALLED BUT NOT ACTIVATED — switch it on once the site is on real hosting " +
+      "and someone is going to configure it.",
+    /*
+     * THE ONE PLUGIN THAT MUST NOT BE SWITCHED ON FOR US.
+     *
+     * Wordfence calls dns_get_record() while serving a request. Where DNS is
+     * slow or unreachable — which is every machine running the local driver
+     * behind a restricted network — that blocks until PHP's 30-second limit
+     * kills the request, and it does it on EVERY request. Measured on a real
+     * install: 30s fatal with it active, 0.55s with it off.
+     *
+     * The damage is not only a slow site. Export health-checks the server by
+     * asking it for a page; the page never comes, so export concludes the
+     * server never started and refuses to publish. One plugin activated by
+     * default took the whole publish path down.
+     *
+     * This is the sharpest case of the rule the checklist was written with:
+     * installing is not configuring. An unconfigured SEO plugin is merely
+     * unhelpful. An unconfigured firewall is a firewall nobody has told what
+     * to allow, making outbound calls on every page load, on a site whose
+     * owner has not arrived yet.
+     */
+    autoActivate: false,
     sortOrder: 20,
   },
   {

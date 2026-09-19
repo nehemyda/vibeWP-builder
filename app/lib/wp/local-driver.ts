@@ -123,6 +123,37 @@ async function isPortListening(port: number, timeoutMs = 800): Promise<boolean> 
  * outlives the request that started it; it will not survive a reboot, hence
  * this is called on every export rather than only at provision time.
  */
+/**
+ * The last PHP fatal the server wrote, if it wrote one.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THE ERROR HAD TO GET LONGER
+ *
+ * "Server did not start on port 8811" was reported when the server HAD
+ * started and was answering — with a fatal, on every request, because an
+ * active plugin blocked until PHP's execution limit killed it. The message
+ * named the one thing that was fine and said nothing about the cause, which
+ * was sitting in a log file the whole time.
+ *
+ * A health check that fails knows only "no good answer". The log knows why.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+async function lastServerFatal(installPath: string): Promise<string | null> {
+  try {
+    const log = await readFile(join(installPath, ".vibewp-server.log"), "utf8");
+    /* The tail only: this file grows for the life of the install, and a fatal
+       from last week explains nothing about the request just made. */
+    const lines = log.split("\n").slice(-400);
+    const fatal = [...lines].reverse().find((l) => /PHP (Fatal error|Parse error)/i.test(l));
+    if (!fatal) return null;
+
+    /* Drop the timestamp the server prefixes, keep what happened. */
+    return fatal.replace(/^\[[^\]]*\]\s*/, "").trim().slice(0, 300);
+  } catch {
+    return null;
+  }
+}
+
 export async function ensureSiteServing(opts: {
   installPath: string;
   port: number;
@@ -172,7 +203,18 @@ export async function ensureSiteServing(opts: {
     }
     await new Promise((r) => setTimeout(r, 200));
   }
-  return { serving: false, error: `Server did not start on port ${port}` };
+  /*
+   * Say what the log says. A server that binds and then fatals on every
+   * request is indistinguishable, from here, from one that never bound —
+   * and the difference is the whole of the fix.
+   */
+  const fatal = await lastServerFatal(installPath);
+  return {
+    serving: false,
+    error: fatal
+      ? `WordPress on port ${port} is failing to render: ${fatal}`
+      : `Server did not start on port ${port}`,
+  };
 }
 
 /**
