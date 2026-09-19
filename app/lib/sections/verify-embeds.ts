@@ -61,6 +61,12 @@ const REFUSE: Array<[string, string, string]> = [
   ["youtube", "https://www.youtube.com/@channel", "not a video"],
   ["calendly", "https://calendly.com/", "no booking path"],
   ["calendly", "https://calendly.com/app/scheduled_events/user/me", "the Calendly dashboard"],
+  /* The vendor's marketing page answers X-Frame-Options: SAMEORIGIN, so this
+     would be a blank frame with no error anywhere. */
+  ["embedsocial", "https://embedsocial.com/google-reviews-widget/", "an EmbedSocial marketing page"],
+  ["embedsocial", "https://embedsocial.com/", "EmbedSocial's home page"],
+  ["sociablekit", "https://widgets.sociablekit.com/", "SociableKIT with no widget"],
+  ["sociablekit", "https://widgets.sociablekit.com.evil.net/x", "a widget host as a prefix"],
   ["google-maps", "https://www.google.com/search?q=cafe", "a search, not a map"],
   ["google-maps", "https://mail.google.com/mail/u/0/?q=invoice", "gmail on the same host"],
   ["google-maps", "https://maps.app.goo.gl/AbCdEf123", "a Maps share link"],
@@ -81,6 +87,8 @@ const ACCEPT: Array<[string, string, string]> = [
   ["google-maps", "https://www.google.com/maps?q=SW1A+1AA", "a map query"],
   ["google-maps", "https://www.google.com/maps/embed?pb=!1m18!2m3", "an embed URL already"],
   ["calendly", "https://calendly.com/jane/30min?month=2026-09", "a booking page"],
+  ["sociablekit", "https://widgets.sociablekit.com/google-reviews/iframe/123456", "a SociableKIT widget"],
+  ["embedsocial", "https://embedsocial.com/api/reviews/abc123", "an EmbedSocial widget"],
 ];
 
 for (const [provider, url, what] of ACCEPT) {
@@ -93,6 +101,24 @@ for (const [provider, url, what] of ACCEPT) {
 for (const [provider, url, why] of REFUSE) {
   const r = resolveEmbed(provider, url);
   if (!r.ok && !/[.!]$/.test(r.reason)) fail(`${why}: reason isn't a sentence — ${r.reason}`);
+}
+
+/*
+ * The widget vendors hand out the frame's src directly, so the resolver must
+ * return it BYTE-FOR-BYTE. A stray normalisation — a dropped query, an added
+ * slash — would break a link the vendor generated, and it would look like the
+ * vendor's fault.
+ */
+const PASS_THROUGH: Array<[string, string]> = [
+  ["sociablekit", "https://widgets.sociablekit.com/google-reviews/iframe/123456"],
+  ["embedsocial", "https://embedsocial.com/api/reviews/abc123?theme=light&limit=6"],
+];
+
+for (const [provider, url] of PASS_THROUGH) {
+  const r = resolveEmbed(provider, url);
+  if (!r.ok) fail(`pass-through: ${provider} refused its own widget link — ${r.reason}`);
+  else if (r.src !== url) fail(`pass-through: ${provider} rewrote the link\n    in : ${url}\n    out: ${r.src}`);
+  else console.log(`  ok   ${provider.padEnd(12)} link passed through untouched`);
 }
 
 /** Every provider's own hint and hosts have to be present, or the field lies. */

@@ -21,8 +21,9 @@ export type EmbedBlockProps = {
  *
  * A WordPress plugin cannot run on a Vibe site — it is PHP inside WordPress,
  * and there is no WordPress. But most of what a local business calls a plugin
- * is not one: a booking page, a map, a video. Each of those is a URL its owner
- * already publishes, and framing it needs no plugin on either side.
+ * is not one: a booking page, a map, a video, a reviews widget. Each of those
+ * is a URL its owner already publishes, and framing it needs no plugin on
+ * either side.
  *
  * So this is the Vibe answer to "can I add a plugin", and it has the property
  * the plugin route never could: identical markup works on an exported
@@ -50,7 +51,8 @@ export const EmbedBlock: SectionDefinition<EmbedBlockProps> = {
   name: "Embed",
   category: "Content",
   description:
-    "A booking page, map or video from somewhere else, framed on the page. Choose where it comes from and paste the link.",
+    "A booking page, map, video or reviews widget from somewhere else, framed on the page. " +
+    "Choose where it comes from and paste the link.",
   rootClass: "yp-embedblock",
 
   fields: {

@@ -165,6 +165,71 @@ export const EMBED_PROVIDERS: EmbedProvider[] = [
       return undefined;
     },
   },
+  {
+    /*
+     * REVIEWS ARE A VENDOR WIDGET, NOT AN INTEGRATION OF OURS.
+     *
+     * Google's own API gives at most five reviews, chosen by Google, under
+     * terms that cap how long the text may be cached — a cap an exported
+     * WordPress site structurally cannot honour, because after export we no
+     * longer control it. Nor may we emit Review/AggregateRating markup for
+     * reviews collected elsewhere about the client, so the SEO prize that
+     * would justify owning the pipeline is not on the table.
+     *
+     * A vendor holds that relationship, bills the client, and carries the
+     * compliance. We frame their page, which is what this section already
+     * does for everything else.
+     */
+    key: "sociablekit",
+    name: "SociableKIT",
+    hosts: ["widgets.sociablekit.com"],
+    defaultHeight: 640,
+    hint: "In SociableKIT, open your widget and choose the Link option, then paste that link here.",
+    toEmbedSrc(url) {
+      /*
+       * Nothing to rewrite. Unlike a YouTube watch page, the link these
+       * vendors hand you IS the frame's src — they generate it for exactly
+       * this. Inventing a path grammar here would only create a way to reject
+       * links that work: a wrong widget id answers 200 and draws the vendor's
+       * own error, which is theirs to show and not ours to pre-empt.
+       */
+      if (url.pathname === "/" || url.pathname === "") return null;
+      return url.toString();
+    },
+    whyNot(url) {
+      if (url.pathname === "/" || url.pathname === "") {
+        return "That's SociableKIT's home page, not your widget link.";
+      }
+      return undefined;
+    },
+  },
+  {
+    key: "embedsocial",
+    name: "EmbedSocial",
+    hosts: ["embedsocial.com"],
+    defaultHeight: 640,
+    hint: "In EmbedSocial, open your widget, choose iFrame code, and paste the link from its src here.",
+    toEmbedSrc(url) {
+      /*
+       * Only /api/. EmbedSocial serves its marketing site from this same
+       * host, and those pages answer with X-Frame-Options: SAMEORIGIN — so a
+       * client who pasted the page they had been reading would get a frame
+       * that stays blank with nothing anywhere saying why. The widget itself
+       * sits under /api/ and sets no such header.
+       */
+      if (!url.pathname.startsWith("/api/")) return null;
+      return url.toString();
+    },
+    whyNot(url) {
+      if (!url.pathname.startsWith("/api/")) {
+        return (
+          "That's an EmbedSocial web page, not your widget — it would refuse to load here. " +
+          "Use the iFrame code option; the link inside it starts embedsocial.com/api/."
+        );
+      }
+      return undefined;
+    },
+  },
 ];
 
 /**
