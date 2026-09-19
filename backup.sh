@@ -42,6 +42,36 @@ fi
 [ -n "$NODE_BIN" ] || fail "could not find node"
 export PATH="$(dirname "$NODE_BIN"):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
+# --- media mirror ------------------------------------------------------------
+# Image bytes from Supabase Storage, copied to a directory OUTSIDE the repo.
+#
+# Outside because git keeps every version of every binary for the life of the
+# repository and this grows with each client upload. The ROWS that point at
+# these files are in the dump above — those diff, and belong in a commit.
+#
+# Runs on every invocation, including one where the database has not changed.
+# Tying it to "something to commit" would mean a mirror that failed yesterday
+# is never retried, because the failure itself changes nothing to commit.
+MEDIA_OK=1
+mirror_media() {
+  if ( cd "$APP" && "$NODE_BIN" "$TSX" lib/db/backup-media.ts "$@" ) >>"$LOG" 2>&1; then
+    log "media: $(grep -E '^(\[dry run\] )?media:' "$LOG" | tail -1 | sed 's/^[^:]*media: //')"
+  else
+    MEDIA_OK=0
+    log "media mirror FAILED (see $LOG)"
+  fi
+}
+
+# Whatever else happened, do not report success when the images did not copy.
+finish() {
+  if [ "$MEDIA_OK" -eq 0 ]; then
+    log "=== backup finished, MEDIA INCOMPLETE ==="
+    exit 1
+  fi
+  log "=== backup finished${1:+ $1} ==="
+  exit 0
+}
+
 cd "$REPO" || fail "repo not found at $REPO"
 
 log "=== backup started ==="
@@ -54,13 +84,14 @@ TSX="$APP/node_modules/.bin/tsx"
   || fail "database dump failed (see $LOG)"
 log "database dumped"
 
+if [ "$DRY_RUN" -eq 1 ]; then mirror_media --dry-run; else mirror_media; fi
+
 # --- 2. stage ----------------------------------------------------------------
 git add -A
 
 if git diff --cached --quiet; then
   log "no changes — nothing to back up"
-  log "=== backup finished (no-op) ==="
-  exit 0
+  finish "(no-op)"
 fi
 
 CHANGED=$(git diff --cached --name-only | wc -l | tr -d ' ')
@@ -82,8 +113,7 @@ log "credential scan clean"
 if [ "$DRY_RUN" -eq 1 ]; then
   log "dry run — not committing or pushing"
   git reset -q
-  log "=== backup finished (dry run) ==="
-  exit 0
+  finish "(dry run)"
 fi
 
 # --- 4. commit and push ------------------------------------------------------
@@ -97,4 +127,4 @@ REMOTE_HEAD="$(git rev-parse "origin/$BRANCH" 2>/dev/null || echo none)"
 [ "$LOCAL_HEAD" = "$REMOTE_HEAD" ] || fail "push reported success but remote is at $REMOTE_HEAD"
 
 log "pushed ${LOCAL_HEAD:0:7} — $CHANGED file(s)"
-log "=== backup finished ==="
+finish
