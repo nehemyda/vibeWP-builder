@@ -3,6 +3,7 @@ import { requireAgency } from "@/lib/auth/require-agency";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { BusinessDetailsFields } from "@/components/dashboard/BusinessDetailsFields";
 import { createAgencySiteAction } from "@/app/actions/agency-sites";
+import { CloneFromSelect } from "@/components/dashboard/CloneFromSelect";
 import { PlanSelect } from "@/components/dashboard/PlanSelect";
 import { SiteModeSelect } from "@/components/dashboard/SiteModeSelect";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
@@ -27,11 +28,11 @@ export default async function AgencyNewSitePage({
   searchParams,
 }: {
   params: Promise<{ partnerId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; cloneFrom?: string }>;
 }) {
   const { partnerId } = await params;
   const { profile, agency } = await requireAgency();
-  const { error } = await searchParams;
+  const { error, cloneFrom } = await searchParams;
 
   if (!agency) redirect("/agency");
 
@@ -78,6 +79,13 @@ export default async function AgencyNewSitePage({
               <PlanSelect defaultValue={agency.plan} style={inputStyle} />
             </div>
           </div>
+
+          <CloneFromSelect
+            agencyId={agency.id}
+            defaultValue={cloneFrom}
+            style={inputStyle}
+            hintClassName={shell.rowSub}
+          />
 
           <div>
             <label htmlFor="mode" style={labelStyle}>

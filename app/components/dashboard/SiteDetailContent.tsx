@@ -1,5 +1,6 @@
 import { CopyableText } from "@/components/dashboard/CopyableText";
 import { Pagination } from "@/components/dashboard/Pagination";
+import { DuplicateIcon } from "./ActionIcons";
 import { ConfirmSubmitButton } from "@/components/dashboard/ConfirmSubmitButton";
 import { BusinessDetailsFields } from "@/components/dashboard/BusinessDetailsFields";
 import { upsertBusinessProfileAction } from "@/app/actions/business-profile";
@@ -77,14 +78,30 @@ export function SiteDetailContent({
       <div className={shell.panel} style={{ padding: "1.3rem", marginBottom: "1.2rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <h2 style={{ margin: "0 0 1rem", fontSize: "1rem" }}>Site info</h2>
-          <form action={deleteSiteAction.bind(null, site.id, listPath)}>
+          <div style={{ display: "flex", gap: "0.5rem", whiteSpace: "nowrap" }}>
+            {/*
+              Into the new-site form with this one chosen, not straight to a
+              new site. A site needs an owner to invite and a name, and this
+              copies neither — the form already asks for both, and a Duplicate
+              that skipped it would create a site belonging to nobody.
+            */}
+            <a
+              className={`${shell.btn} ${shell.btnSmall}`}
+              href={`${listPath}/new?cloneFrom=${encodeURIComponent(site.smbId ?? "")}`}
+              title="Start a new site with this one's layout. The words and photographs are written for the new business."
+            >
+              <DuplicateIcon />
+              Duplicate
+            </a>
+            <form action={deleteSiteAction.bind(null, site.id, listPath)}>
             <ConfirmSubmitButton
               confirmMessage={`Delete ${site.name}? This hides it but keeps all leads and builder content — recoverable.`}
               className={`${shell.btn} ${shell.btnSmall}`}
             >
               Delete site
-            </ConfirmSubmitButton>
-          </form>
+              </ConfirmSubmitButton>
+            </form>
+          </div>
         </div>
         <div className={shell.fieldLabel}>SMB ID</div>
         <p style={{ margin: "0 0 0.9rem" }}>

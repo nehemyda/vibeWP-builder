@@ -96,3 +96,20 @@ export function PurgeIcon() {
     </Icon>
   );
 }
+
+/**
+ * Duplicate — one card with a second behind it.
+ *
+ * Two overlapping shapes rather than a plus or a copy-and-paste glyph,
+ * because what this makes is another SITE, not another copy of this page's
+ * contents. The offset says "a second one like it", which is what a clone is
+ * here: the same layout, its own words.
+ */
+export function DuplicateIcon() {
+  return (
+    <Icon>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+    </Icon>
+  );
+}

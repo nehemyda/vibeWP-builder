@@ -1,9 +1,9 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { sites } from "@/lib/db/schema";
+import { sites, sitePages } from "@/lib/db/schema";
 import { canEditSite } from "@/app/actions/sites";
 import { ensureSiteForm } from "@/lib/forms/ensure";
 import { getAiProviderSettings } from "@/lib/ai-provider-settings";
@@ -18,7 +18,7 @@ import {
 import { generateHeroContentWithGemini } from "@/lib/ai/gemini";
 import { searchPhoto } from "@/lib/images/pexels";
 import { sectionsForPlan } from "@/lib/sections/resolve";
-import { planPage, planChrome, type PlannedSection } from "@/lib/sections/page-plan";
+import { planPage, planChrome, planFromSchema, type PlannedSection } from "@/lib/sections/page-plan";
 import { generateHeroContent, heroContentToSchema } from "@/lib/mock-ai";
 import type { FieldSpec } from "@/lib/sections/types";
 import { modelFailureReason } from "@/lib/ai/deadline";
@@ -86,8 +86,35 @@ export async function generatePageAction(opts: {
   const settings = await getAiProviderSettings();
 
   const available = await sectionsForPlan(site?.plan ?? "starter");
+
+  /*
+   * A site started from another one follows that one's SHAPE.
+   *
+   * Read off the site record rather than taken as an argument. This is a
+   * server action, so an argument is whatever a browser sends: a caller able
+   * to name a source could lift the structure of a site they cannot open, and
+   * one able to pass a plan outright could name sections the target's plan
+   * never bought. The id was written at creation from a list the creator was
+   * allowed to see, and the lift is filtered through the TARGET's own
+   * `available`, so neither is reachable from here.
+   *
+   * Only the shape travels. The words are written for THIS business and the
+   * photographs are searched on its own trade, which is the whole reason a
+   * clone is a plan and not a copy.
+   */
+  let plan: PlannedSection[] | null = null;
+  if (site?.clonedFromSiteId) {
+    const source = await db.query.sitePages.findFirst({
+      where: and(eq(sitePages.siteId, site.clonedFromSiteId), eq(sitePages.slug, slug)),
+    });
+    const lifted = source ? planFromSchema(source.schemaJson, available, slug) : [];
+    /* No page of this slug on the source, or nothing on it this plan allows:
+       fall through to the ordinary plan rather than building nothing. */
+    if (lifted.length) plan = lifted;
+  }
+
   // The client's own words, so an explicit "add a form" is not lost to the slug.
-  const plan = planPage(slug, available, instruction);
+  if (!plan) plan = planPage(slug, available, instruction);
 
   /*
    * Header and footer are chosen once and then left alone. Re-picking them on

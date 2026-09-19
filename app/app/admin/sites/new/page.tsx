@@ -4,6 +4,7 @@ import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { BusinessDetailsFields } from "@/components/dashboard/BusinessDetailsFields";
 import { createSiteAction } from "@/app/actions/admin-sites";
 import { PlanSelect } from "@/components/dashboard/PlanSelect";
+import { CloneFromSelect } from "@/components/dashboard/CloneFromSelect";
 import { SiteModeSelect } from "@/components/dashboard/SiteModeSelect";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
 import { ADMIN_NAV } from "../../nav";
@@ -25,10 +26,10 @@ const labelStyle = {
 export default async function NewSitePage({
   searchParams,
 }: {
-  searchParams: Promise<{ agencyId?: string; error?: string }>;
+  searchParams: Promise<{ agencyId?: string; error?: string; cloneFrom?: string }>;
 }) {
   const { profile } = await requireRole(["super_admin"]);
-  const { agencyId, error } = await searchParams;
+  const { agencyId, error, cloneFrom } = await searchParams;
 
   const agencyList = await db.query.agencies.findMany({
     orderBy: (a, { desc }) => [desc(a.createdAt)],
@@ -73,6 +74,9 @@ export default async function NewSitePage({
               <PlanSelect style={inputStyle} />
             </div>
           </div>
+
+          {/* No agencyId: an admin may start from any site. */}
+          <CloneFromSelect defaultValue={cloneFrom} style={inputStyle} hintClassName={shell.rowSub} />
 
           <div>
             <label htmlFor="mode" style={labelStyle}>

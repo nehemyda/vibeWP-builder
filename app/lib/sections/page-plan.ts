@@ -220,6 +220,86 @@ export function planPage(
   return out;
 }
 
+
+/**
+ * The plan a page was already built from, read back off the page itself.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY A CLONE IS A PLAN AND NOT A COPY
+ *
+ * Duplicating a site by copying its pages produces a plumber's website that
+ * says "long-fermented sourdough, baked from 4 AM on Market Street, Bath". It
+ * is wrong in every sentence, and it looks finished — which is worse than a
+ * blank page, and is the same fabrication the generator's own rules forbid:
+ * no invented addresses, no invented opening hours, no testimonials attributed
+ * to people who never said them.
+ *
+ * What is genuinely reusable about a good site is not its words. It is which
+ * sections, in which order, doing which job — the decisions an agency actually
+ * repeats from client to client. That is a PlannedSection[], which is exactly
+ * what the generator already takes.
+ *
+ * So a clone lifts the plan and runs it against the new business. The copy is
+ * written for that business, and so are the photographs: fillSectionImages
+ * searches on photoQueryFor(business), which reads the client's first service.
+ * Nothing of the source's content travels.
+ *
+ * WHY THE JOB IS MATCHED TO THE SECTION AND NOT TO ITS POSITION
+ *
+ * `job` is the brief a section is generated against ("The opening", "The
+ * ask"), and it is not stored on the node — nothing needed it after
+ * generation. The slug's own slots carry that vocabulary, so it is recovered
+ * from there.
+ *
+ * By SECTION, though, never by position. Position only lines up while a page
+ * still matches the canonical plan for its slug, and a page anyone has edited
+ * does not. Measured on a real edited homepage, positional matching briefed
+ * "Common questions" onto a testimonials section and "The ask" onto an FAQ —
+ * every job one slot out, each one a small lie told to the generator about
+ * what it was writing.
+ *
+ * A section that fills no known slot takes its own name, which reads correctly
+ * in a prompt: "Embed", "Gallery".
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export function planFromSchema(
+  schema: unknown,
+  available: ResolvedSection[],
+  /** The page's slug, used only to recover the job each slot describes. */
+  slug = "home",
+): PlannedSection[] {
+  const nodes = (schema as { nodes?: Array<{ type?: string }> } | null)?.nodes;
+  if (!Array.isArray(nodes)) return [];
+
+  const byNodeType = new Map(available.map((s) => [s.nodeType, s]));
+
+  /* The job each slot would give a section, keyed by the section it asks for. */
+  const jobForKey = new Map<string, string>();
+  for (const slot of slotsFor(slug)) {
+    for (const candidate of slot.candidates) {
+      if (!jobForKey.has(candidate)) jobForKey.set(candidate, slot.job);
+    }
+  }
+
+  const out: PlannedSection[] = [];
+  for (const node of nodes) {
+    const section = byNodeType.get(node.type ?? "");
+
+    /*
+     * Silently skipped, and that is correct. `available` is already filtered
+     * by isActive and the target site's plan, so a section the source site may
+     * use and the new one may not simply does not appear — the same way a slot
+     * falls through in planPage rather than leaving a hole. Copying it would
+     * put a section on a site whose plan does not permit it.
+     */
+    if (!section) continue;
+
+    out.push({ job: jobForKey.get(section.key) ?? section.name, section });
+  }
+
+  return out;
+}
+
 /**
  * The category a slot is really asking for, read off its own first choice so
  * the two can never disagree — hardcoding "hero-split means Hero" here would

@@ -8,6 +8,7 @@ import { requireAgency } from "@/lib/auth/require-agency";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/activity";
 import { planKeyOf } from "@/lib/billing";
+import { resolveCloneSource } from "@/lib/sites/clone-source";
 
 function str(formData: FormData, key: string): string | null {
   const v = String(formData.get(key) ?? "").trim();
@@ -37,6 +38,10 @@ export async function createAgencySiteAction(formData: FormData) {
   const mode = modeOf(formData.get("mode"));
   const ownerFullName = String(formData.get("ownerFullName") ?? "").trim();
   const ownerEmail = String(formData.get("ownerEmail") ?? "").trim();
+  /* Restricted to this agency's own sites — see resolveCloneSource. */
+  const clonedFromSiteId = await resolveCloneSource(String(formData.get("cloneFrom") ?? ""), {
+    agencyId: agency.id,
+  });
 
   if (!name) redirect(newSitePath);
   if (!ownerFullName || !ownerEmail) {
@@ -67,6 +72,7 @@ export async function createAgencySiteAction(formData: FormData) {
       plan,
       mode,
       status: "draft",
+      clonedFromSiteId,
     })
     .returning();
 

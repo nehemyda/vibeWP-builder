@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { profiles, agencies, sites, sitePages, businessProfiles } from "@/lib/db/schema";
 import { generateSmbId } from "@/lib/ids";
+import { resolveCloneSource } from "@/lib/sites/clone-source";
 import { requirePermission } from "@/lib/auth/require-permission";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/activity";
@@ -33,6 +34,8 @@ export async function createSiteAction(formData: FormData) {
   const agencyId = String(formData.get("agencyId") ?? "").trim();
   const ownerFullName = String(formData.get("ownerFullName") ?? "").trim();
   const ownerEmail = String(formData.get("ownerEmail") ?? "").trim();
+  /* An admin may start from any site, so no agency restriction. */
+  const clonedFromSiteId = await resolveCloneSource(String(formData.get("cloneFrom") ?? ""));
 
   const redirectBase = agencyId ? `/admin/sites/new?agencyId=${agencyId}` : "/admin/sites/new";
   if (!name) redirect(redirectBase);
@@ -70,6 +73,7 @@ export async function createSiteAction(formData: FormData) {
       plan,
       mode,
       status: "draft",
+      clonedFromSiteId,
     })
     .returning();
 

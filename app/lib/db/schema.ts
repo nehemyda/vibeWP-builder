@@ -158,6 +158,18 @@ export const sites = pgTable("sites", {
   designTokens: jsonb("design_tokens"),
   /** Set when the intake form is first submitted — drives Build vs Edit. */
   intakeCompletedAt: timestamp("intake_completed_at", { withTimezone: true }),
+  /**
+   * The site this one was started from, when it was.
+   *
+   * Lineage, not a dependency: nothing reads it at render time and a clone is
+   * a complete site the moment it exists. It is here for the question that
+   * cannot be answered afterwards — when a template turns out to carry a bad
+   * section or a wrong claim, which sites inherited it. Without this the
+   * answer is to open every site and look.
+   *
+   * No cascade. Deleting a source must not touch what was built from it.
+   */
+  clonedFromSiteId: uuid("cloned_from_site_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
