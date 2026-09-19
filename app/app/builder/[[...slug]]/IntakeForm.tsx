@@ -7,6 +7,7 @@ import { PALETTES, paletteByKey, isHexColor } from "@/lib/brand/palettes";
 import { extractPalette, type LogoPalette } from "@/lib/brand/logo-colors";
 import { LOGO_MAX_BYTES } from "@/lib/business/logo";
 import { DAY_LABELS, DAYS, type Day, type OpeningHours } from "@/lib/business/hours";
+import { importFromWebsiteAction, type ImportedField } from "@/app/actions/import-site";
 import {
   detectBusinessDriftAction,
   pullBusinessDetailsAction,
@@ -71,6 +72,77 @@ export function IntakeForm({
   const [drift, setDrift] = useState<BusinessFieldDrift[]>([]);
   const [pulling, setPulling] = useState(false);
   /** Colours read out of the logo, offered on the colour step. */
+  /*
+   * Reading the client's existing website.
+   *
+   * Held as a PROPOSAL rather than written into `data` on arrival: every value
+   * is something a page claimed, and the person who knows whether a phone
+   * number is still right is the one looking at this form. Same shape as the
+   * WordPress drift panel below, for the same reason.
+   */
+  const [importUrl, setImportUrl] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [imported, setImported] = useState<ImportedField[] | null>(null);
+  const [importNote, setImportNote] = useState<string | null>(null);
+
+  async function readMyWebsite() {
+    setImporting(true);
+    setImportNote(null);
+    setImported(null);
+    try {
+      const r = await importFromWebsiteAction({ siteId, url: importUrl });
+      if (r.ok) setImported(r.fields);
+      else setImportNote(r.error);
+    } catch {
+      setImportNote("Couldn't read that site just now.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  /** Accepting the proposal — the only point at which the form changes. */
+  function useImported() {
+    if (!imported) return;
+
+    /*
+     * Decided against the state we HAVE, not inside the updater.
+     *
+     * Counting within setData and reading the counters straight afterwards is
+     * a bug that hides itself: React runs the updater later, so both counts
+     * were still zero when the message was written and it always said
+     * "nothing to fill" — including the run that had just filled a field.
+     */
+    const toFill = imported.filter(
+      (f) => !String((data as Record<string, unknown>)[f.field] ?? "").trim(),
+    );
+    const filled = toFill.length;
+    const kept = imported.length - filled;
+
+    if (filled) {
+      setData((prev) => {
+        const next = { ...prev };
+        /* Never over an answer the client already gave. They were here first,
+           and a page they have not looked at in two years should not win. */
+        for (const f of toFill) (next as Record<string, unknown>)[f.field] = f.value;
+        return next;
+      });
+    }
+
+    setImported(null);
+    /*
+     * Says what actually happened, which is not always "filled in". When every
+     * proposed field was already answered, nothing changes — and a message
+     * claiming otherwise would send someone scrolling for an edit that was
+     * never made.
+     */
+    setImportNote(
+      filled === 0
+        ? `Nothing to fill — you had already answered ${kept === 1 ? "that one" : "all of those"}.`
+        : `Filled in ${filled} ${filled === 1 ? "field" : "fields"} below — look them over before saving.` +
+          (kept ? ` ${kept} left as you had ${kept === 1 ? "it" : "them"}.` : ""),
+    );
+  }
+
   const [logoPalette, setLogoPalette] = useState<LogoPalette | null>(null);
   const [logoNote, setLogoNote] = useState<string | null>(null);
 
@@ -325,6 +397,64 @@ export function IntakeForm({
         <div className={styles.body}>
           {step === 0 && (
             <div className={styles.grid}>
+              {/*
+                First, because it can fill most of what follows. An agency
+                onboarding a client who already has a website should not retype
+                what that website already says.
+              */}
+              <div className={styles.span2}>
+                <p className={styles.legend}>Already have a website?</p>
+                <p className={styles.legendHint}>
+                  Paste it and we&rsquo;ll read your details from it. We only take details
+                  the site publishes about itself — nothing is filled in until you say so.
+                </p>
+                <div className={styles.logoRow}>
+                  <input
+                    className={styles.input}
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    placeholder="yourbusiness.co.uk"
+                    aria-label="Your existing website address"
+                    disabled={importing}
+                  />
+                  <button
+                    type="button"
+                    className={styles.driftBtn}
+                    onClick={() => void readMyWebsite()}
+                    disabled={importing || !importUrl.trim()}
+                  >
+                    {importing ? "Reading…" : "Read my site"}
+                  </button>
+                </div>
+                {importNote && <p className={styles.legendHint}>{importNote}</p>}
+
+                {imported && (
+                  <div className={styles.drift}>
+                    <strong className={styles.driftTitle}>
+                      {imported.length === 1
+                        ? "Found one detail on your site"
+                        : `Found ${imported.length} details on your site`}
+                    </strong>
+                    <p className={styles.driftNote}>
+                      Check each one — we read what the page publishes, and a site can be
+                      out of date. Anything you have already filled in is left alone.
+                    </p>
+                    <ul className={styles.driftList}>
+                      {imported.map((f) => (
+                        <li key={f.field}>
+                          <span className={styles.driftLabel}>{f.label}</span>
+                          <span className={styles.driftNow}>{f.value}</span>
+                          <em className={styles.driftManual}>from {f.source}</em>
+                        </li>
+                      ))}
+                    </ul>
+                    <button type="button" className={styles.driftBtn} onClick={useImported}>
+                      Use these details
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div className={styles.span2}>
                 <p className={styles.legend}>Logo</p>
                 <p className={styles.legendHint}>
