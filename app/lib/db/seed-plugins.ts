@@ -28,7 +28,31 @@ const DEFAULT_PLUGINS = [
     slug: "wordpress-seo",
     name: "Yoast SEO",
     purpose:
-      "Titles, meta descriptions and sitemaps. The theme already emits our own, so this is for the client to build on rather than a gap it fills.",
+      "OFF THE CHECKLIST — the theme is the SEO layer and two of them collide. " +
+      "Measured on a real install: filling Yoast's description field puts TWO " +
+      "meta description tags on the page; Yoast's Organization JSON-LD competes " +
+      "with the theme's LocalBusiness; and Yoast replaces core's sitemap, which " +
+      "is the one the theme filters noindex pages out of. Left here, switched " +
+      "off, so the decision is visible and reversible.",
+    /*
+     * NOT DELETED, AND NOT A HALF MEASURE.
+     *
+     * The row's own previous text said it: "the theme already emits our own".
+     * It was on the list anyway, and that overlap is not a tidiness problem.
+     * inc/seo.php exists because a client's meta tags should not depend on a
+     * plugin we install and they must maintain, and it does titles,
+     * descriptions, canonicals, robots, noindex and LocalBusiness from the SEO
+     * fields they edit in our own builder.
+     *
+     * Configuring Yoast would have made this worse rather than better: two of
+     * the three collisions only fire once its fields are filled in, which is
+     * what configuring it means.
+     *
+     * isActive false rather than removing the entry, so an admin opening the
+     * screen sees a plugin we deliberately do not install and why, instead of
+     * an absence they have to guess at.
+     */
+    isActive: false,
     sortOrder: 0,
   },
   {
