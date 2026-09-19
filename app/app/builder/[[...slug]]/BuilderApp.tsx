@@ -20,6 +20,7 @@ import {
 } from "@/app/actions/pages";
 import { detectIntent } from "@/lib/page-intent";
 import type { SiteMode } from "@/lib/db/schema";
+import { type DesignTokens } from "@/lib/design/tokens";
 import { composePageBody } from "@/lib/render/page-document";
 import { getSectionByKey, getSectionByNodeType } from "@/lib/sections";
 import {
@@ -39,10 +40,7 @@ import { SCREENS, fieldFor as hideField } from "@/lib/design/part-visibility";
 import { widthFieldFor } from "@/lib/design/part-size";
 import { PART_ORDER_FIELD } from "@/lib/design/part-order";
 import {
-  schemaToGutenberg,
-  sectionToTemplatePart,
   withPreviewPlaceholders,
-  withSiteLogo,
 } from "@/lib/wp/serialize";
 import { PreviewFrame, type CanvasSelection, type SectionBox } from "./PreviewFrame";
 import { CanvasOverlay } from "./CanvasOverlay";
@@ -50,7 +48,6 @@ import { Composer, WorkingCover } from "./Composer";
 import { DesignPanel, type CatalogueEntry } from "./DesignPanel";
 import { StylePanel } from "./StylePanel";
 import { saveDesignTokensAction } from "@/app/actions/design";
-import { sanitiseTokens, type DesignTokens } from "@/lib/design/tokens";
 import { SECTION_STYLE_OPTIONS, sectionOwnOptions } from "@/lib/design/section-style";
 import { ELEMENT_ROLES } from "@/lib/design/element-style";
 import { WordPressLockNotice } from "./WordPressLockNotice";
@@ -1345,10 +1342,19 @@ export function BuilderApp({
          * Refused rather than failed. Surfacing the pages involved and leaving
          * the banner to offer Pull is the whole point: the old behaviour pushed
          * straight over a wp-admin edit with no mention of it.
+         *
+         * The advice is NOT appended blindly. A refusal about content we
+         * cannot represent already says that pulling loses it too, and
+         * following that with "pull those changes in first" would hand
+         * someone the one instruction guaranteed to destroy the thing they
+         * were just warned about.
          */
+        const pullWouldHelp = !result.error.includes("cannot represent");
         say(
-          `${result.error} Use the notice above to pull those changes in first, ` +
-            `or say "overwrite wordpress" if you're sure.`,
+          pullWouldHelp
+            ? `${result.error} Use the notice above to pull those changes in first, ` +
+                `or say "overwrite wordpress" if you're sure.`
+            : `${result.error} Say "overwrite wordpress" only if you accept losing it.`,
         );
         setSyncDismissed(false);
         await refreshSync();

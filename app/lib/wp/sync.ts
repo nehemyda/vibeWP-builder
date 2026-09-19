@@ -122,6 +122,33 @@ export function pushWouldOverwrite(state: PageSyncState): boolean {
   return state === "wp_ahead" || state === "conflict" || state === "never_synced";
 }
 
+/**
+ * Whether pushing this page would destroy something in WordPress.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THE STATE ALONE WAS NOT ENOUGH
+ *
+ * A block our schema cannot model is invisible to classifyPage. Both sides of
+ * the comparison are projected through serialize→parse, and gutenbergToSchema
+ * builds nodes only from sections it recognises — so a Contact Form 7 block
+ * added in wp-admin is dropped from the WordPress side BEFORE the two are
+ * compared. The page then reads in_sync, the overwrite guard does not fire,
+ * and upsertPage replaces post_content without it.
+ *
+ * Which is to say: the one kind of edit we can least afford to lose was the
+ * one the guard could not see. detectUnmodelledBlocks had found it all along
+ * and only the sync banner was listening.
+ *
+ * NOTE THAT PULLING DOES NOT RESCUE IT EITHER. The same parser drops the block
+ * on the way in, so "pull first, then push" still loses it. An unmodelled
+ * block can only be kept by not pushing that page — which is why this refuses
+ * rather than offering a fix that does not work.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export function pushWouldLose(page: { state: PageSyncState; unmodelled: string[] }): boolean {
+  return pushWouldOverwrite(page.state) || page.unmodelled.length > 0;
+}
+
 export function describeState(state: PageSyncState): string {
   switch (state) {
     case "not_exported":

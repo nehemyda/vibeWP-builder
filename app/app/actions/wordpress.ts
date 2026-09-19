@@ -13,7 +13,7 @@ import { resolveBrandColors } from "@/lib/brand/palettes";
 import { loadBusinessContext, contactFactsFor } from "@/lib/ai/business-context";
 import { detectBusinessDriftAction } from "@/app/actions/business-sync";
 import { gutenbergToSchema } from "@/lib/wp/serialize";
-import { pushWouldOverwrite } from "@/lib/wp/sync";
+import { pushWouldLose } from "@/lib/wp/sync";
 import { detectSyncAction } from "@/app/actions/sync";
 import {
   provisionSite,
@@ -219,15 +219,41 @@ export async function exportToWordPressAction(
   if (!force) {
     const detected = await detectSyncAction(smbId);
     if (detected.ok) {
-      const risky = detected.pages.filter((p) => pushWouldOverwrite(p.state));
+      const risky = detected.pages.filter((p) => pushWouldLose(p));
       if (risky.length > 0) {
+        /*
+         * Two reasons, two different answers, so they are worded apart.
+         *
+         * An edited page can be pulled in and then pushed. A page carrying a
+         * block we cannot model cannot: the pull drops it too, so the only way
+         * to keep it is not to push that page. Telling someone to "pull first"
+         * there would be advice that destroys the thing it claims to save.
+         */
+        const unmodelled = risky.filter((p) => p.unmodelled.length > 0);
+        const edited = risky.filter((p) => p.unmodelled.length === 0);
+
+        const blocks = [...new Set(unmodelled.flatMap((p) => p.unmodelled))];
+        const parts: string[] = [];
+
+        if (edited.length) {
+          parts.push(
+            edited.length === 1
+              ? `The "${edited[0].title}" page has been edited in WordPress since the last sync. Pushing now would overwrite it.`
+              : `${edited.length} pages have been edited in WordPress since the last sync. Pushing now would overwrite them.`,
+          );
+        }
+        if (unmodelled.length) {
+          parts.push(
+            `${unmodelled.length === 1 ? `The "${unmodelled[0].title}" page has` : `${unmodelled.length} pages have`} ` +
+              `content VibeWP cannot represent (${blocks.join(", ")}). Pushing would delete it, and pulling ` +
+              "would too — keep it by leaving those pages alone, or overwrite to lose it.",
+          );
+        }
+
         return {
           ok: false,
           blocked: true,
-          error:
-            risky.length === 1
-              ? `The "${risky[0].title}" page has been edited in WordPress since the last sync. Pushing now would overwrite it.`
-              : `${risky.length} pages have been edited in WordPress since the last sync. Pushing now would overwrite them.`,
+          error: parts.join(" "),
           pages: risky.map((p) => ({ slug: p.slug, state: p.state })),
         };
       }
