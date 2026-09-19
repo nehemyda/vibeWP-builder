@@ -62,6 +62,9 @@ export const EmbedBlock: SectionDefinition<EmbedBlockProps> = {
       type: "choice",
       label: "Comes from",
       choices: EMBED_PROVIDERS.map((p) => p.key),
+      /* Both from the registry, so adding a provider cannot leave the picker
+         showing its key while everything else shows its name. */
+      choiceLabels: Object.fromEntries(EMBED_PROVIDERS.map((p) => [p.key, p.name])),
       default: "youtube",
     },
     url: { type: "text", label: "Link", hint: "Paste the address you were given." },

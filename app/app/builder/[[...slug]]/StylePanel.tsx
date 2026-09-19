@@ -26,6 +26,75 @@ import styles from "./builder.module.css";
  * rather than laggy.
  * ─────────────────────────────────────────────────────────────────────
  */
+/**
+ * One section setting.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THIS IS A COMPONENT AND NOT TWO COPIES
+ *
+ * The element options and the section options rendered the same control,
+ * written out twice. Both drew a <select> filled from `spec.choices` — which
+ * meant a `number` field, having no choices, drew an EMPTY dropdown in both
+ * places. The type was declared in FieldType and routed by isOptionField, and
+ * min/max already sat on FieldSpec marked "Only for `number`", so the contract
+ * promised something neither call site delivered.
+ *
+ * Nothing used it until embed-block needed a height, which is why an empty
+ * control shipped twice over rather than once.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+function OptionControl({
+  id,
+  spec,
+  value,
+  busy,
+  onChange,
+}: {
+  id: string;
+  spec: FieldSpec;
+  value: string;
+  busy?: boolean;
+  onChange: (value: string) => void;
+}) {
+  if (spec.type === "number") {
+    return (
+      <input
+        id={id}
+        type="number"
+        className={styles.styleSelect}
+        value={value}
+        min={spec.min}
+        max={spec.max}
+        disabled={busy}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+
+  return (
+    <select
+      id={id}
+      className={styles.styleSelect}
+      value={value}
+      disabled={busy}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {(spec.choices ?? []).map((choice) => (
+        <option key={choice} value={choice}>
+          {/*
+            A choice is stored as a key and shown to a client. For "none" or
+            "tint" those are the same word, so every section so far has read
+            correctly by accident. A provider key does not: "sociablekit" is
+            not how SociableKIT spells itself, and the panel capitalises, so it
+            would reach a client as "Sociablekit".
+          */}
+          {spec.choiceLabels?.[choice] ?? choice}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export function StylePanel({
   tokens,
   onPreview,
@@ -97,19 +166,13 @@ export function StylePanel({
               <label className={styles.styleLabel} htmlFor={`el-${option.field}`}>
                 <span>{option.spec.label}</span>
               </label>
-              <select
+              <OptionControl
                 id={`el-${option.field}`}
-                className={styles.styleSelect}
+                spec={option.spec}
                 value={value}
-                disabled={busy}
-                onChange={(e) => section.onChange(option.field, e.target.value)}
-              >
-                {(option.spec.choices ?? []).map((choice) => (
-                  <option key={choice} value={choice}>
-                    {choice}
-                  </option>
-                ))}
-              </select>
+                busy={busy}
+                onChange={(v) => section.onChange(option.field, v)}
+              />
             </div>
           );
         })}
@@ -124,19 +187,13 @@ export function StylePanel({
               <label className={styles.styleLabel} htmlFor={`sec-${option.field}`}>
                 <span>{option.spec.label}</span>
               </label>
-              <select
+              <OptionControl
                 id={`sec-${option.field}`}
-                className={styles.styleSelect}
+                spec={option.spec}
                 value={value}
-                disabled={busy}
-                onChange={(e) => section.onChange(option.field, e.target.value)}
-              >
-                {(option.spec.choices ?? []).map((choice) => (
-                  <option key={choice} value={choice}>
-                    {choice}
-                  </option>
-                ))}
-              </select>
+                busy={busy}
+                onChange={(v) => section.onChange(option.field, v)}
+              />
               {option.spec.hint && <p className={styles.styleHint}>{option.spec.hint}</p>}
             </div>
           );

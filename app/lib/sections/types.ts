@@ -80,6 +80,16 @@ export type FieldSpec = {
   maxChars?: number;
   /** Only for `choice`: the permitted values. */
   choices?: string[];
+  /**
+   * Only for `choice`: how a value is spelled for a client, when the stored
+   * key is not already the right spelling.
+   *
+   * Optional because most choices are ordinary words — "none", "tint",
+   * "contained" — which read correctly as themselves. A key that is an
+   * identifier rather than a word does not: an embed provider is stored as
+   * "sociablekit" and belongs on screen as "SociableKIT".
+   */
+  choiceLabels?: Record<string, string>;
   /** Applied when a section is added without the option being specified. */
   default?: string | number | boolean;
   /** Only for `number`. */
