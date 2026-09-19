@@ -149,7 +149,7 @@ export function extractProfile(html: string, pageUrl?: string): ExtractedProfile
       const split = !postal ? splitPostcode(street) : null;
       if (split) {
         out.address = { value: split.rest, source: "schema.org streetAddress" };
-        out.postcode = { value: split.postcode, source: "read off the end of the address" };
+        out.postcode = { value: split.postcode, source: "the end of the address line" };
 
         /*
          * The segment before the postcode is the town, nearly always. Nearly

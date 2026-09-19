@@ -3,7 +3,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { canEditSite } from "@/app/actions/sites";
 import { readSite } from "@/lib/import/read-site";
+import { enrichFromPageText } from "@/lib/import/enrich";
+import { getAiProviderSettings } from "@/lib/ai-provider-settings";
 import type { IntakeData } from "@/lib/intake-state";
+import type { ServiceEntry } from "@/lib/business/hours";
 
 /**
  * Reading a client's existing website, for the intake form to offer.
@@ -25,16 +28,29 @@ import type { IntakeData } from "@/lib/intake-state";
  * ─────────────────────────────────────────────────────────────────────
  */
 
-/** One field we could fill, and where it came from. */
-export type ImportedField = {
-  field: keyof IntakeData;
-  label: string;
-  value: string;
-  source: string;
-};
+/**
+ * One field we could fill, and where it came from.
+ *
+ * Two shapes because intake stores services as rows, not a sentence, and a
+ * proposal that flattened them to text would have to be split apart again
+ * on the way in — guessing at the separator a model happened to use.
+ */
+export type ImportedField =
+  | { kind: "text"; field: keyof IntakeData; label: string; value: string; source: string }
+  | { kind: "services"; field: "services"; label: string; value: ServiceEntry[]; source: string };
 
 export type ImportResult =
-  | { ok: true; url: string; fields: ImportedField[] }
+  | {
+      ok: true;
+      url: string;
+      fields: ImportedField[];
+      /**
+       * Why the fuzzy fields are missing, when they are. The structured ones
+       * arrive regardless — a phone number read off a schema block does not
+       * depend on a model being up — so an AI failure is a note, not an error.
+       */
+      note?: string;
+    }
   | { ok: false; error: string };
 
 const LABELS: Partial<Record<keyof IntakeData, string>> = {
@@ -69,7 +85,58 @@ export async function importFromWebsiteAction(opts: {
   for (const [field, label] of Object.entries(LABELS) as Array<[keyof IntakeData, string]>) {
     const found = read.profile[field as keyof typeof read.profile];
     if (found && typeof found.value === "string" && found.value.trim()) {
-      fields.push({ field, label, value: found.value, source: found.source });
+      fields.push({ kind: "text", field, label, value: found.value, source: found.source });
+    }
+  }
+
+  /*
+   * The two fields nothing declares — services and about — read by the model
+   * from the page's TEXT. Only if a provider is configured; the structured
+   * fields above do not depend on it, and a site with no AI key should still
+   * get a phone number out of this.
+   */
+  let note: string | undefined;
+  const settings = await getAiProviderSettings();
+  if (settings.activeProvider === "gemini" && settings.geminiApiKey) {
+    const { result, error } = await enrichFromPageText({
+      apiKey: settings.geminiApiKey,
+      pageText: read.text,
+    });
+
+    if (error) {
+      note = `Couldn't read services and about from the page: ${error}. The details above came from the page directly.`;
+    }
+
+    if (result.services.length) {
+      fields.push({
+        kind: "services",
+        field: "services",
+        label: "Services",
+        value: result.services.map((name) => ({ name })),
+        /* Labelled as what it is. A schema field is a declaration; this is a
+           reading, and the reviewer should weigh it accordingly. */
+        source: "the page's wording, read by AI — check this",
+      });
+    }
+
+    if (result.about) {
+      /*
+       * The model's summary replaces the meta description when both exist. A
+       * meta description is written for a search result — one line, keyword-
+       * led, often stale — where this is written for the field it will fill.
+       * The meta version is never worse than absent, so it stays when the
+       * model has nothing.
+       */
+      const i = fields.findIndex((f) => f.field === "about");
+      const about: ImportedField = {
+        kind: "text",
+        field: "about",
+        label: "About",
+        value: result.about,
+        source: "an AI summary of the page — check this",
+      };
+      if (i >= 0) fields[i] = about;
+      else fields.push(about);
     }
   }
 
@@ -86,5 +153,5 @@ export async function importFromWebsiteAction(opts: {
     };
   }
 
-  return { ok: true, url: read.url, fields };
+  return { ok: true, url: read.url, fields, note };
 }

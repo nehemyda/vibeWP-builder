@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "verify": "tsx lib/sections/verify.ts && tsx lib/sections/verify-render.ts && tsx lib/sections/verify-edits.ts && tsx lib/sections/verify-carry.ts && tsx lib/sections/verify-tokens.ts && tsx lib/design/verify-gallery.ts && tsx lib/sections/verify-embeds.ts && tsx lib/verify-page-intent.ts && tsx lib/db/verify-backup-order.ts && tsx lib/sections/verify-clone-plan.ts && tsx lib/net/verify-safe-fetch.ts && tsx lib/import/verify-extract.ts",
+    "verify": "tsx lib/sections/verify.ts && tsx lib/sections/verify-render.ts && tsx lib/sections/verify-edits.ts && tsx lib/sections/verify-carry.ts && tsx lib/sections/verify-tokens.ts && tsx lib/design/verify-gallery.ts && tsx lib/sections/verify-embeds.ts && tsx lib/verify-page-intent.ts && tsx lib/db/verify-backup-order.ts && tsx lib/sections/verify-clone-plan.ts && tsx lib/net/verify-safe-fetch.ts && tsx lib/import/verify-extract.ts && tsx lib/import/verify-enrich.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx lib/db/seed.ts"

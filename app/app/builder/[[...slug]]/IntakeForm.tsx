@@ -91,8 +91,14 @@ export function IntakeForm({
     setImported(null);
     try {
       const r = await importFromWebsiteAction({ siteId, url: importUrl });
-      if (r.ok) setImported(r.fields);
-      else setImportNote(r.error);
+      if (r.ok) {
+        setImported(r.fields);
+        /* The structured details arrived; this says why the AI-read ones did
+           not, so their absence is explained rather than puzzling. */
+        if (r.note) setImportNote(r.note);
+      } else {
+        setImportNote(r.error);
+      }
     } catch {
       setImportNote("Couldn't read that site just now.");
     } finally {
@@ -112,9 +118,17 @@ export function IntakeForm({
      * were still zero when the message was written and it always said
      * "nothing to fill" — including the run that had just filled a field.
      */
-    const toFill = imported.filter(
-      (f) => !String((data as Record<string, unknown>)[f.field] ?? "").trim(),
-    );
+    /*
+     * "Already answered" means something different for a list. The form can
+     * hold an empty services row the client added and never filled — that is
+     * not an answer, and String([{name:""}]) is "[object Object]", which would
+     * have counted it as one.
+     */
+    const answered = (f: ImportedField): boolean =>
+      f.kind === "services"
+        ? data.services.some((s) => s.name.trim())
+        : Boolean(String((data as Record<string, unknown>)[f.field] ?? "").trim());
+    const toFill = imported.filter((f) => !answered(f));
     const filled = toFill.length;
     const kept = imported.length - filled;
 
@@ -443,7 +457,9 @@ export function IntakeForm({
                       {imported.map((f) => (
                         <li key={f.field}>
                           <span className={styles.driftLabel}>{f.label}</span>
-                          <span className={styles.driftNow}>{f.value}</span>
+                          <span className={styles.driftNow}>
+                            {f.kind === "services" ? f.value.map((v) => v.name).join(", ") : f.value}
+                          </span>
                           <em className={styles.driftManual}>from {f.source}</em>
                         </li>
                       ))}
