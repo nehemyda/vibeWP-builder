@@ -43,3 +43,11 @@ backups/backup.log
 # repository inside this one.
 .claude/worktrees/
 app/.claude/worktrees/
+
+# The plaintext dump. It holds every client's pages, leads and form
+# submissions in the clear, and backup.sh now writes it OUTSIDE the repo —
+# these rules are the second line, for a stray copy or an older checkout.
+# The committed backup is backups/*.age, decryptable only with the private
+# key, which is not on this machine.
+backups/db-data.json
+backups/db-data.sql

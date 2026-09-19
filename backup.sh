@@ -60,6 +60,9 @@ export PATH="$(dirname "$NODE_BIN"):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/b
 MEDIA_OK=1
 MEDIA_DIR="${VIBEWP_MEDIA_BACKUP_DIR:-$HOME/vibewp-backups/media}"
 
+# Where the PLAINTEXT dump is written — outside the repo, never committed.
+DUMP_DIR="${VIBEWP_DUMP_DIR:-$HOME/vibewp-backups/db}"
+
 mirror_media() {
   if ( cd "$APP" && "$NODE_BIN" "$TSX" lib/db/backup-media.ts "$@" ) >>"$LOG" 2>&1; then
     log "media: $(grep -E '^(\[dry run\] )?media:' "$LOG" | tail -1 | sed 's/^[^:]*media: //')"
@@ -67,6 +70,59 @@ mirror_media() {
     MEDIA_OK=0
     log "media mirror FAILED (see $LOG)"
   fi
+}
+
+# --- encryption --------------------------------------------------------------
+# Encrypts the dump into the repo, leaving the plaintext outside it.
+#
+# WHY IT ONLY RUNS WHEN THE DATA CHANGED
+#
+# age uses a fresh nonce every time, so encrypting identical data twice gives
+# different bytes. Encrypting unconditionally would therefore commit a new
+# ~650KB blob on every run forever — blobs git cannot delta-compress, in a
+# repository nobody can prune. That would quietly undo the property
+# backup-db.ts goes out of its way to have: an identical dump produces an
+# identical file, so a scheduled run with no changes commits nothing.
+#
+# So the PLAINTEXT is digested and the digest is committed beside the
+# ciphertext. Same digest, same data, leave the existing ciphertext alone.
+#
+# WHY A PUBLIC KEY AND NOT A PASSPHRASE
+#
+# A passphrase must be readable by cron, which means storing it on the machine
+# being backed up — where anyone who can read the ciphertext can read the
+# passphrase beside it. With a recipient key this machine holds only the
+# PUBLIC half and cannot decrypt its own backups. The private half lives
+# wherever the user keeps secrets, and is the only thing that can.
+encrypt_dump() {
+  if ! command -v age >/dev/null 2>&1; then
+    fail "age is not installed — cannot encrypt the dump"
+  fi
+  if [ -z "${VIBEWP_BACKUP_PUBKEY:-}" ]; then
+    fail "VIBEWP_BACKUP_PUBKEY is not set — refusing to back up unencrypted"
+  fi
+
+  local out="$REPO/backups"
+  mkdir -p "$out"
+
+  for name in db-data.json db-data.sql; do
+    local src="$DUMP_DIR/$name"
+    [ -f "$src" ] || fail "expected dump at $src"
+
+    local digest current
+    digest=$(shasum -a 256 "$src" | cut -d" " -f1)
+    current=$(cat "$out/$name.sha256" 2>/dev/null || echo none)
+
+    if [ "$digest" = "$current" ] && [ -f "$out/$name.age" ]; then
+      continue
+    fi
+
+    age -r "$VIBEWP_BACKUP_PUBKEY" -o "$out/$name.age.tmp" "$src" \
+      || fail "age could not encrypt $name"
+    mv "$out/$name.age.tmp" "$out/$name.age"
+    printf '%s\n' "$digest" >"$out/$name.sha256"
+    log "encrypted $name"
+  done
 }
 
 # --- off-site ----------------------------------------------------------------
@@ -122,9 +178,12 @@ log "=== backup started ==="
 # Uses the repo-local tsx rather than npx, so it works offline.
 TSX="$APP/node_modules/.bin/tsx"
 [ -x "$TSX" ] || fail "tsx not installed — run 'npm install' in $APP"
-( cd "$APP" && "$NODE_BIN" "$TSX" lib/db/backup-db.ts ) >>"$LOG" 2>&1 \
+mkdir -p "$DUMP_DIR"
+( cd "$APP" && VIBEWP_DUMP_DIR="$DUMP_DIR" "$NODE_BIN" "$TSX" lib/db/backup-db.ts ) >>"$LOG" 2>&1 \
   || fail "database dump failed (see $LOG)"
-log "database dumped"
+log "database dumped to $DUMP_DIR"
+
+encrypt_dump
 
 if [ "$DRY_RUN" -eq 1 ]; then
   mirror_media --dry-run

@@ -159,7 +159,19 @@ async function main() {
 
   lines.push("COMMIT;", "");
 
-  const outDir = join(process.cwd(), "..", "backups");
+  /*
+   * Where the PLAINTEXT dump lands.
+   *
+   * Overridable so backup.sh can put it outside the repository. The dump holds
+   * every client's pages, leads, form submissions and business details in the
+   * clear — credentials are redacted above, client data is not and cannot be,
+   * since it is the thing being backed up. Once the committed copy is
+   * encrypted, the plaintext must not be written anywhere git can reach it: a
+   * file that is gitignored today is one `git add -f` or one rule change away
+   * from being committed, and the safe version of that is for the file not to
+   * be there at all.
+   */
+  const outDir = process.env.VIBEWP_DUMP_DIR ?? join(process.cwd(), "..", "backups");
   mkdirSync(outDir, { recursive: true });
 
   writeFileSync(join(outDir, "db-data.json"), JSON.stringify({ tables: dump }, null, 2) + "\n");
