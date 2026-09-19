@@ -35,7 +35,9 @@ const DEFAULT_PLUGINS = [
     slug: "updraftplus",
     name: "UpdraftPlus",
     purpose:
-      "Scheduled backups a client controls. The free tier covers local and manual restore; the paid one adds remote destinations.",
+      "Backups a client controls, once they set a schedule. Activating it schedules NOTHING — " +
+      "verified on a real install: no backup interval, no destination, an empty updraft folder " +
+      "and a single cleanup job. Until someone configures it, this site has no backups.",
     sortOrder: 10,
   },
   {
@@ -72,7 +74,10 @@ const DEFAULT_PLUGINS = [
     slug: "w3-total-cache",
     name: "W3 Total Cache",
     purpose:
-      "Page caching. Stands in for WP Rocket, which is paid and cannot be installed from a slug.",
+      "Stands in for WP Rocket, which is paid and cannot be installed from a slug. Activating it " +
+      "caches NOTHING — verified on a real install: page, database, object and minify cache all " +
+      "off, leaving only browser-cache rules that need Apache or nginx and do nothing under the " +
+      "local driver's PHP server. It is a plugin waiting to be configured, not a speed-up.",
     sortOrder: 30,
   },
 ];
