@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import type { PlannedSection } from "@/lib/sections/page-plan";
 import { isOptionField, type FieldSpec } from "@/lib/sections/types";
 import { describeBusiness, contactFactsFor, type BusinessContext } from "./business-context";
+import { modelDeadline } from "./deadline";
 
 const MODEL = "gemini-2.5-flash";
 
@@ -118,7 +119,10 @@ ${sectionBriefs}
 Return ONLY a JSON object whose keys are exactly these section keys:
 ${plan.map((p) => `"${p.section.key}"`).join(", ")}
 Each value is that section's object, in the shape shown. No commentary.`,
-    config: { responseMimeType: "application/json" },
+    config: {
+      responseMimeType: "application/json",
+      abortSignal: modelDeadline(),
+    },
   });
 
   const text = response.text;

@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { getSectionByNodeType } from "@/lib/sections";
 import type { ResolvedSection } from "@/lib/sections/resolve";
 import type { EditOp, PageSchema } from "@/lib/sections/edit-ops";
+import { modelDeadline } from "./deadline";
 
 const MODEL = "gemini-2.5-flash";
 
@@ -338,7 +339,11 @@ ${chromeCatalogue}
         only has room for your business name and the menu."
 
 Return only the JSON object.`,
-    config: { responseMimeType: "application/json", responseSchema: OP_SCHEMA },
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: OP_SCHEMA,
+      abortSignal: modelDeadline(),
+    },
   });
 
   const text = response.text;

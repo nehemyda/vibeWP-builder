@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { modelDeadline } from "./deadline";
 
 const MODEL = "gemini-2.5-flash";
 
@@ -121,7 +122,10 @@ ${subjects.length} entries, in the same order as the images.`,
         ],
       },
     ],
-    config: { responseMimeType: "application/json" },
+    config: {
+      responseMimeType: "application/json",
+      abortSignal: modelDeadline(),
+    },
   });
 
   const text = response.text;

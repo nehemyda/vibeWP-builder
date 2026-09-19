@@ -21,6 +21,7 @@ import { sectionsForPlan } from "@/lib/sections/resolve";
 import { planPage, planChrome, type PlannedSection } from "@/lib/sections/page-plan";
 import { generateHeroContent, heroContentToSchema } from "@/lib/mock-ai";
 import type { FieldSpec } from "@/lib/sections/types";
+import { modelFailureReason } from "@/lib/ai/deadline";
 
 /** Stable per-prompt spread, so two businesses in one vertical don't collide. */
 function seedFrom(prompt: string): number {
@@ -118,7 +119,12 @@ export async function generatePageAction(opts: {
     });
   } catch (err) {
     console.error("Page generation failed, falling back to a single hero:", err);
-    return degradedHero(instruction, "the AI provider failed", business.businessName);
+    /*
+     * Which failure it was, in the client's words. "It took too long" and "it
+     * said no" call for different things — wait and try again, versus check
+     * the key — and one message covering both tells a client neither.
+     */
+    return degradedHero(instruction, modelFailureReason(err), business.businessName);
   }
 
   /*

@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import type { HeroContent } from "@/lib/mock-ai";
+import { modelDeadline } from "./deadline";
 
 const MODEL = "gemini-2.5-flash";
 
@@ -34,6 +35,7 @@ Write compelling, specific marketing copy for this exact business — not generi
 - outlineLabel: a secondary call-to-action button text, max 30 characters`,
     config: {
       responseMimeType: "application/json",
+      abortSignal: modelDeadline(),
     },
   });
 

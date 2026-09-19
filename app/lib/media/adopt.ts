@@ -26,6 +26,19 @@ type ImageValue = { url?: string; alt?: string; sourceUrl?: string; [k: string]:
 const MAX_BYTES = 8_000_000;
 
 /**
+ * How long to wait for one photograph.
+ *
+ * This fetches a THIRD-PARTY url — whatever a section happens to point at —
+ * during publish and export. Without a deadline, one unresponsive image host
+ * stalls the whole operation indefinitely, which is the same failure the model
+ * calls had: not an error anyone can see, just a thing that never finishes.
+ *
+ * Generous, because a large photograph over a slow link is a normal thing that
+ * should still succeed, and a miss only costs the ORIGINAL url being kept.
+ */
+const FETCH_TIMEOUT_MS = 20_000;
+
+/**
  * Fetches one remote image into the store and returns its new URL.
  *
  * Null on any failure, and every caller treats that as "leave the original
@@ -34,7 +47,10 @@ const MAX_BYTES = 8_000_000;
  */
 async function adoptUrl(siteId: string, url: string, alt?: string): Promise<string | null> {
   try {
-    const res = await fetch(url, { redirect: "follow" });
+    const res = await fetch(url, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (!res.ok) return null;
 
     const contentType = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();

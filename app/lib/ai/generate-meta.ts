@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { describeBusiness, type BusinessContext } from "./business-context";
 import { DESC_LIMIT, TITLE_LIMIT } from "@/lib/seo/limits";
+import { modelDeadline } from "./deadline";
 
 const MODEL = "gemini-2.5-flash";
 
@@ -118,7 +119,10 @@ Rules:
 Return ONLY a JSON object of the form:
 {"pages":[{"slug":"home","focusKeyword":"…","title":"…","description":"…"}]}
 with one entry per page, using exactly the slugs given.`,
-    config: { responseMimeType: "application/json" },
+    config: {
+      responseMimeType: "application/json",
+      abortSignal: modelDeadline(),
+    },
   });
 
   const text = response.text;
