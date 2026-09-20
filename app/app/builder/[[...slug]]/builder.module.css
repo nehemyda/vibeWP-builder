@@ -1905,6 +1905,14 @@
   color: var(--ink, #131922);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 }
+/* Opens a form rather than switching the pane, so it is set off from the
+   tabs above it — the ellipsis in its label says the same thing in words. */
+.dashLauncher {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #e3e5e9);
+  border-radius: 0 0 8px 8px;
+}
 
 /*
  * The PANE scrolls, and nothing above it does. min-height: 0 is what allows a

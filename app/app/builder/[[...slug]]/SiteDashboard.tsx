@@ -56,12 +56,25 @@ export function SiteDashboard({
   tab,
   onTab,
   onClose,
+  onBusinessDetails,
   siteName,
   children,
 }: {
   tab: DashboardTab;
   onTab: (tab: DashboardTab) => void;
   onClose: () => void;
+  /**
+   * Opens the business-details form, from the same rail as the tabs.
+   *
+   * Not a tab, because it cannot be one: the intake form is a full-screen
+   * overlay with its own steps and footer, and rendering it inside this pane
+   * would put a dialog inside a dialog. But it IS the fourth thing a client
+   * reaches for alongside style, images and SEO — the toolbar used to hold
+   * four separate buttons for the four of them, opening two different
+   * surfaces that looked like one. One button opens this; the rail lists all
+   * four; this entry launches the form over the top.
+   */
+  onBusinessDetails?: () => void;
   siteName: string;
   /** The active tab's content, rendered by the caller. */
   children: React.ReactNode;
@@ -116,6 +129,16 @@ export function SiteDashboard({
                 {t.label}
               </button>
             ))}
+            {onBusinessDetails && (
+              <button
+                type="button"
+                className={`${styles.dashTab} ${styles.dashLauncher}`}
+                title="Business name, contact details, services and colours"
+                onClick={onBusinessDetails}
+              >
+                Business details…
+              </button>
+            )}
           </nav>
 
           {/*

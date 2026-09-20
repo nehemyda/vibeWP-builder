@@ -1496,56 +1496,30 @@ export function BuilderApp({
             </select>
           )}
           {/*
-            Reopens the intake form. The details it holds drive every generated
-            page, so it belongs beside the page being edited rather than buried
-            in a settings screen the client would have to leave the builder for.
-          */}
-          <button
-            type="button"
-            className={styles.detailsBtn}
-            onClick={() => setIntakeOpen(true)}
-            title="Business name, contact details, services and colours"
-          >
-            Business details
-          </button>
+            One button for the four things that are about the SITE rather than
+            the page: style, images, SEO and business details. There were four
+            buttons here, and they opened two surfaces — three of them tabs of
+            one dashboard, which already draws its own rail of exactly those
+            tabs, so the toolbar was repeating the dashboard's navigation
+            outside the dashboard. The fourth opened the intake form. From the
+            toolbar they read as four doors to one room, because that is what
+            they were; the room now has one door and the rail inside lists all
+            four destinations. Business details launches from that rail, since
+            its form is a full-screen overlay and cannot be a pane.
 
-          {/*
-            Beside Business details, because they are the same kind of thing:
-            what the site IS, and what it LOOKS like. Both belong next to the
-            page being edited rather than in a settings screen the client has
-            to leave the builder for.
+            Toggles: open lands on Style, open again closes whatever tab is up
+            — the same behaviour each of the old buttons had for its own tab.
+            ?panel= deep links are unchanged; they never went through here.
           */}
           <button
             type="button"
-            className={`${styles.detailsBtn} ${dashTab === "style" ? styles.detailsBtnOn : ""}`}
-            onClick={() => openDash(dashTab === "style" ? null : "style")}
-            title="Heading size, spacing, corners and page width"
-            aria-pressed={dashTab === "style"}
+            className={`${styles.detailsBtn} ${dashTab ? styles.detailsBtnOn : ""}`}
+            onClick={() => openDash(dashTab ? null : "style")}
+            title="Style, images, SEO and business details for the whole site"
+            aria-pressed={Boolean(dashTab)}
+            aria-expanded={Boolean(dashTab)}
           >
-            Style
-          </button>
-          {/*
-            The library, openable on its own so images can be uploaded before
-            there is anywhere to put them — which is the usual order: a client
-            gathers their photographs first and places them afterwards.
-          */}
-          <button
-            type="button"
-            className={`${styles.detailsBtn} ${dashTab === "images" ? styles.detailsBtnOn : ""}`}
-            onClick={() => openDash(dashTab === "images" ? null : "images")}
-            title="Your uploaded images"
-            aria-pressed={dashTab === "images"}
-          >
-            Images
-          </button>
-          <button
-            type="button"
-            className={`${styles.detailsBtn} ${dashTab === "seo" ? styles.detailsBtnOn : ""}`}
-            onClick={() => openDash(dashTab === "seo" ? null : "seo")}
-            title="Page titles and descriptions for search engines"
-            aria-pressed={dashTab === "seo"}
-          >
-            SEO
+            Site settings
           </button>
         </div>
 
@@ -2194,6 +2168,7 @@ export function BuilderApp({
             tab={dashTab}
             onTab={openDash}
             onClose={() => openDash(null)}
+            onBusinessDetails={() => setIntakeOpen(true)}
             siteName={siteName}
           >
             {dashTab === "style" && (
