@@ -8,7 +8,15 @@
 .cover {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  /*
+   * Above the site dashboard's scrim (200), because this form is launched
+   * FROM that dashboard's rail and must appear over it — at 90 it opened
+   * underneath, and "Business details… does nothing" was the whole report.
+   * In the band the builder already uses for things that open over the
+   * dashboard: the lightbox sits at 260 and the confirm dialog at 280, and
+   * a confirm must still beat this, so 240.
+   */
+  z-index: 240;
   background: linear-gradient(150deg, #f7f5f2 0%, #eceef2 100%);
   display: flex;
   align-items: center;
