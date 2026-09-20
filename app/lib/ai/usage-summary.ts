@@ -41,7 +41,9 @@ export async function siteUsageSummary(siteId: string, opts: { days?: number } =
   const rows = await db
     .select({
       action: aiUsage.action,
-      calls: sql<number>`count(*)::int`,
+      /* A request is one thing the client asked for; rows from before the
+         column existed count as one each. */
+      calls: sql<number>`count(distinct coalesce(${aiUsage.requestId}, ${aiUsage.id}))::int`,
       tokens: sql<number>`coalesce(sum(${aiUsage.totalTokens}), 0)::int`,
       lastAt: sql<Date | null>`max(${aiUsage.createdAt})`,
     })

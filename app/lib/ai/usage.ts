@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
 import type { GenerateContentResponse } from "@google/genai";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -55,13 +56,19 @@ export type UsageContext = {
   action: UsageAction;
   /** Filled in once the action has authenticated; the context opens before that. */
   userId?: string;
+  /**
+   * Set when the context opens. Every model call inside one action shares it,
+   * so "how many times did the client ask" is a count of these, not of rows —
+   * an edit is two calls, and a client who made six edits did not make twelve.
+   */
+  requestId?: string;
 };
 
 const store = new AsyncLocalStorage<UsageContext>();
 
 /** Runs `fn` with every model call inside it attributed to this site and action. */
 export function runWithUsageContext<T>(ctx: UsageContext, fn: () => Promise<T>): Promise<T> {
-  return store.run({ ...ctx }, fn);
+  return store.run({ ...ctx, requestId: ctx.requestId ?? randomUUID() }, fn);
 }
 
 /**
@@ -78,6 +85,7 @@ export type UsageRow = {
   siteId: string;
   agencyId: string | null;
   userId: string | null;
+  requestId: string | null;
   action: UsageAction;
   model: string;
   promptTokens: number;
@@ -133,6 +141,7 @@ export async function captureUsage(response: GenerateContentResponse, model: str
     await writer({
       siteId: ctx.siteId,
       userId: ctx.userId ?? null,
+      requestId: ctx.requestId ?? null,
       action: ctx.action,
       model,
       promptTokens: prompt,

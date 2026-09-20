@@ -199,7 +199,7 @@ export async function OverviewView({
                 <thead>
                   <tr>
                     <th>What</th>
-                    <th>Times</th>
+                    <th>Requests</th>
                     <th>Credits</th>
                   </tr>
                 </thead>

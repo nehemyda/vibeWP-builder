@@ -88,6 +88,18 @@ async function main() {
     console.log("  ok   a call inside a context lands with site, user, action, model and every count");
   }
 
+  /* ── 2b. Two calls in one action share a request id; two actions do not ── */
+  rows.length = 0;
+  await runWithUsageContext({ siteId: SITE_A, action: "edit" }, async () => {
+    await captureUsage(response({ totalTokenCount: 1 }), "plan");
+    await captureUsage(response({ totalTokenCount: 2 }), "revise");
+  });
+  await runWithUsageContext({ siteId: SITE_A, action: "edit" }, () => captureUsage(response({ totalTokenCount: 3 }), "plan"));
+  if (rows.length !== 3) fail(`expected 3 rows, got ${rows.length}`);
+  else if (!rows[0].requestId || rows[0].requestId !== rows[1].requestId) fail("the two calls of one edit do not share a request id");
+  else if (rows[2].requestId === rows[0].requestId) fail("a second edit reused the first edit's request id");
+  else console.log("  ok   plan and revise of one edit share a request id; the next edit gets its own");
+
   /* ── 3. A response with no usage block is not a row of zeros ────────── */
   rows.length = 0;
   await runWithUsageContext({ siteId: SITE_A, action: "edit" }, () => captureUsage(response(undefined), "m"));
@@ -204,11 +216,18 @@ async function main() {
   console.log(`  ok   ${reaching} server actions reach a model, all inside runWithUsageContext`);
 
   /* ── 11. The hand-written migration names the same columns as the schema ── */
-  const migration = readFileSync(join(__dirname, "..", "db", "migrate-batch40.ts"), "utf8");
+  /* Every migration that touches ai_usage, read together: the table was
+     created in batch 40 and has grown since, one column per batch. */
+  const dbDir = join(__dirname, "..", "db");
+  const migrations = readdirSync(dbDir)
+    .filter((n) => /^migrate-batch\d+\.ts$/.test(n))
+    .map((n) => readFileSync(join(dbDir, n), "utf8"))
+    .filter((src) => /ai_usage/.test(src))
+    .join("\n");
   for (const col of getTableConfig(aiUsage).columns) {
-    if (!new RegExp(`\\b${col.name}\\b`).test(migration)) fail(`migrate-batch40 lacks column ${col.name}`);
+    if (!new RegExp(`\\b${col.name}\\b`).test(migrations)) fail(`no migration creates ai_usage.${col.name}`);
   }
-  console.log("  ok   migrate-batch40 creates every column the schema declares");
+  console.log("  ok   every ai_usage column the schema declares is created by a migration");
 
   console.log(fails === 0 ? "\nEVERY MODEL CALL IS ACCOUNTED FOR" : `\n${fails} FAILURE(S)`);
   process.exitCode = fails === 0 ? 0 : 1;

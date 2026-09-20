@@ -859,6 +859,12 @@ export const aiUsage = pgTable(
       .references(() => sites.id, { onDelete: "cascade" }),
     agencyId: uuid("agency_id"),
     userId: uuid("user_id"),
+    /**
+     * One client action — an edit is two model calls, plan and revise — so a
+     * dashboard can count what the client did rather than what we did. Null
+     * on rows written before it existed.
+     */
+    requestId: uuid("request_id"),
     /** What the client was doing: generate_page, edit, image_alt, page_meta, import_site. */
     action: text("action").notNull(),
     model: text("model").notNull(),
