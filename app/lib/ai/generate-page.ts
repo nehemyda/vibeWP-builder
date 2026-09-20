@@ -3,6 +3,7 @@ import type { PlannedSection } from "@/lib/sections/page-plan";
 import { isOptionField, type FieldSpec } from "@/lib/sections/types";
 import { describeBusiness, contactFactsFor, type BusinessContext } from "./business-context";
 import { modelDeadline } from "./deadline";
+import { captureUsage } from "./usage";
 
 const MODEL = "gemini-2.5-flash";
 
@@ -124,6 +125,7 @@ Each value is that section's object, in the shape shown. No commentary.`,
       abortSignal: modelDeadline(),
     },
   });
+  await captureUsage(response, MODEL);
 
   const text = response.text;
   if (!text) throw new Error("Gemini returned an empty response.");

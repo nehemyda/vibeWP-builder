@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import type { HeroContent } from "@/lib/mock-ai";
 import { modelDeadline } from "./deadline";
+import { captureUsage } from "./usage";
 
 const MODEL = "gemini-2.5-flash";
 
@@ -38,6 +39,7 @@ Write compelling, specific marketing copy for this exact business — not generi
       abortSignal: modelDeadline(),
     },
   });
+  await captureUsage(response, MODEL);
 
   const text = response.text;
   if (!text) throw new Error("Gemini returned an empty response.");

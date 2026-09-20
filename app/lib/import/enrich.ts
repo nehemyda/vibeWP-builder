@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { modelDeadline, modelFailureReason } from "@/lib/ai/deadline";
+import { captureUsage } from "@/lib/ai/usage";
 
 const MODEL = "gemini-2.5-flash";
 
@@ -92,6 +93,7 @@ Return ONLY JSON of exactly this shape:
         abortSignal: modelDeadline(),
       },
     });
+    await captureUsage(response, MODEL);
   } catch (err) {
     return { result: EMPTY, error: modelFailureReason(err) };
   }

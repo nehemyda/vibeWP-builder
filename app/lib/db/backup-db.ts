@@ -79,6 +79,7 @@ export const RESTORE_ORDER = [
   "form_definitions",
   "form_submissions",
   "lead_notes",
+  "ai_usage",
 ];
 
 function sqlLiteral(value: unknown): string {

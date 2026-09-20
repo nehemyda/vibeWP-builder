@@ -4,6 +4,7 @@ import { getSectionByNodeType } from "@/lib/sections";
 import type { ResolvedSection } from "@/lib/sections/resolve";
 import type { EditOp, PageSchema } from "@/lib/sections/edit-ops";
 import { modelDeadline } from "./deadline";
+import { captureUsage } from "./usage";
 
 const MODEL = "gemini-2.5-flash";
 
@@ -345,6 +346,7 @@ Return only the JSON object.`,
       abortSignal: modelDeadline(),
     },
   });
+  await captureUsage(response, MODEL);
 
   const text = response.text;
   if (!text) throw new Error("The planner returned nothing.");

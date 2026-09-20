@@ -2,6 +2,7 @@
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { runWithUsageContext, attributeUsageTo } from "@/lib/ai/usage";
 import { sitePages } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import { canEditSite } from "@/app/actions/sites";
@@ -90,6 +91,7 @@ async function assertAccess(siteId: string): Promise<void> {
   if (!(await canEditSite(user.id, siteId))) {
     throw new Error("You don't have access to this site.");
   }
+  attributeUsageTo(user.id);
 }
 
 /** Every page's meta, with what is wrong with it. */
@@ -300,10 +302,13 @@ export type GenerateResult =
  * calls is how a site gets nine titles that all begin with the business name.
  * ─────────────────────────────────────────────────────────────────────
  */
-export async function generatePageMetaAction(opts: {
-  siteId: string;
-  scope: GenerateScope;
-}): Promise<GenerateResult> {
+type MetaGenerateOpts = { siteId: string; scope: GenerateScope };
+
+export async function generatePageMetaAction(opts: MetaGenerateOpts): Promise<GenerateResult> {
+  return runWithUsageContext({ siteId: opts.siteId, action: "page_meta" }, () => runPageMeta(opts));
+}
+
+async function runPageMeta(opts: MetaGenerateOpts): Promise<GenerateResult> {
   await assertAccess(opts.siteId);
 
   const settings = await getAiProviderSettings();

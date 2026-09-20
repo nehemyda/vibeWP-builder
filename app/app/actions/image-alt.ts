@@ -9,6 +9,7 @@ import { canEditSite } from "@/app/actions/sites";
 import { getAiProviderSettings } from "@/lib/ai-provider-settings";
 import { describeBusiness, loadBusinessContext } from "@/lib/ai/business-context";
 import { generateAltWithGemini, type AltKind, type AltSubject } from "@/lib/ai/generate-alt";
+import { runWithUsageContext, attributeUsageTo } from "@/lib/ai/usage";
 import { imagePaths, writeImage, type ImageValue } from "@/lib/design/image-map";
 import { mediaAssets } from "@/lib/db/schema";
 import { isNull } from "drizzle-orm";
@@ -79,6 +80,7 @@ async function assertAccess(siteId: string): Promise<void> {
   if (!(await canEditSite(user.id, siteId))) {
     throw new Error("You don't have access to this site.");
   }
+  attributeUsageTo(user.id);
 }
 
 const isPlaceholder = (alt: string) => !alt.trim() || alt.trim() === PLACEHOLDER;
@@ -261,7 +263,7 @@ export type AltGenerateResult =
  * would spend twice as much to produce two descriptions of one thing that then
  * differ from each other.
  */
-export async function generateImageAltAction(opts: {
+type AltGenerateOpts = {
   siteId: string;
   scope: "missing" | "all";
   /**
@@ -273,7 +275,13 @@ export async function generateImageAltAction(opts: {
    * the alt with words removed.
    */
   field: "alt" | "title" | "both";
-}): Promise<AltGenerateResult> {
+};
+
+export async function generateImageAltAction(opts: AltGenerateOpts): Promise<AltGenerateResult> {
+  return runWithUsageContext({ siteId: opts.siteId, action: "image_alt" }, () => runImageAlt(opts));
+}
+
+async function runImageAlt(opts: AltGenerateOpts): Promise<AltGenerateResult> {
   await assertAccess(opts.siteId);
 
   const settings = await getAiProviderSettings();
@@ -603,11 +611,17 @@ export type OneResult = { ok: true; value: string } | { ok: false; message: stri
  * is a button next to the field.
  * ─────────────────────────────────────────────────────────────────────
  */
-export async function generateOneImageMetaAction(opts: {
+type OneMetaOpts = {
   siteId: string;
   target: OneTarget;
   field: AltKind;
-}): Promise<OneResult> {
+};
+
+export async function generateOneImageMetaAction(opts: OneMetaOpts): Promise<OneResult> {
+  return runWithUsageContext({ siteId: opts.siteId, action: "image_alt" }, () => runOneImageMeta(opts));
+}
+
+async function runOneImageMeta(opts: OneMetaOpts): Promise<OneResult> {
   await assertAccess(opts.siteId);
 
   const settings = await getAiProviderSettings();

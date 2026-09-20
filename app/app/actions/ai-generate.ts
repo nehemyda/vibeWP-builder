@@ -16,6 +16,7 @@ import {
   pinContactFacts,
 } from "@/lib/ai/business-context";
 import { generateHeroContentWithGemini } from "@/lib/ai/gemini";
+import { runWithUsageContext, attributeUsageTo } from "@/lib/ai/usage";
 import { searchPhoto } from "@/lib/images/pexels";
 import { sectionsForPlan } from "@/lib/sections/resolve";
 import { planPage, planChrome, planFromSchema, type PlannedSection } from "@/lib/sections/page-plan";
@@ -65,12 +66,19 @@ export type GeneratedPage = {
  * business record and spends API budget, so it must not be callable for a site
  * the user cannot edit.
  */
-export async function generatePageAction(opts: {
+type GenerateOpts = {
   siteId: string;
   slug: string;
   title?: string;
   instruction: string;
-}): Promise<GeneratedPage> {
+};
+
+/** Every model call made while building the page is recorded against this site. */
+export async function generatePageAction(opts: GenerateOpts): Promise<GeneratedPage> {
+  return runWithUsageContext({ siteId: opts.siteId, action: "generate_page" }, () => runGenerate(opts));
+}
+
+async function runGenerate(opts: GenerateOpts): Promise<GeneratedPage> {
   const { siteId, slug, instruction, title } = opts;
 
   const supabase = await createClient();
@@ -81,6 +89,7 @@ export async function generatePageAction(opts: {
   if (!(await canEditSite(user.id, siteId))) {
     throw new Error("You don't have access to this site.");
   }
+  attributeUsageTo(user.id);
 
   const site = await db.query.sites.findFirst({ where: eq(sites.id, siteId) });
   const business = await loadBusinessContext(siteId);

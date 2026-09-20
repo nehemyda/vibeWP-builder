@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { modelDeadline } from "./deadline";
+import { captureUsage } from "./usage";
 
 const MODEL = "gemini-2.5-flash";
 
@@ -127,6 +128,7 @@ ${subjects.length} entries, in the same order as the images.`,
       abortSignal: modelDeadline(),
     },
   });
+  await captureUsage(response, MODEL);
 
   const text = response.text;
   if (!text) throw new Error("The model returned an empty response.");

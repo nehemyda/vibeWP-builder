@@ -9,6 +9,7 @@ import {
   integer,
   primaryKey,
   unique,
+  index,
 } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", [
@@ -839,3 +840,37 @@ export const platformSettings = pgTable("platform_settings", {
     .notNull()
     .defaultNow(),
 });
+
+/**
+ * One row per model call, attributed to the site and (denormalised) the agency
+ * it was made under. Tokens as the provider reported them; credits are derived
+ * at read time. See lib/ai/usage.ts for why this exists before any limit does.
+ *
+ * `agency_id` is deliberately NOT a foreign key: a site's spend under an agency
+ * is history, and deleting the agency must neither cascade it away nor be
+ * refused because of it.
+ */
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    agencyId: uuid("agency_id"),
+    userId: uuid("user_id"),
+    /** What the client was doing: generate_page, edit, image_alt, page_meta, import_site. */
+    action: text("action").notNull(),
+    model: text("model").notNull(),
+    promptTokens: integer("prompt_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    thoughtTokens: integer("thought_tokens").notNull().default(0),
+    cachedTokens: integer("cached_tokens").notNull().default(0),
+    totalTokens: integer("total_tokens").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("ai_usage_site_created_idx").on(t.siteId, t.createdAt),
+    index("ai_usage_agency_created_idx").on(t.agencyId, t.createdAt),
+  ],
+);

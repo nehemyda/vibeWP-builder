@@ -5,6 +5,7 @@ import { canEditSite } from "@/app/actions/sites";
 import { readSite } from "@/lib/import/read-site";
 import { enrichFromPageText } from "@/lib/import/enrich";
 import { getAiProviderSettings } from "@/lib/ai-provider-settings";
+import { runWithUsageContext, attributeUsageTo } from "@/lib/ai/usage";
 import type { IntakeData } from "@/lib/intake-state";
 import type { ServiceEntry } from "@/lib/business/hours";
 
@@ -63,10 +64,13 @@ const LABELS: Partial<Record<keyof IntakeData, string>> = {
   about: "About",
 };
 
-export async function importFromWebsiteAction(opts: {
-  siteId: string;
-  url: string;
-}): Promise<ImportResult> {
+type ImportOpts = { siteId: string; url: string };
+
+export async function importFromWebsiteAction(opts: ImportOpts): Promise<ImportResult> {
+  return runWithUsageContext({ siteId: opts.siteId, action: "import_site" }, () => runImport(opts));
+}
+
+async function runImport(opts: ImportOpts): Promise<ImportResult> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -75,6 +79,7 @@ export async function importFromWebsiteAction(opts: {
   if (!(await canEditSite(user.id, opts.siteId))) {
     return { ok: false, error: "You don't have access to this site." };
   }
+  attributeUsageTo(user.id);
 
   if (!opts.url.trim()) return { ok: false, error: "Enter your website address first." };
 

@@ -4,6 +4,7 @@ import { plainText } from "@/lib/wp/richtext";
 import { eq, and, isNull } from "drizzle-orm";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
+import { runWithUsageContext, attributeUsageTo } from "@/lib/ai/usage";
 import { sites, sitePages, formDefinitions, mediaAssets } from "@/lib/db/schema";
 import { canEditSite } from "@/app/actions/sites";
 import { savePageSchemaAction } from "@/app/actions/pages";
@@ -399,8 +400,7 @@ function describeCanvasOp(op: CanvasOp): string {
   }
 }
 
-async function runEdit(
-  opts: {
+type RunEditOpts = {
     siteId: string;
     slug: string;
     instruction: string;
@@ -417,9 +417,18 @@ async function runEdit(
      * contact facts, the revision, the message. A second path would drift.
      */
     op?: EditOp;
-  },
-  noteOp: (op: unknown) => void,
-): Promise<EditResult> {
+};
+
+/**
+ * Both the chat and the canvas arrive here, so this is where a change to a
+ * page is booked against the site that asked for it - whether the model was
+ * asked to plan it or the client picked the operation themselves.
+ */
+async function runEdit(opts: RunEditOpts, noteOp: (op: unknown) => void): Promise<EditResult> {
+  return runWithUsageContext({ siteId: opts.siteId, action: "edit" }, () => editPage(opts, noteOp));
+}
+
+async function editPage(opts: RunEditOpts, noteOp: (op: unknown) => void): Promise<EditResult> {
   const { siteId, slug, instruction } = opts;
 
   const supabase = await createClient();
@@ -430,6 +439,7 @@ async function runEdit(
   if (!(await canEditSite(user.id, siteId))) {
     throw new Error("You don't have access to this site.");
   }
+  attributeUsageTo(user.id);
 
   const settings = await getAiProviderSettings();
   if (settings.activeProvider !== "gemini" || !settings.geminiApiKey) {

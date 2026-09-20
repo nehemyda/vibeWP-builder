@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { describeBusiness, type BusinessContext } from "./business-context";
 import { DESC_LIMIT, TITLE_LIMIT } from "@/lib/seo/limits";
 import { modelDeadline } from "./deadline";
+import { captureUsage } from "./usage";
 
 const MODEL = "gemini-2.5-flash";
 
@@ -124,6 +125,7 @@ with one entry per page, using exactly the slugs given.`,
       abortSignal: modelDeadline(),
     },
   });
+  await captureUsage(response, MODEL);
 
   const text = response.text;
   if (!text) throw new Error("The model returned an empty response.");
