@@ -841,6 +841,10 @@ export function BuilderApp({
     // Persist before telling the user it worked, so the message reflects
     // what actually happened rather than optimism — a failed save here used
     // to be silent, leaving the canvas showing work that was already lost.
+    /* Read before the save refreshes `pages`, or a just-created page reads as
+       having existed all along. */
+    const existed = pages.some((p) => p.slug === slug);
+
     let saved = true;
     try {
       await savePageSchemaAction({
@@ -865,12 +869,22 @@ export function BuilderApp({
     const count = result.schema.nodes.length;
     const built = `${count} section${count === 1 ? "" : "s"}`;
 
+    /*
+     * Whether a TARGET was passed says how generate was called, not whether
+     * the page is new — the rebuild path passes one too, and so "regenerate
+     * the home page" reported "Created your homepage… say 'go to home page'
+     * to switch back" to someone already on it, with nothing created. What
+     * the page was before the save is the fact that decides the sentence,
+     * and `existed` is read before the list is refreshed for that reason.
+     */
     const base = saved
-      ? target
+      ? target && !existed
         ? `Created your ${pageLabel} — ${built}. You're now editing it — say "go to home page" to switch back.`
-        : replaceHistory
-          ? `Here's a first pass at your homepage — ${built}.`
-          : `Updated your ${pageLabel} — ${built}. Say "undo" to put back the previous version.`
+        : target
+          ? `Rebuilt your ${pageLabel} from scratch — ${built}. Say "undo" to put back the previous version.`
+          : replaceHistory
+            ? `Here's a first pass at your homepage — ${built}.`
+            : `Updated your ${pageLabel} — ${built}. Say "undo" to put back the previous version.`
       : "I built this, but couldn't save it. Your changes may be lost if you reload.";
 
     /*
