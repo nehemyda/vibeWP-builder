@@ -338,6 +338,8 @@ export function BuilderApp({
    * toolbar's "Business details" button reopens it when they do want it.
    */
   const [intakeOpen, setIntakeOpen] = useState(!initialIntake.completed);
+  /** A website chat asked us to read; handed to the intake form when it opens. */
+  const [intakeImportUrl, setIntakeImportUrl] = useState<string | null>(null);
   /** Resolved phone/email/address/hours for the {{token}}s in the canvas. */
   const [facts, setFacts] = useState(previewFacts);
   const [generating, setGenerating] = useState(false);
@@ -1013,6 +1015,28 @@ export function BuilderApp({
      * Regenerating reaches the same place without destroying anything — and
      * the page's history is kept, so a rebuild someone dislikes can be undone.
      */
+    /*
+     * "Build my site from <url>" does NOT build anything. It opens the
+     * business-details form with that site already being read, so what the
+     * page publishes lands in the same review panel as the typed-in path —
+     * and nothing is filled in until the client says so. The words for the
+     * site are still written from those details afterwards, as they would be
+     * for anyone; the shortcut is in collecting the details, not in copying
+     * the site.
+     */
+    if (intent.kind === "import_site") {
+      setMessages((prev) => [...prev, { id: nextId(), role: "user", text, steps: [] }]);
+      remember("user", text);
+      say(
+        `I'll read ${intent.url} and show you what it publishes about your business — ` +
+          `name, phone, address, services — before anything is filled in. Check each one, ` +
+          `then save, and I'll build from those details.`,
+      );
+      setIntakeImportUrl(intent.url);
+      setIntakeOpen(true);
+      return;
+    }
+
     if (intent.kind === "rebuild_page") {
       const target = pages.find((p) => p.slug === intent.slug);
       if (!target) {
@@ -1419,10 +1443,15 @@ export function BuilderApp({
           siteId={siteId}
           initial={intake.data}
           isFirstBuild={!intake.completed}
-          onDone={(summary, rebuild, savedFacts) =>
-            void onIntakeDone(summary, rebuild, savedFacts)
-          }
-          onCancel={() => setIntakeOpen(false)}
+          initialImportUrl={intakeImportUrl ?? undefined}
+          onDone={(summary, rebuild, savedFacts) => {
+            setIntakeImportUrl(null);
+            void onIntakeDone(summary, rebuild, savedFacts);
+          }}
+          onCancel={() => {
+            setIntakeImportUrl(null);
+            setIntakeOpen(false);
+          }}
         />
       )}
 

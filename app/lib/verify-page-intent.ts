@@ -92,6 +92,48 @@ for (const [message, kind, slug] of CASES) {
 }
 
 /*
+ * ── Reading the client's existing website ────────────────────────────────
+ *
+ * The negatives are the ones that would break silently, and the first is
+ * not hypothetical: it was sent to this builder in testing. A URL in a
+ * message must never, by itself, mean "build from this".
+ */
+const IMPORT_CASES: Array<[string, "import_site" | "edit_page", string?]> = [
+  ["build my site from https://www.pimlicoplumbers.com/", "import_site", "https://www.pimlicoplumbers.com/"],
+  ["import my details from pimlicoplumbers.com", "import_site", "pimlicoplumbers.com"],
+  ["here's our current website: https://example.com", "import_site", "https://example.com"],
+  ["read my existing site https://example.com/about", "import_site", "https://example.com/about"],
+  ["use https://example.com as a reference", "import_site", "https://example.com"],
+  ["start my website from www.example.com.", "import_site", "www.example.com"],
+  ["Build our new site based on https://example.co.uk", "import_site", "https://example.co.uk"],
+
+  // ── must stay edits ──
+  [
+    "Add a section near the bottom of the page with a Google map showing where we are. Use this link: https://www.google.com/maps/place/Bath",
+    "edit_page",
+  ],
+  ["https://example.com", "edit_page"],
+  ["add a map, use this link https://maps.google.com/?q=x", "edit_page"],
+  ["link the button to https://calendly.com/jane/30min", "edit_page"],
+  ["embed https://youtube.com/watch?v=abc", "edit_page"],
+  ["mention that we're at example.com in the footer", "edit_page"],
+  ["e.g. make the heading bigger", "edit_page"],
+];
+
+let importOk = 0;
+for (const [message, kind, url] of IMPORT_CASES) {
+  const got = detectIntent(message);
+  if (got.kind !== kind) {
+    fail(`${JSON.stringify(message)}\n       expected ${kind}, got ${got.kind}${"url" in got ? ` (${got.url})` : ""}`);
+  } else if (url !== undefined && (!("url" in got) || got.url !== url)) {
+    fail(`${JSON.stringify(message)}\n       expected url ${url}, got ${"url" in got ? got.url : "(none)"}`);
+  } else {
+    importOk += 1;
+  }
+}
+console.log(`  ok   ${importOk}/${IMPORT_CASES.length} import cases — a bare link, and "use this link", stay edits`);
+
+/*
  * A create must never name a page after a sentence. Length is the property
  * that separates a name from a clause, so it is asserted directly rather than
  * only through the examples above.

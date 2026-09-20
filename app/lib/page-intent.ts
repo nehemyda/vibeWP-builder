@@ -19,6 +19,15 @@ export type ChatIntent =
    * patterns, because \bcreate finds no word boundary inside it.
    */
   | { kind: "rebuild_page"; slug: string }
+  /**
+   * Read the client's EXISTING website to fill in their details.
+   *
+   * A verb plus a link, never a bare link. "Add a map, use this link:
+   * https://…" contains a URL and is an edit — it was sent to this builder in
+   * testing and would have rebuilt the homepage under a looser rule. So the
+   * verb has to say the site is theirs and the ask is to read it.
+   */
+  | { kind: "import_site"; url: string }
   | { kind: "edit_page" };
 
 /** Reserved because they collide with the app's own routes or WP internals. */
@@ -134,6 +143,38 @@ const REBUILD_PATTERNS: RegExp[] = [
   ),
 ];
 
+/**
+ * A web address, as typed. http(s)://, www., or a bare domain with a real
+ * TLD — two letters or more, so "e.g." and "i.e." do not qualify.
+ */
+const URL_RE = String.raw`((?:https?:\/\/|www\.)[^\s"'<>]+|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}(?:\/[^\s"'<>]*)?)`;
+
+/**
+ * Only phrasings that say "this is MY site — read it". Each anchors the URL
+ * to a verb about importing or building FROM, so a link that is merely the
+ * object of an edit ("use this link", "link the button to", "embed") never
+ * matches: none of those name the site as the client's own.
+ */
+const IMPORT_PATTERNS: RegExp[] = [
+  // build/make/create/start (my|our) (new)? site|website from|using|based on <url>
+  new RegExp(
+    String.raw`\b(?:build|make|create|start|set up)\s+(?:my|our|the|this)?\s*(?:new\s+)?(?:site|website)\s+(?:from|using|based on|off)\s+${URL_RE}`,
+    "i",
+  ),
+  // import|read (my|our) (existing|current)? site|website|details|info (from)? <url>
+  new RegExp(
+    String.raw`\b(?:import|read|pull|grab|fetch)\s+(?:my|our|the|this)?\s*(?:existing|current|old)?\s*(?:site|website|details|info|information|business details)?\s*(?:from\s+)?${URL_RE}`,
+    "i",
+  ),
+  // here's|here is|this is (my|our) (current|existing|old)? site|website[:] <url>
+  new RegExp(
+    String.raw`\b(?:here(?:'s| is)|this is)\s+(?:my|our)\s+(?:current|existing|old)?\s*(?:site|website)\s*[:\-—]?\s*${URL_RE}`,
+    "i",
+  ),
+  // use <url> as (a|my|our|the)? reference|starting point|template
+  new RegExp(String.raw`\buse\s+${URL_RE}\s+as\s+(?:a\s+|my\s+|our\s+|the\s+)?(?:reference|starting point|template|basis)\b`, "i"),
+];
+
 const SWITCH_PATTERNS: RegExp[] = [
   new RegExp(
     String.raw`\b(?:go to|open|edit|switch to|show me)\s+(?:the\s+)?["']?${NAME}["']?\s+page\b`,
@@ -169,6 +210,20 @@ function isPageName(phrase: string): boolean {
 
 export function detectIntent(message: string): ChatIntent {
   const text = normalise(message);
+
+  /*
+   * First, because it is the most specific — it requires a URL — and because
+   * "build my site from …" contains "build", which the create patterns would
+   * otherwise get a look at. Nothing here can fire on a bare link: every
+   * pattern needs a verb naming the site as the client's own.
+   */
+  for (const pattern of IMPORT_PATTERNS) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      const url = match[1].replace(/[.,;:!?)]+$/, ""); // trailing punctuation from the sentence
+      return { kind: "import_site", url };
+    }
+  }
 
   for (const pattern of CREATE_PATTERNS) {
     const match = text.match(pattern);

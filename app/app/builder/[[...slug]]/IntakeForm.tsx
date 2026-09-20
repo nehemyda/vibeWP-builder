@@ -39,6 +39,7 @@ type Step = 0 | 1 | 2;
 
 export function IntakeForm({
   siteId,
+  initialImportUrl,
   initial,
   isFirstBuild,
   onDone,
@@ -57,6 +58,13 @@ export function IntakeForm({
    */
   onDone: (summary: string, rebuild: boolean, facts: Record<string, string>) => void;
   onCancel: () => void;
+  /**
+   * A website to read as soon as the form opens — how the chat's "build my
+   * site from <url>" arrives here. It lands in the same review panel the
+   * typed-in path uses, so nothing is filled in until the client says so
+   * whichever way they asked.
+   */
+  initialImportUrl?: string;
 }) {
   const [step, setStep] = useState<Step>(0);
   const [data, setData] = useState<IntakeData>(initial);
@@ -80,17 +88,17 @@ export function IntakeForm({
    * number is still right is the one looking at this form. Same shape as the
    * WordPress drift panel below, for the same reason.
    */
-  const [importUrl, setImportUrl] = useState("");
+  const [importUrl, setImportUrl] = useState(initialImportUrl ?? "");
   const [importing, setImporting] = useState(false);
   const [imported, setImported] = useState<ImportedField[] | null>(null);
   const [importNote, setImportNote] = useState<string | null>(null);
 
-  async function readMyWebsite() {
+  async function readMyWebsite(url = importUrl) {
     setImporting(true);
     setImportNote(null);
     setImported(null);
     try {
-      const r = await importFromWebsiteAction({ siteId, url: importUrl });
+      const r = await importFromWebsiteAction({ siteId, url });
       if (r.ok) {
         setImported(r.fields);
         /* The structured details arrived; this says why the AI-read ones did
@@ -253,6 +261,17 @@ export function IntakeForm({
       setLogoNote("Couldn't read that image. Try a different file.");
     }
   }
+
+  /*
+   * Arrived from chat with a site to read: read it. The URL is passed
+   * directly rather than read from state so this cannot race the state
+   * initialiser above.
+   */
+  useEffect(() => {
+    if (initialImportUrl) void readMyWebsite(initialImportUrl);
+    // Once, on open. readMyWebsite is stable for the life of this form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialImportUrl]);
 
   useEffect(() => {
     let cancelled = false;
