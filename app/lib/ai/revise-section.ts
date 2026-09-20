@@ -1,9 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
 import type { ResolvedSection } from "@/lib/sections/resolve";
 import { isOptionField, type FieldSpec } from "@/lib/sections/types";
-import { describeBusiness, type BusinessContext } from "./business-context";
+import type { BusinessContext } from "./business-context";
 import { modelDeadline } from "./deadline";
 import { captureUsage } from "./usage";
+import { SHARED_FIELD_KEYS } from "./plan-prompt";
 
 const MODEL = "gemini-2.5-flash";
 
@@ -31,8 +32,75 @@ const MODEL = "gemini-2.5-flash";
  * different words did not ask for a different picture. Options (columns,
  * sticky, background) are the same: they are chosen in the panel, not written.
  * Both are stripped before the model sees the section and restored after.
+ *
+ * WHY THE PROMPT IS SMALL AND THE MODEL DOES NOT "THINK"
+ *
+ * Changing a label is not a reasoning problem. The full business brief —
+ * the owner's paragraph, the closed services list with its rules about
+ * headings — is what a page WRITER needs; a reviser needs the name, the
+ * trade, the town and the service names, as a guard against inventing, and
+ * takes its tone from the words already in the section. The thinking budget
+ * is zero for the same reason: on the old prompt the model spent up to 1,300
+ * tokens deliberating over a button, and the answer was the same.
  * ─────────────────────────────────────────────────────────────────────
  */
+
+/** One line about the business: enough to stop invention, not a brief. */
+export function businessLine(b: BusinessContext): string {
+  const parts = [b.businessName];
+  if (b.categories) parts.push(b.categories);
+  const place = [b.city, b.state, b.country].filter(Boolean).join(", ");
+  if (place) parts.push(place);
+  let line = parts.join(" — ");
+  if (b.services.length) line += `. Services (the only ones offered): ${b.services.join("; ")}`;
+  return line;
+}
+
+/** The copy fields, one line each: name, length, shape. */
+export function fieldGuide(fields: Record<string, FieldSpec>): string {
+  return Object.entries(fields)
+    .filter(([name, spec]) => isCopy(name, spec))
+    .map(([name, spec]) => {
+      const limit = spec.maxChars ? ` ≤${spec.maxChars} chars` : "";
+      if (spec.type !== "list") return `${name}: ${spec.label}${limit}`;
+      const shape = spec.of
+        ? `list of {${Object.entries(spec.of).filter(([, s]) => !isImage(s)).map(([k]) => k).join(", ")}}`
+        : "list of short lines";
+      return `${name}: ${spec.label}, ${shape}`;
+    })
+    .join("\n");
+}
+
+export function buildRevisionPrompt(opts: {
+  section: ResolvedSection;
+  current: Record<string, unknown>;
+  business: BusinessContext;
+  instruction: string;
+  pageTitle: string;
+}): string {
+  const { section, current, business, instruction, pageTitle } = opts;
+  const def = section.definition;
+  return `Make ONE requested change to the "${section.name}" section of the "${pageTitle}" page of a small business website.
+
+Business: ${businessLine(business)}
+
+Section now (JSON):
+${JSON.stringify(copyFields(def.fields, current))}
+
+Fields:
+${fieldGuide(def.fields)}
+
+Request: "${instruction}"
+
+Rules:
+- Change ONLY what was asked. One button named means one button changed; a headline asked for means the headline and nothing else.
+- Return ONLY the fields you changed, as JSON with the field names above. Leave every other field out. Return {} if the request cannot be done in this section.
+- A list is returned whole, every entry in order, changed or not.
+- Keep within each length. Match the tone of the words already there. British English.
+- Never invent facts — no prices, phone numbers, addresses, years, awards or counts that are not in the business line above.
+
+Return only the JSON object.`;
+}
 
 export type Revision = {
   props: Record<string, unknown>;
@@ -41,12 +109,15 @@ export type Revision = {
 };
 
 const isImage = (spec: FieldSpec) => spec.type === "image";
+/* Copy is what a client reads. Photos, settings and the shared style fields
+   (partOrder is stored as text but is a layout, not a sentence) are not. */
+const isCopy = (name: string, spec: FieldSpec) => !isOptionField(spec) && !isImage(spec) && !SHARED_FIELD_KEYS.has(name);
 
 /** The section's copy only — no photographs, no settings. */
 export function copyFields(fields: Record<string, FieldSpec>, props: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [name, spec] of Object.entries(fields)) {
-    if (isOptionField(spec) || isImage(spec)) continue;
+    if (!isCopy(name, spec)) continue;
     if (!(name in props)) continue;
     const value = props[name];
     if (spec.type === "list" && spec.of && Array.isArray(value)) {
@@ -88,7 +159,7 @@ export function applyRevision(
 
   for (const [name, spec] of Object.entries(fields)) {
     if (!(name in p)) continue;
-    if (isOptionField(spec) || isImage(spec)) continue;
+    if (!isCopy(name, spec)) continue;
     const value = p[name];
 
     let next: unknown;
@@ -99,13 +170,15 @@ export function applyRevision(
       next = value.map((item, i) => {
         if (!spec.of) return typeof item === "string" ? item : String(item ?? "");
         if (!item || typeof item !== "object" || Array.isArray(item)) return null;
-        const entry = { ...(item as Record<string, unknown>) };
-        const was = before[i];
-        for (const k of imageKeys) {
-          if (was && typeof was === "object" && k in (was as Record<string, unknown>)) {
-            entry[k] = (was as Record<string, unknown>)[k];
-          }
-        }
+        /*
+         * The entry that was there comes FIRST, the model's on top. The model
+         * was shown copy only, so a button's "variant" or a card's photo is
+         * something it never saw and cannot return; starting from the old
+         * entry keeps them, and the photo is pinned back on regardless.
+         */
+        const was = before[i] && typeof before[i] === "object" ? (before[i] as Record<string, unknown>) : {};
+        const entry: Record<string, unknown> = { ...was, ...(item as Record<string, unknown>) };
+        for (const k of imageKeys) if (k in was) entry[k] = was[k];
         return entry;
       });
       if ((next as unknown[]).some((x) => x === null)) continue;
@@ -131,54 +204,15 @@ export async function reviseSectionWithGemini(opts: {
   pageTitle: string;
 }): Promise<Revision> {
   const { apiKey, section, current, business, instruction, pageTitle } = opts;
-  const def = section.definition;
   const ai = new GoogleGenAI({ apiKey });
-
-  const shown = copyFields(def.fields, current);
-  const guide = Object.entries(def.fields)
-    .filter(([, spec]) => !isOptionField(spec) && !isImage(spec))
-    .map(([name, spec]) => `${name} — ${spec.label}${spec.maxChars ? `, up to ${spec.maxChars} characters` : ""}${spec.hint ? ` (${spec.hint})` : ""}`)
-    .join("\n");
 
   const response = await ai.models.generateContent({
     model: MODEL,
-    contents: `You are making ONE requested change to a section of the "${pageTitle}" page of a real small business website. The section is the "${section.name}".
-
-## The business
-
-${describeBusiness(business)}
-
-## The section as it stands
-
-\`\`\`json
-${JSON.stringify(shown, null, 2)}
-\`\`\`
-
-Fields:
-${guide}
-
-## What the site owner asked for
-
-"${instruction}"
-
-## Rules
-
-- Change ONLY what was asked. If they named a button, change that button and
-  nothing else. If they asked for a different headline, change the headline
-  and nothing else. A client who asks for one word changed and gets a new
-  section has lost work they may have chosen.
-- Return ONLY the fields you changed, as a JSON object using the field names
-  above. Leave every other field out entirely. An empty object {} is the
-  correct answer if the request cannot be carried out in this section.
-- A list must be returned whole, with every entry, in order — changed or not.
-- Keep each value within its length. British English. Never invent
-  verifiable facts: no prices, phone numbers, addresses, years, awards or
-  customer counts that are not in the business details above.
-- Match the tone of the words already there.
-
-Return only the JSON object.`,
+    contents: buildRevisionPrompt({ section, current, business, instruction, pageTitle }),
     config: {
       responseMimeType: "application/json",
+      /* A label change is not a reasoning task; see the note at the top. */
+      thinkingConfig: { thinkingBudget: 0 },
       abortSignal: modelDeadline(),
     },
   });
@@ -186,5 +220,5 @@ Return only the JSON object.`,
 
   const text = response.text;
   if (!text) throw new Error("Gemini returned an empty response.");
-  return applyRevision(def.fields, current, JSON.parse(text));
+  return applyRevision(section.definition.fields, current, JSON.parse(text));
 }

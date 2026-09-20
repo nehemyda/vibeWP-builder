@@ -77,7 +77,8 @@ const OPTION_TYPES = ["boolean", "choice", "number"];
 /** Settings every section has, so they are described once and never per section. */
 /* The same four sets lib/sections/index.ts merges into every page section. */
 const SHARED_FIELDS = { ...SECTION_STYLE_FIELDS, ...ELEMENT_STYLE_FIELDS, ...PART_VISIBILITY_OPTIONS, ...PART_SIZE_OPTIONS };
-const SHARED_OPTIONS = new Set(Object.keys(SHARED_FIELDS));
+export const SHARED_FIELD_KEYS: ReadonlySet<string> = new Set(Object.keys(SHARED_FIELDS));
+const SHARED_OPTIONS = SHARED_FIELD_KEYS;
 
 /**
  * The shared settings as one block. The hide/width families are patterns —
