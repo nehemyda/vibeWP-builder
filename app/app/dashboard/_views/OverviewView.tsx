@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { agencies, leads, type sites, type profiles } from "@/lib/db/schema";
 import type { resolveSitePaths } from "@/lib/site-paths";
 import { daysSince } from "@/lib/time";
+import { siteUsageSummary } from "@/lib/ai/usage-summary";
+import { CREDIT_TOKENS } from "@/lib/ai/usage";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CopyableText } from "@/components/dashboard/CopyableText";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
@@ -54,6 +56,7 @@ export async function OverviewView({
   });
 
   const daysLive = daysSince(site.createdAt);
+  const usage = await siteUsageSummary(site.id, { days: 30 });
 
   const agency = site.agencyId
     ? await db.query.agencies.findFirst({ where: eq(agencies.id, site.agencyId) })
@@ -122,8 +125,8 @@ export async function OverviewView({
               <div className={styles.miniValue}>{recentLeads.length}</div>
             </div>
             <div className={shell.statCard}>
-              <div className={shell.label}>Avg. load time</div>
-              <div className={styles.miniValue}>—</div>
+              <div className={shell.label}>AI credits (30d)</div>
+              <div className={styles.miniValue}>{usage.credits}</div>
             </div>
           </div>
         </div>
@@ -177,6 +180,52 @@ export async function OverviewView({
             Upgrade plan
           </a>
         </div>
+      </div>
+
+      <div className={shell.panel}>
+        <div className={shell.panelHead}>
+          <h2>AI usage</h2>
+          <span className={shell.rowSub}>Last 30 days</span>
+        </div>
+        {usage.calls === 0 ? (
+          <p className={shell.rowSub} style={{ margin: 0, padding: "1rem 1.3rem" }}>
+            Nothing yet. Building a page, editing one, or describing images in the builder uses AI, and
+            shows up here.
+          </p>
+        ) : (
+          <>
+            <div className={shell.tableWrap}>
+              <table className={shell.table}>
+                <thead>
+                  <tr>
+                    <th>What</th>
+                    <th>Times</th>
+                    <th>Credits</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usage.byAction.map((line) => (
+                    <tr key={line.action}>
+                      <td className={shell.rowName}>{line.label}</td>
+                      <td>{line.calls}</td>
+                      <td>{line.credits}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td className={shell.rowName}>Total</td>
+                    <td>{usage.calls}</td>
+                    <td className={shell.rowName}>{usage.credits}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className={shell.rowSub} style={{ margin: 0, padding: "0.9rem 1.3rem" }}>
+              One credit is {CREDIT_TOKENS.toLocaleString()} tokens of AI work, counted from the total.
+              {usage.lastAt ? ` Last used ${usage.lastAt.toLocaleDateString()}.` : ""} No allowance is set on your
+              plan yet — this is simply what your site has used.
+            </p>
+          </>
+        )}
       </div>
     </DashboardShell>
   );
