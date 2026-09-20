@@ -307,7 +307,10 @@ ${chromeCatalogue}
   set_option instead: changing the whole design to reach a setting throws away
   a layout they may have chosen.
 - Use rewrite_section when the client wants different WORDS in one section, and
-  put what they asked for in "instruction".
+  put what they asked for in "instruction". Only the words they name are
+  changed; the rest of the section is kept as it is, so this is the right
+  answer for a single label, heading or sentence as much as for a whole
+  section.
 - Use regenerate_page ONLY when they clearly want the whole page written again.
 - Use edit_form to change the FORM this page shows — add a question, remove
   one, rename one, make one required, or change how wide it is. Put the action

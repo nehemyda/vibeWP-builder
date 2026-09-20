@@ -15,6 +15,7 @@ import {
   pinContactFacts,
 } from "@/lib/ai/business-context";
 import { generatePageWithGemini } from "@/lib/ai/generate-page";
+import { reviseSectionWithGemini } from "@/lib/ai/revise-section";
 import { fillSectionImages } from "@/lib/ai/section-images";
 import { planEdit } from "@/lib/ai/plan-edit";
 import { loadBuilderMessagesAction } from "@/app/actions/builder-chat";
@@ -1010,9 +1011,49 @@ async function editPage(opts: RunEditOpts, noteOp: (op: unknown) => void): Promi
     }
   }
 
-  if (op.kind === "add_section" || op.kind === "rewrite_section") {
-    const key = op.kind === "add_section" ? op.section : (getSectionByNodeType(op.section)?.key ?? op.section);
-    const resolved = available.find((s) => s.key === key);
+  /*
+   * Rewriting is REVISING. The section's current words go to the model and
+   * only the fields it changed come back, merged onto what was there — so
+   * "change the first button" changes the first button, and the headline the
+   * client chose is still theirs. Photographs and settings never leave the
+   * server. See lib/ai/revise-section.ts for the case that made this so.
+   */
+  let revised: string[] = [];
+  if (op.kind === "rewrite_section") {
+    const at = indexOfSection(schema.nodes ?? [], op.section);
+    if (at < 0) return { ok: false, message: `There's no ${op.section} on this page.` };
+    const node = (schema.nodes ?? [])[at];
+    const resolved = available.find((s) => s.nodeType === node.type);
+    if (!resolved) return { ok: false, message: `There's no "${op.section}" section available.` };
+
+    try {
+      const revision = await reviseSectionWithGemini({
+        apiKey: settings.geminiApiKey,
+        section: resolved,
+        current: (node.props ?? {}) as Record<string, unknown>,
+        business,
+        instruction: op.instruction,
+        pageTitle: page.title ?? slug,
+      });
+      newProps = revision.props;
+      revised = revision.changed;
+    } catch (err) {
+      console.error("Section revision failed:", err);
+      return { ok: false, message: "I couldn't change that section. Try again in a moment." };
+    }
+    if (revised.length === 0) {
+      /* Honest, and reversible in one message: nothing was saved. */
+      return {
+        ok: false,
+        message: `I couldn't see what to change in the ${resolved.name} for that — say which words you want different.`,
+      };
+    }
+    // Real contact details beat anything written about them.
+    newProps = pinContactFacts(newProps, resolved.definition.fields, contactFactsFor(business));
+  }
+
+  if (op.kind === "add_section") {
+    const resolved = available.find((s) => s.key === op.section);
     if (!resolved) return { ok: false, message: `There's no "${op.section}" section available.` };
 
     try {
@@ -1020,10 +1061,7 @@ async function editPage(opts: RunEditOpts, noteOp: (op: unknown) => void): Promi
         apiKey: settings.geminiApiKey,
         plan: [{ job: "The requested section", section: resolved }],
         business,
-        instruction:
-          op.kind === "add_section"
-            ? `${instruction}${op.itemCount ? ` Produce exactly ${op.itemCount} entries.` : ""}`
-            : op.instruction,
+        instruction: `${instruction}${op.itemCount ? ` Produce exactly ${op.itemCount} entries.` : ""}`,
         pageTitle: page.title ?? slug,
       });
       newProps = written[resolved.key];
@@ -1050,7 +1088,7 @@ async function editPage(opts: RunEditOpts, noteOp: (op: unknown) => void): Promi
      * Reuses the site's existing form, so asking for a form on a second page
      * does not create a second inbox.
      */
-    if (op.kind === "add_section" && resolved.definition.nodeType === "FormEmbed") {
+    if (resolved.definition.nodeType === "FormEmbed") {
       const token = await ensureSiteForm(siteId, business.businessName, instruction);
       /*
        * No token, no section. A FormEmbed pointing at nothing renders as blank
@@ -1090,7 +1128,7 @@ async function editPage(opts: RunEditOpts, noteOp: (op: unknown) => void): Promi
       }
     }
 
-    if (op.kind === "add_section" && op.columns && "columns" in resolved.definition.fields) {
+    if (op.columns && "columns" in resolved.definition.fields) {
       newProps.columns = op.columns;
     }
   }
@@ -1111,7 +1149,15 @@ async function editPage(opts: RunEditOpts, noteOp: (op: unknown) => void): Promi
     if (at < 0) return { ok: false, message: `There's no ${op.section} on this page.` };
     nodes[at] = { ...nodes[at], props: newProps ?? nodes[at].props };
     next = { ...schema, nodes };
-    describe = `Rewrote the ${getSectionByNodeType(nodes[at].type)?.name ?? "section"}.`;
+    /*
+     * Say WHAT changed, by the labels the client sees in the panel — "Changed
+     * the Buttons in the Split hero." A message that names the parts touched
+     * is also the client's check that nothing else was.
+     */
+    const def = getSectionByNodeType(nodes[at].type);
+    const labels = revised.map((k) => def?.fields[k]?.label ?? k);
+    const what = labels.length > 1 ? `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}` : labels[0];
+    describe = `Changed the ${what} in the ${def?.name ?? "section"}.`;
   } else {
     const result = applyOp(schema, op, newProps);
     if (!result.ok) // Applied-op failures reach the client too, so they are cleaned like
