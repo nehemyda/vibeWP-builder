@@ -22,6 +22,7 @@ import { planPage, planChrome, planFromSchema, type PlannedSection } from "@/lib
 import { generateHeroContent, heroContentToSchema } from "@/lib/mock-ai";
 import type { FieldSpec } from "@/lib/sections/types";
 import { modelFailureReason } from "@/lib/ai/deadline";
+import { stripUnsupportedStats } from "@/lib/ai/fact-guard";
 
 /** Stable per-prompt spread, so two businesses in one vertical don't collide. */
 function seedFrom(prompt: string): number {
@@ -176,11 +177,13 @@ export async function generatePageAction(opts: {
       continue;
     }
 
-    const props = pinContactFacts(
+    const pinned = pinContactFacts(
       photo ? withPhoto(raw, section, photo) : raw,
       section.definition.fields,
       facts,
     );
+    /* Figures the client never gave us do not reach the page. See fact-guard. */
+    const { props, stripped } = stripUnsupportedStats(pinned, section.definition.fields, business);
 
     if (!usable(props, section)) {
       rejected.push(section.key);
@@ -188,6 +191,14 @@ export async function generatePageAction(opts: {
     }
 
     nodes.push({ id: `n_${section.key}`, type: section.nodeType, props });
+    if (stripped.length) {
+      /* Said in the build report, so an empty stats row is explained rather
+         than puzzling — and so the client knows real figures are theirs to add. */
+      steps.push(
+        `Left out ${stripped.length} figure${stripped.length === 1 ? "" : "s"} nothing you told us supports` +
+          ` (${stripped.join("; ")}) — add real ones in Business details`,
+      );
+    }
     steps.push(`${job} — ${section.name}`);
   }
 
@@ -215,7 +226,11 @@ export async function generatePageAction(opts: {
     const hasFields = Object.keys(section.definition.fields).length > 0;
     const raw = generated[section.key] ?? (hasFields ? null : {});
     if (!raw) continue;
-    const props = pinContactFacts(raw, section.definition.fields, facts);
+    const { props } = stripUnsupportedStats(
+      pinContactFacts(raw, section.definition.fields, facts),
+      section.definition.fields,
+      business,
+    );
     if (!usable(props, section)) continue;
 
     const node: ChromeNode = { id: `n_${section.key}`, type: section.nodeType, props };

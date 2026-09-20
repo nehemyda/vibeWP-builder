@@ -65,10 +65,11 @@ export const HeroShowcase: SectionDefinition<HeroShowcaseProps> = {
   },
 
   aiPrompt:
-    "Credibility-led. The badge is a single verifiable claim (licensed, insured, accredited) — omit " +
-    "it entirely rather than inventing one. Stats are three real figures: years trading, jobs done, " +
-    "rating. If the true numbers are unknown, use round placeholders the client will obviously " +
-    "want to correct, never precise-looking invented ones.",
+    "Credibility-led. The badge is a single verifiable claim (licensed, insured, accredited) — omit it entirely rather than inventing one, and never a made-up registration number. " +
+    "Stats are figures ONLY from the business details supplied — opening hours, a year the owner " +
+    "stated, a service count, a location. Never invent one, and never use a \"placeholder\" number: " +
+    "a round figure reads as a claim the moment it is published, and the client may not notice. " +
+    "If no real figure was supplied, return an empty stats list — the section renders without the row.",
 
   sample: {
     eyebrow: "24/7 EMERGENCY CALL-OUT",
@@ -82,11 +83,11 @@ export const HeroShowcase: SectionDefinition<HeroShowcaseProps> = {
       url: "https://images.pexels.com/photos/6419128/pexels-photo-6419128.jpeg?auto=compress&cs=tinysrgb&h=650&w=940&fm=webp",
       alt: "A plumber's hands tightening a pipe fitting under a sink.",
     },
-    badge: { title: "Gas Safe registered", subtitle: "Reg. 000000" },
+    badge: { title: "Gas Safe registered", subtitle: "Ask to see our card" },
     stats: [
-      { value: "18 yrs", label: "Trading locally" },
-      { value: "4.9★", label: "From 300+ reviews" },
-      { value: "60 min", label: "Average call-out" },
+      { value: "Mon–Sat", label: "Available" },
+      { value: "Bath", label: "Based in" },
+      { value: "Same day", label: "Call-outs" },
     ],
   },
 

@@ -43,18 +43,19 @@ export const ContentStats: SectionDefinition<ContentStatsProps> = {
   },
 
   aiPrompt:
-    "Only figures the client can stand behind. If a real number was not supplied, use an obviously " +
-    "round placeholder the client will correct — never a precise-looking invention like 2,847, which " +
-    "reads as verified and will be published as a factual claim.",
+    "Stats are figures ONLY from the business details supplied — opening hours, a year the owner " +
+    "stated, a service count, a location. Never invent one, and never use a \"placeholder\" number: " +
+    "a round figure reads as a claim the moment it is published, and the client may not notice. " +
+    "If no real figure was supplied, return an empty stats list — the section renders without the row." +
+    " Do not write a heading or intro that promises numbers the list does not contain.",
 
   sample: {
-    heading: "Fourteen years on the same street",
+    heading: "What you can count on",
     intro: "The numbers we'd give you if you asked in the shop.",
     stats: [
-      { value: "500+", label: "Weddings arranged" },
-      { value: "14", label: "Years trading" },
-      { value: "4.9★", label: "From 300+ reviews" },
-      { value: "30mi", label: "Growers we buy within" },
+      { value: "Mon–Sat", label: "Open six days" },
+      { value: "Bath", label: "Growers we buy from" },
+      { value: "Same day", label: "Collection available" },
     ],
   },
 
@@ -76,7 +77,10 @@ export const ContentStats: SectionDefinition<ContentStatsProps> = {
       .filter(Boolean)
       .join("");
 
-    return group("yp-stats", group("yp-stats__inner", head + group("yp-stats__grid", items)), "section");
+    /* No figures, no grid. An empty styled container is the shape verify-carry
+       exists to catch, and it is what a fully-stripped stats row would be. */
+    const grid = items ? group("yp-stats__grid", items) : "";
+    return group("yp-stats", group("yp-stats__inner", head + grid), "section");
   },
 
   fromGutenberg(root) {

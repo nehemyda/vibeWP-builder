@@ -52,22 +52,24 @@ export const HeroSpotlight: SectionDefinition<HeroSpotlightProps> = {
   },
 
   aiPrompt:
-    "Assured, low word count — this renders large on a dark background. Five or six words in the " +
-    "headline. Three stats beneath, real figures only; if the true numbers are unknown use round " +
-    "placeholders the client will obviously correct, never precise-looking invented ones.",
+    "Assured, low word count — this renders large on a dark background. Five or six words in the headline. " +
+    "Stats are figures ONLY from the business details supplied — opening hours, a year the owner " +
+    "stated, a service count, a location. Never invent one, and never use a \"placeholder\" number: " +
+    "a round figure reads as a claim the moment it is published, and the client may not notice. " +
+    "If no real figure was supplied, return an empty stats list — the section renders without the row.",
 
   sample: {
-    eyebrow: "TRUSTED SINCE 2011",
+    eyebrow: "MADE FRESH DAILY",
     heading: "The work speaks for itself",
-    body: "Fourteen years arranging flowers for weddings, funerals and Tuesday afternoons across the city.",
+    body: "Flowers arranged for weddings, funerals and Tuesday afternoons across the city.",
     actions: [
       { label: "Start an order", href: "#", variant: "primary" },
       { label: "See the portfolio", href: "#", variant: "outline" },
     ],
     stats: [
-      { value: "500+", label: "Weddings" },
-      { value: "14 yrs", label: "On Market Street" },
-      { value: "4.9★", label: "Average rating" },
+      { value: "Mon–Sat", label: "Open six days" },
+      { value: "Bath", label: "Made on site" },
+      { value: "Same day", label: "Collection" },
     ],
   },
 
