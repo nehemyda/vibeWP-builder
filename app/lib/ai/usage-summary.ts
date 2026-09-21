@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { aiUsage } from "@/lib/db/schema";
+import { aiUsage, sites } from "@/lib/db/schema";
 import { creditsFromTokens, type UsageAction } from "./usage";
 
 /**
@@ -73,5 +73,50 @@ export async function siteUsageSummary(siteId: string, opts: { days?: number } =
       credits: creditsFromTokens(r.tokens),
     })),
     lastAt,
+  };
+}
+
+export type AgencyUsageSummary = {
+  since: Date;
+  requests: number;
+  totalTokens: number;
+  credits: number;
+  /** Highest spend first. Sites the agency no longer manages still appear for the period they did. */
+  bySite: Array<{ siteId: string; name: string; smbId: string | null; requests: number; tokens: number; credits: number }>;
+};
+
+/**
+ * What an agency's sites spent, by site.
+ *
+ * Read by `ai_usage.agency_id`, not by the sites the agency holds today — the
+ * column was copied onto each row for exactly this, so a site transferred out
+ * mid-month still shows what it spent while it was theirs, and a site
+ * transferred in does not bring its history along.
+ */
+export async function agencyUsageSummary(agencyId: string, opts: { days?: number } = {}): Promise<AgencyUsageSummary> {
+  const days = opts.days ?? 30;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  const rows = await db
+    .select({
+      siteId: aiUsage.siteId,
+      name: sites.name,
+      smbId: sites.smbId,
+      requests: sql<number>`count(distinct coalesce(${aiUsage.requestId}, ${aiUsage.id}))::int`,
+      tokens: sql<number>`coalesce(sum(${aiUsage.totalTokens}), 0)::int`,
+    })
+    .from(aiUsage)
+    .innerJoin(sites, eq(sites.id, aiUsage.siteId))
+    .where(and(eq(aiUsage.agencyId, agencyId), gte(aiUsage.createdAt, since)))
+    .groupBy(aiUsage.siteId, sites.name, sites.smbId)
+    .orderBy(desc(sql`sum(${aiUsage.totalTokens})`));
+
+  const totalTokens = rows.reduce((s, r) => s + r.tokens, 0);
+  return {
+    since,
+    requests: rows.reduce((s, r) => s + r.requests, 0),
+    totalTokens,
+    credits: creditsFromTokens(totalTokens),
+    bySite: rows.map((r) => ({ ...r, credits: creditsFromTokens(r.tokens) })),
   };
 }

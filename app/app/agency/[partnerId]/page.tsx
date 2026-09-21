@@ -7,6 +7,8 @@ import { requireAgency } from "@/lib/auth/require-agency";
 import { startImpersonationAction } from "@/app/actions/impersonation";
 import { daysAgo } from "@/lib/time";
 import { planKeyOf, planLabel } from "@/lib/billing";
+import { agencyUsageSummary } from "@/lib/ai/usage-summary";
+import { CREDIT_TOKENS } from "@/lib/ai/usage";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CopyableText } from "@/components/dashboard/CopyableText";
 import { Chip } from "@/components/dashboard/Chip";
@@ -85,6 +87,7 @@ export default async function AgencyDashboardPage({
     ]);
 
   const seatCount = teamCount[0]?.count ?? 0;
+  const usage = await agencyUsageSummary(agency.id, { days: 30 });
   const basePath = `/agency/${agency.partnerId}`;
 
   /* `agencies.plan` stores the plan KEY, so showing it to a person means
@@ -287,6 +290,55 @@ export default async function AgencyDashboardPage({
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className={shell.panel}>
+        <div className={shell.panelHead}>
+          <h2>AI usage</h2>
+          <span className={shell.rowSub}>
+            {usage.credits} credit{usage.credits === 1 ? "" : "s"} across {usage.bySite.length} site
+            {usage.bySite.length === 1 ? "" : "s"} · last 30 days
+          </span>
+        </div>
+        {usage.requests === 0 ? (
+          <p className={shell.rowSub} style={{ margin: 0, padding: "1rem 1.3rem" }}>
+            Nothing yet. Every page a client builds, edits or describes with AI is counted here, by site.
+          </p>
+        ) : (
+          <>
+            <div className={shell.tableWrap}>
+              <table className={shell.table}>
+                <thead>
+                  <tr>
+                    <th>Site</th>
+                    <th>Requests</th>
+                    <th>Credits</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usage.bySite.map((row) => (
+                    <tr key={row.siteId}>
+                      <td className={shell.rowName}>
+                        {row.smbId ? <Link href={`${basePath}/sites/${row.smbId}`}>{row.name}</Link> : row.name}
+                      </td>
+                      <td>{row.requests}</td>
+                      <td>{row.credits}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td className={shell.rowName}>Total</td>
+                    <td>{usage.requests}</td>
+                    <td className={shell.rowName}>{usage.credits}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className={shell.rowSub} style={{ margin: 0, padding: "0.9rem 1.3rem" }}>
+              One credit is {CREDIT_TOKENS.toLocaleString()} tokens of AI work. A site&apos;s spend stays with the
+              agency it belonged to at the time. No allowance or price applies yet.
+            </p>
+          </>
+        )}
       </div>
     </DashboardShell>
   );
