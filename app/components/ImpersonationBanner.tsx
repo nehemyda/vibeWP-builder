@@ -2,12 +2,13 @@ import { eq } from "drizzle-orm";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
 import { profiles } from "@/lib/db/schema";
-import { isImpersonating } from "@/lib/impersonation";
+import { readImpersonationSession } from "@/lib/impersonation";
 import { stopImpersonationAction } from "@/app/actions/impersonation";
 import styles from "./ImpersonationBanner.module.css";
 
 export async function ImpersonationBanner() {
-  if (!(await isImpersonating())) return null;
+  const backup = await readImpersonationSession();
+  if (!backup) return null;
 
   const supabase = await createClient();
   const {
@@ -24,8 +25,10 @@ export async function ImpersonationBanner() {
         {profile?.role ? ` (${profile.role})` : ""}
       </span>
       <form action={stopImpersonationAction}>
+        {/* Named, because the person returning is not always an admin: an
+            agency owner viewing a client goes back to their agency. */}
         <button type="submit" className={styles.btn}>
-          Return to admin
+          {backup.impersonatorName ? `Back to ${backup.impersonatorName}` : "Back to my account"}
         </button>
       </form>
     </div>

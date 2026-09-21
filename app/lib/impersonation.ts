@@ -47,3 +47,28 @@ export async function readImpersonationSession(): Promise<ImpersonationSession |
     return null;
   }
 }
+
+/**
+ * Which session to back up when impersonation starts.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHY THE FIRST BACKUP WINS
+ *
+ * A super admin opened an agency's dashboard (impersonating its owner), then
+ * clicked a client's Dashboard from there. The second start ran as the agency
+ * owner and wrote the AGENCY OWNER's tokens over the admin's. "Return" then
+ * restored the agency owner and sent them to /admin, which bounced them
+ * straight back to the agency — the admin's own session was gone, and the
+ * only way home was to sign out.
+ *
+ * The cookie holds the REAL operator: whoever was signed in before the first
+ * hop. Every later hop keeps it. Returning always lands on the person who
+ * actually sat down at the keyboard, however many dashboards deep they went.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export function backupToKeep(
+  existing: ImpersonationSession | null,
+  fresh: ImpersonationSession,
+): ImpersonationSession {
+  return existing ?? fresh;
+}

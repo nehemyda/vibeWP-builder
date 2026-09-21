@@ -9,7 +9,7 @@ import { db } from "@/lib/db";
 import { profiles, agencies, agencyMembers, sites, siteMembers } from "@/lib/db/schema";
 import { roleHomePath } from "@/lib/role-redirect";
 import { resolveSitePaths } from "@/lib/site-paths";
-import { IMPERSONATION_COOKIE, readImpersonationSession } from "@/lib/impersonation";
+import { IMPERSONATION_COOKIE, backupToKeep, readImpersonationSession } from "@/lib/impersonation";
 import { logActivity } from "@/lib/activity";
 
 /** Where impersonation should land — the ID-ful canonical URL, not the bare one, so the admin sees at a glance who they're viewing. */
@@ -122,6 +122,17 @@ export async function startImpersonationAction(targetUserId: string) {
   });
 
   /*
+   * A hop from inside an impersonation. The caller here is the person being
+   * impersonated — an agency owner opening a client — so the real operator,
+   * and the session to return to, is whoever the existing cookie names.
+   * See backupToKeep() in lib/impersonation.ts.
+   */
+  const existing = await readImpersonationSession();
+  const operator = existing
+    ? { id: existing.impersonatorId ?? caller.id, name: existing.impersonatorName ?? callerProfile.fullName ?? "Unknown" }
+    : { id: caller.id, name: callerProfile.fullName ?? "Unknown" };
+
+  /*
    * Log BEFORE swapping the session, and pass the impersonator explicitly.
    *
    * Both details matter. After setSession() below, auth.getUser() resolves to
@@ -131,27 +142,29 @@ export async function startImpersonationAction(targetUserId: string) {
    * the explicit argument.
    */
   await logActivity({
-    actorUserId: caller.id,
-    actorName: callerProfile.fullName ?? "Unknown",
+    actorUserId: operator.id,
+    actorName: operator.name,
     action: "impersonation.started",
     targetType: "user",
     targetId: targetUserId,
     targetLabel: targetProfile?.fullName ?? targetAuthUser.user.email ?? targetUserId,
-    metadata: { targetRole: targetProfile?.role ?? null },
-    impersonator: { id: caller.id, name: callerProfile.fullName ?? "Unknown" },
+    metadata: { targetRole: targetProfile?.role ?? null, via: existing ? caller.id : null },
+    impersonator: operator,
   });
 
   const cookieStore = await cookies();
   cookieStore.set(
     IMPERSONATION_COOKIE,
-    JSON.stringify({
-      accessToken: callerSession.access_token,
-      refreshToken: callerSession.refresh_token,
-      // Carried so logActivity() can name the real operator on every action
-      // taken during this session. See lib/impersonation.ts.
-      impersonatorId: caller.id,
-      impersonatorName: callerProfile.fullName ?? "Unknown",
-    }),
+    JSON.stringify(
+      backupToKeep(existing, {
+        accessToken: callerSession.access_token,
+        refreshToken: callerSession.refresh_token,
+        // Carried so logActivity() can name the real operator on every action
+        // taken during this session. See lib/impersonation.ts.
+        impersonatorId: caller.id,
+        impersonatorName: callerProfile.fullName ?? "Unknown",
+      }),
+    ),
     { httpOnly: true, secure: true, sameSite: "lax", path: "/" },
   );
 
@@ -177,13 +190,27 @@ export async function stopImpersonationAction() {
     ? await db.query.profiles.findFirst({ where: eq(profiles.id, impersonated.id) })
     : undefined;
 
-  await supabase.auth.setSession({
+  const { data: restored, error: restoreError } = await supabase.auth.setSession({
     access_token: backup.accessToken,
     refresh_token: backup.refreshToken,
   });
 
   const cookieStore = await cookies();
   cookieStore.delete(IMPERSONATION_COOKIE);
+
+  /*
+   * Where "return" goes depends on who is returning. An agency owner who
+   * opened a client's dashboard comes back to their agency; only a super
+   * admin comes back to /admin. Sending everyone to /admin bounced the agency
+   * owner off the role guard and looked like the return had failed. A backup
+   * whose tokens no longer work (signed out elsewhere, expired) is a real
+   * sign-in again, not a redirect loop.
+   */
+  const restoredId = restored?.user?.id ?? backup.impersonatorId ?? null;
+  const restoredProfile = restoredId
+    ? await db.query.profiles.findFirst({ where: eq(profiles.id, restoredId) })
+    : undefined;
+  const home = restoreError || !restoredProfile ? "/login" : roleHomePath(restoredProfile.role);
 
   // Explicit impersonator again: the cookie has just been deleted, so cookie
   // detection would report this as an ordinary action by the admin — which
@@ -201,5 +228,5 @@ export async function stopImpersonationAction() {
     },
   });
 
-  redirect("/admin");
+  redirect(home);
 }
