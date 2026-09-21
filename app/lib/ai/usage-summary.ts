@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { aiUsage, sites } from "@/lib/db/schema";
+import { agencies, aiUsage, sites } from "@/lib/db/schema";
 import { creditsFromTokens, type UsageAction } from "./usage";
 
 /**
@@ -118,5 +118,66 @@ export async function agencyUsageSummary(agencyId: string, opts: { days?: number
     totalTokens,
     credits: creditsFromTokens(totalTokens),
     bySite: rows.map((r) => ({ ...r, credits: creditsFromTokens(r.tokens) })),
+  };
+}
+
+export type PlatformUsageSummary = {
+  since: Date;
+  requests: number;
+  totalTokens: number;
+  credits: number;
+  /** Highest spend first; sites with no agency are gathered as one "Direct clients" line. */
+  byAgency: Array<{ agencyId: string | null; name: string; partnerId: string | null; sites: number; requests: number; tokens: number; credits: number }>;
+  /** Which models did the work — the real version of the old illustrative provider mix. */
+  byModel: Array<{ model: string; tokens: number; share: number }>;
+};
+
+/** Everything the platform spent, for the super admin: by agency, and by model. */
+export async function platformUsageSummary(opts: { days?: number } = {}): Promise<PlatformUsageSummary> {
+  const days = opts.days ?? 30;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  const [agencyRows, modelRows] = await Promise.all([
+    db
+      .select({
+        agencyId: aiUsage.agencyId,
+        name: agencies.name,
+        partnerId: agencies.partnerId,
+        sites: sql<number>`count(distinct ${aiUsage.siteId})::int`,
+        requests: sql<number>`count(distinct coalesce(${aiUsage.requestId}, ${aiUsage.id}))::int`,
+        tokens: sql<number>`coalesce(sum(${aiUsage.totalTokens}), 0)::int`,
+      })
+      .from(aiUsage)
+      .leftJoin(agencies, eq(agencies.id, aiUsage.agencyId))
+      .where(gte(aiUsage.createdAt, since))
+      .groupBy(aiUsage.agencyId, agencies.name, agencies.partnerId)
+      .orderBy(desc(sql`sum(${aiUsage.totalTokens})`)),
+    db
+      .select({ model: aiUsage.model, tokens: sql<number>`coalesce(sum(${aiUsage.totalTokens}), 0)::int` })
+      .from(aiUsage)
+      .where(gte(aiUsage.createdAt, since))
+      .groupBy(aiUsage.model)
+      .orderBy(desc(sql`sum(${aiUsage.totalTokens})`)),
+  ]);
+
+  const totalTokens = agencyRows.reduce((s, r) => s + r.tokens, 0);
+  return {
+    since,
+    requests: agencyRows.reduce((s, r) => s + r.requests, 0),
+    totalTokens,
+    credits: creditsFromTokens(totalTokens),
+    byAgency: agencyRows.map((r) => ({
+      agencyId: r.agencyId,
+      /* An agency deleted since still has a name on its rows' history — "a
+         former agency" is truer than a blank, and a null agency is a site the
+         platform serves directly. */
+      name: r.agencyId ? (r.name ?? "A former agency") : "Direct clients",
+      partnerId: r.partnerId ?? null,
+      sites: r.sites,
+      requests: r.requests,
+      tokens: r.tokens,
+      credits: creditsFromTokens(r.tokens),
+    })),
+    byModel: modelRows.map((r) => ({ model: r.model, tokens: r.tokens, share: totalTokens ? r.tokens / totalTokens : 0 })),
   };
 }

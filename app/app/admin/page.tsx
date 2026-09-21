@@ -9,6 +9,8 @@ import shell from "@/components/dashboard/dashboard-shell.module.css";
 import styles from "./admin.module.css";
 import { ADMIN_NAV } from "./nav";
 import { planLabel } from "@/lib/billing";
+import { platformUsageSummary } from "@/lib/ai/usage-summary";
+import { CREDIT_TOKENS } from "@/lib/ai/usage";
 
 export default async function AdminDashboardPage() {
   const { profile } = await requireRole(["super_admin"]);
@@ -35,6 +37,7 @@ export default async function AdminDashboardPage() {
   /* Agencies store the plan KEY; the catalogue carries the name an admin
      actually edits at /admin/billing. */
   const planCatalogue = await db.select({ key: plans.key, name: plans.name }).from(plans);
+  const usage = await platformUsageSummary({ days: 30 });
 
   return (
     <DashboardShell
@@ -71,9 +74,11 @@ export default async function AdminDashboardPage() {
           <div className={`${shell.delta} ${shell.deltaUp}`}>illustrative — no billing yet</div>
         </div>
         <div className={shell.statCard}>
-          <div className={shell.label}>AI spend (MTD)</div>
-          <div className={shell.value}>$9,340</div>
-          <div className={`${shell.delta} ${shell.deltaWarn}`}>illustrative — mocked AI</div>
+          <div className={shell.label}>AI credits (30d)</div>
+          <div className={shell.value}>{usage.credits.toLocaleString()}</div>
+          <div className={shell.delta}>
+            {usage.requests.toLocaleString()} request{usage.requests === 1 ? "" : "s"} · {usage.totalTokens.toLocaleString()} tokens
+          </div>
         </div>
       </div>
 
@@ -123,19 +128,63 @@ export default async function AdminDashboardPage() {
           </div>
         </div>
 
-        <div className={shell.panel} style={{ padding: "1.2rem 1.3rem" }}>
-          <h2 style={{ margin: "0 0 0.2rem", fontSize: "1rem" }}>AI provider mix</h2>
-          <p className={styles.mutedNote}>Illustrative — real usage metering isn&apos;t wired up yet.</p>
-          <div className={styles.providerBar}>
-            <span style={{ width: "54%", background: "#5b6bff" }} />
-            <span style={{ width: "31%", background: "#ff7a45" }} />
-            <span style={{ width: "15%", background: "#17875a" }} />
+        {/*
+          Real, from the ledger. This panel was an illustrative provider mix —
+          "Claude 54%, GPT 31%" — drawn in CSS with no data behind it. Every
+          call is recorded now, so it shows what was actually spent, by the
+          agency it was spent under, and which models did the work.
+        */}
+        <div className={shell.panel}>
+          <div className={shell.panelHead}>
+            <h2>AI usage</h2>
+            <span className={shell.rowSub}>Last 30 days</span>
           </div>
-          <div className={styles.legend}>
-            <span>Claude 54%</span>
-            <span>GPT 31%</span>
-            <span>Gemini 15%</span>
-          </div>
+          {usage.requests === 0 ? (
+            <p className={shell.rowSub} style={{ margin: 0, padding: "1rem 1.3rem" }}>
+              No AI work recorded yet.
+            </p>
+          ) : (
+            <>
+              <div className={shell.tableWrap}>
+                <table className={shell.table}>
+                  <thead>
+                    <tr>
+                      <th>Agency</th>
+                      <th>Sites</th>
+                      <th>Credits</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usage.byAgency.map((row) => (
+                      <tr key={row.agencyId ?? "direct"}>
+                        <td className={shell.rowName}>
+                          {row.partnerId ? <Link href={`/admin/agencies/${row.partnerId}`}>{row.name}</Link> : row.name}
+                        </td>
+                        <td>{row.sites}</td>
+                        <td>{row.credits}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td className={shell.rowName}>Total</td>
+                      <td>{usage.byAgency.reduce((n, r) => n + r.sites, 0)}</td>
+                      <td className={shell.rowName}>{usage.credits}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className={styles.legend} style={{ padding: "0.9rem 1.3rem" }}>
+                {usage.byModel.map((m) => (
+                  <span key={m.model}>
+                    {m.model} {Math.round(m.share * 100)}%
+                  </span>
+                ))}
+              </div>
+              <p className={shell.rowSub} style={{ margin: 0, padding: "0 1.3rem 0.9rem" }}>
+                One credit is {CREDIT_TOKENS.toLocaleString()} tokens. Spend is booked to the agency a site belonged
+                to at the time.
+              </p>
+            </>
+          )}
         </div>
       </div>
     </DashboardShell>

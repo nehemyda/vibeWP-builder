@@ -4,13 +4,6 @@
   color: var(--muted);
 }
 
-.providerBar {
-  display: flex;
-  height: 10px;
-  border-radius: 999px;
-  overflow: hidden;
-  margin: 0.6rem 0 0.8rem;
-}
 
 .legend {
   display: flex;
