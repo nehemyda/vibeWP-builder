@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { plans, agencyPlanPrices, type SiteMode } from "@/lib/db/schema";
+import { agencies, sites, plans, agencyPlanPrices, type SiteMode } from "@/lib/db/schema";
 
 type Plan = typeof plans.$inferSelect;
 
@@ -234,3 +234,60 @@ export const PRICE_SOURCE_LABEL: Record<PriceSource, string> = {
   platform: "Platform list price",
   unknown: "No plan on file",
 };
+
+/**
+ * What the platform itself is owed each month, from what is on file.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * WHOSE REVENUE IS WHOSE
+ *
+ * An agency pays the platform for ITS plan, and bills its own clients at its
+ * own prices — that margin is the agency's, and the agency billing page
+ * already draws the line exactly there (`platformCostCents` beside
+ * `clientMrrCents`). So a managed site contributes nothing here; its agency's
+ * subscription does. A site with no agency is the platform's own client and
+ * pays the resolved price directly.
+ *
+ * "From what is on file" is the honest qualifier: no payment is taken
+ * anywhere yet, so this is the sum of plan prices, not of money received.
+ * ─────────────────────────────────────────────────────────────────────
+ */
+export type PlatformMrr = {
+  cents: number;
+  agencyCents: number;
+  directCents: number;
+  agencies: number;
+  directSites: number;
+};
+
+/** Pure, so the arithmetic can be asserted without a database. */
+export function platformMrrFrom(
+  agencyPlans: Array<{ plan: string }>,
+  directSites: Array<{ plan: string; customPriceMonthlyCents: number | null }>,
+  pricing: {
+    platformPriceFor: (plan: string) => number | null;
+    resolve: (site: { plan: string; customPriceMonthlyCents: number | null }) => { cents: number };
+  },
+): PlatformMrr {
+  const agencyCents = agencyPlans.reduce((sum, a) => sum + (pricing.platformPriceFor(a.plan) ?? 0), 0);
+  const directCents = directSites.reduce((sum, s) => sum + pricing.resolve(s).cents, 0);
+  return {
+    cents: agencyCents + directCents,
+    agencyCents,
+    directCents,
+    agencies: agencyPlans.length,
+    directSites: directSites.length,
+  };
+}
+
+export async function platformMrr(): Promise<PlatformMrr> {
+  const [agencyRows, directRows, pricing] = await Promise.all([
+    db.select({ plan: agencies.plan }).from(agencies),
+    db
+      .select({ plan: sites.plan, customPriceMonthlyCents: sites.customPriceMonthlyCents })
+      .from(sites)
+      .where(and(isNull(sites.agencyId), isNull(sites.deletedAt))),
+    loadPricingContext(null),
+  ]);
+  return platformMrrFrom(agencyRows, directRows, pricing);
+}

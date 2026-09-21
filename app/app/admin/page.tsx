@@ -8,7 +8,7 @@ import { AdminSearch } from "@/components/dashboard/AdminSearch";
 import shell from "@/components/dashboard/dashboard-shell.module.css";
 import styles from "./admin.module.css";
 import { ADMIN_NAV } from "./nav";
-import { planLabel } from "@/lib/billing";
+import { formatCents, planLabel, platformMrr } from "@/lib/billing";
 import { platformUsageSummary } from "@/lib/ai/usage-summary";
 import { CREDIT_TOKENS } from "@/lib/ai/usage";
 
@@ -38,6 +38,7 @@ export default async function AdminDashboardPage() {
      actually edits at /admin/billing. */
   const planCatalogue = await db.select({ key: plans.key, name: plans.name }).from(plans);
   const usage = await platformUsageSummary({ days: 30 });
+  const mrr = await platformMrr();
 
   return (
     <DashboardShell
@@ -70,8 +71,11 @@ export default async function AdminDashboardPage() {
         </div>
         <div className={shell.statCard}>
           <div className={shell.label}>Platform MRR</div>
-          <div className={shell.value}>$184.2k</div>
-          <div className={`${shell.delta} ${shell.deltaUp}`}>illustrative — no billing yet</div>
+          <div className={shell.value}>{formatCents(mrr.cents)}</div>
+          <div className={shell.delta}>
+            {mrr.agencies} agenc{mrr.agencies === 1 ? "y" : "ies"} · {mrr.directSites} direct site
+            {mrr.directSites === 1 ? "" : "s"} — plan prices on file; no payments taken yet
+          </div>
         </div>
         <div className={shell.statCard}>
           <div className={shell.label}>AI credits (30d)</div>
