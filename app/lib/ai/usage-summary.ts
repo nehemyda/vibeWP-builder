@@ -181,3 +181,62 @@ export async function platformUsageSummary(opts: { days?: number } = {}): Promis
     byModel: modelRows.map((r) => ({ model: r.model, tokens: r.tokens, share: totalTokens ? r.tokens / totalTokens : 0 })),
   };
 }
+
+export type UsageBreakdown = {
+  since: Date;
+  bySite: Array<{ siteId: string; name: string; smbId: string | null; agencyName: string | null; partnerId: string | null; requests: number; tokens: number; credits: number }>;
+  byAction: Array<{ action: string; label: string; requests: number; tokens: number; credits: number; tokensPerRequest: number }>;
+};
+
+/**
+ * The two cuts the overview does not show: which SITES spend, and on WHAT.
+ *
+ * Tokens per request by action is the number that decides an allowance. It
+ * is what showed an edit costing 9,000 tokens before the planner prompt was
+ * cut to a third — and it is what will show the next such thing.
+ */
+export async function platformUsageBreakdown(opts: { days?: number; topSites?: number } = {}): Promise<UsageBreakdown> {
+  const days = opts.days ?? 30;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const requests = sql<number>`count(distinct coalesce(${aiUsage.requestId}, ${aiUsage.id}))::int`;
+  const tokens = sql<number>`coalesce(sum(${aiUsage.totalTokens}), 0)::int`;
+
+  const [siteRows, actionRows] = await Promise.all([
+    db
+      .select({
+        siteId: aiUsage.siteId,
+        name: sites.name,
+        smbId: sites.smbId,
+        agencyName: agencies.name,
+        partnerId: agencies.partnerId,
+        requests,
+        tokens,
+      })
+      .from(aiUsage)
+      .innerJoin(sites, eq(sites.id, aiUsage.siteId))
+      .leftJoin(agencies, eq(agencies.id, aiUsage.agencyId))
+      .where(gte(aiUsage.createdAt, since))
+      .groupBy(aiUsage.siteId, sites.name, sites.smbId, agencies.name, agencies.partnerId)
+      .orderBy(desc(sql`sum(${aiUsage.totalTokens})`))
+      .limit(opts.topSites ?? 25),
+    db
+      .select({ action: aiUsage.action, requests, tokens })
+      .from(aiUsage)
+      .where(gte(aiUsage.createdAt, since))
+      .groupBy(aiUsage.action)
+      .orderBy(desc(sql`sum(${aiUsage.totalTokens})`)),
+  ]);
+
+  return {
+    since,
+    bySite: siteRows.map((r) => ({ ...r, credits: creditsFromTokens(r.tokens) })),
+    byAction: actionRows.map((r) => ({
+      action: r.action,
+      label: usageActionLabel(r.action),
+      requests: r.requests,
+      tokens: r.tokens,
+      credits: creditsFromTokens(r.tokens),
+      tokensPerRequest: r.requests ? Math.round(r.tokens / r.requests) : 0,
+    })),
+  };
+}

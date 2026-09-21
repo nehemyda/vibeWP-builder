@@ -33,7 +33,7 @@ export const ADMIN_NAV: NavGroup[] = [
     items: [
       { icon: "🤖", label: "AI providers", href: "/admin/ai-providers" },
       { icon: "💳", label: "Billing & plans", href: "/admin/billing" },
-      { icon: "📊", label: "Usage & cost", href: "/admin" },
+      { icon: "📊", label: "Usage & cost", href: "/admin/usage" },
       { icon: "⚙", label: "Settings", href: "/admin/settings" },
       { icon: "✉", label: "SMTP", href: "/admin/settings/smtp" },
     ],
