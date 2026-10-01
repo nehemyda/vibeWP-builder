@@ -1433,15 +1433,12 @@ body.yp-page {
  * match: the grid already wraps everything this section renders, so the
  * root is free to carry a background without leaving anything else
  * uncontained. See "Section background + full width" near the end of this
- * file. .yp-contact-cards and .yp-contact-hours were never checked for the
- * same thing and keep exactly what they had.
+ * file. .yp-contact-cards and .yp-contact-hours have now been checked too —
+ * .yp-contact-hours__grid already wraps everything the same way, so its
+ * width moved there directly; .yp-contact-cards' heading sits outside its
+ * own grid, so it got a new .__inner wrapper instead. Both rules are
+ * declared at the true end of this file.
  */
-.yp-page .yp-contact-cards,
-.yp-page .yp-contact-hours {
-  max-width: var(--container);
-  margin: 0 auto;
-  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
-}
 
 .yp-page .yp-contact-cards__heading,
 .yp-page .yp-contact-hours__heading,
@@ -3909,4 +3906,72 @@ body.yp-page {
 .yp-page .yp-embedblock__phnote {
   font-size: calc(0.8rem * var(--yp-text-scale, 1));
   color: var(--muted);
+}
+
+/*
+ * Trusted-by strip: no new wrapper needed. .yp-logos__inner already wraps
+ * everything and already carries its own max-width — checked, and nothing
+ * else here conflicts with it — so this only needed adding to the
+ * u-row--full allow-list above and its own background rule.
+ */
+.yp-page .u-row--full .yp-logos__inner {
+  max-width: none !important;
+}
+
+/*
+ * Contact & opening hours: no new wrapper either. .yp-contact-hours__grid
+ * already wraps both the copy column and the hours panel together, the
+ * same shape Split Hero's own grid has — so its width moved directly onto
+ * the grid, split out of the old 2-way rule it shared with Contact cards.
+ */
+.yp-page .yp-contact-hours__grid {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+}
+.yp-page .u-row--full .yp-contact-hours__grid {
+  max-width: none !important;
+}
+
+/*
+ * Contact cards: the same new-wrapper treatment as Work gallery — its
+ * heading and intro sit outside .yp-contact-cards__grid with no ancestor to
+ * give this option, so a new .__inner wrapper holds all three together.
+ * Checked individually, split out of the same old 2-way rule above.
+ */
+.yp-page .yp-contact-cards__inner {
+  max-width: var(--container); margin: 0 auto;
+  padding: calc(var(--space-section-top) * var(--yp-space-scale, 1)) calc(var(--space-gutter) * var(--yp-space-scale, 1)) calc(var(--space-section-bottom) * var(--yp-space-scale, 1));
+}
+.yp-page .u-row--full .yp-contact-cards__inner {
+  max-width: none !important;
+}
+
+/*
+ * Showcase hero: the same shape as centred and stacked hero above — its own
+ * max-width lives on the root alone (not shared with any other hero type),
+ * so u-row--full overrides it directly. .__grid and the .__stats row
+ * beneath it are siblings under that root with no width of their own, so
+ * both stretch together with it — there is no separate readable-width
+ * column here to hold back, unlike the two typographic heroes.
+ */
+.yp-page .yp-hero-showcase.u-row--full {
+  max-width: none !important;
+}
+
+/*
+ * Contact form: the same shape again — its own max-width lives on the root,
+ * not shared with anything else, and there is no existing wrapper at all to
+ * reach into, so u-row--full overrides the root directly rather than
+ * needing one added.
+ *
+ * Pre-existing gap, found while checking this: every other section in this
+ * file gets its own box-sizing: border-box reset, and .yp-embed never had
+ * one. Without it, its width: 100% and its own padding add together
+ * instead of sharing one box, so the section has always rendered slightly
+ * wider than its container — invisible until "full" removes the max-width
+ * that was quietly absorbing the difference.
+ */
+.yp-page .yp-embed { box-sizing: border-box; }
+.yp-page .yp-embed.u-row--full {
+  max-width: none !important;
 }

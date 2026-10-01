@@ -6,6 +6,10 @@ export type ContactCardsProps = {
   heading?: string;
   intro?: string;
   channels?: Array<{ label: string; value: string; kind?: "phone" | "email" | "text" }>;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -39,6 +43,27 @@ export const ContactCards: SectionDefinition<ContactCardsProps> = {
         value: { type: "text", label: "The detail itself" },
         kind: { type: "text", label: "phone | email | text" },
       },
+    },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: heading and intro sit
+     * outside .yp-contact-cards__grid with no shared ancestor, so
+     * toGutenberg wraps them together in a NEW element
+     * (.yp-contact-cards__inner) — the same fix content-gallery needed.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The heading and channels stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the heading and channels.",
+      choices: ["contained", "full"],
+      default: "contained",
     },
   },
 
@@ -82,14 +107,28 @@ export const ContactCards: SectionDefinition<ContactCardsProps> = {
       .filter(Boolean)
       .join("");
 
-    return group("yp-contact-cards", head + group("yp-contact-cards__grid", cards), "section");
+    const rootClass = [
+      "yp-contact-cards",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(
+      rootClass,
+      group("yp-contact-cards__inner", head + group("yp-contact-cards__grid", cards)),
+      "section",
+    );
   },
 
   fromGutenberg(root) {
     const el = root.querySelector(".yp-contact-cards");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
 
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-contact-cards__heading")),
       intro: text(el.querySelector(".yp-contact-cards__intro")),
       channels: el

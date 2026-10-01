@@ -11,6 +11,10 @@ export type HeroShowcaseProps = {
   /** Overlapping credential chip on the photo. */
   badge?: { title: string; subtitle?: string };
   stats?: Array<{ value: string; label: string }>;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -61,6 +65,29 @@ export const HeroShowcase: SectionDefinition<HeroShowcaseProps> = {
         value: { type: "text", label: "Figure" },
         label: { type: "text", label: "What it counts" },
       },
+    },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: this section's own
+     * max-width already lives on the root alone, not shared with any other
+     * hero type, so u-row--full overrides it directly. .__grid and .__stats
+     * are both siblings under that root with no width of their own, so they
+     * stretch together with it — there is no separate readable-width column
+     * to hold back here.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The photo and numbers stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge, photo, copy and numbers together.",
+      choices: ["contained", "full"],
+      default: "contained",
     },
   },
 
@@ -142,8 +169,15 @@ export const HeroShowcase: SectionDefinition<HeroShowcaseProps> = {
         )
       : "";
 
-    return group(
+    const rootClass = [
       "yp-hero-showcase",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(
+      rootClass,
       group("yp-hero-showcase__grid", copy + media) + stats,
       "section",
     );
@@ -152,11 +186,14 @@ export const HeroShowcase: SectionDefinition<HeroShowcaseProps> = {
   fromGutenberg(root) {
     const el = root.querySelector(".yp-hero-showcase");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
 
     const img = parseImage(el, ".yp-hero-showcase__frame");
     const badgeTitle = text(el.querySelector(".yp-hero-showcase__badge-title"));
 
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       eyebrow: text(el.querySelector(".yp-hero-showcase__eyebrow")),
       heading: text(el.querySelector(".yp-hero-showcase__heading")),
       body: text(el.querySelector(".yp-hero-showcase__body")),

@@ -7,6 +7,10 @@ export type FormEmbedProps = {
   body?: string;
   /** Which form to show — the embed token from Leads & forms. */
   formToken?: string;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 const text = (el: HTMLElement | null): string => (el ? el.textContent.trim() : "");
@@ -37,6 +41,27 @@ export const FormEmbed: SectionDefinition<FormEmbedProps> = {
   fields: {
     heading: { type: "text", label: "Heading", maxChars: 60 },
     body: { type: "text", label: "Intro line", maxChars: 160 },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Different reason from most: this section's own
+     * max-width already lives on the root, not shared with anything else,
+     * and there is no wrapper at all to reach into — u-row--full overrides
+     * the root directly instead.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The heading and form stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the heading and form.",
+      choices: ["contained", "full"],
+      default: "contained",
+    },
   },
 
   aiPrompt:
@@ -64,13 +89,23 @@ export const FormEmbed: SectionDefinition<FormEmbedProps> = {
       .filter(Boolean)
       .join("");
 
-    return group("yp-embed", inner, "section");
+    const rootClass = [
+      "yp-embed",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(rootClass, inner, "section");
   },
 
   fromGutenberg(root) {
     const el = root.querySelector(".yp-embed");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-embed__heading")),
       body: text(el.querySelector(".yp-embed__body")),
       formToken: el.querySelector(".yp-embed__mount")?.getAttribute("data-vibewp-form") ?? "",

@@ -1390,13 +1390,6 @@ body.yp-page {
 .yp-page .yp-contact-visit,   .yp-page .yp-contact-visit *,
 .yp-page .yp-contact-band,    .yp-page .yp-contact-band * { margin-block-start: 0; margin-block-end: 0; }
 
-.yp-page .yp-contact-cards,
-.yp-page .yp-contact-hours {
-  max-width: var(--container);
-  margin: 0 auto;
-  padding: var(--space-section-top) var(--space-gutter) var(--space-section-bottom);
-}
-
 .yp-page .yp-contact-cards__heading,
 .yp-page .yp-contact-hours__heading,
 .yp-page .yp-contact-visit__heading {

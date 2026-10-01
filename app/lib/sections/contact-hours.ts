@@ -10,6 +10,10 @@ export type ContactHoursProps = {
   address?: string;
   hoursHeading?: string;
   hours?: Array<{ day: string; time: string }>;
+  /** A soft colour wash behind the section. "none" is the design's own background. */
+  background?: string;
+  /** "contained" matches the rest of the page; "full" stretches the row edge to edge. */
+  layout?: string;
 };
 
 /**
@@ -47,6 +51,27 @@ export const ContactHours: SectionDefinition<ContactHoursProps> = {
         day: { type: "text", label: "Day" },
         time: { type: "text", label: "Hours, or Closed" },
       },
+    },
+    /*
+     * Declared per-section, not merged into every section — see the note on
+     * hero-split.ts. Works here for the identical structural reason:
+     * .yp-contact-hours__grid already wraps everything under the root, the
+     * copy column and the hours panel both, with nothing else emitted
+     * alongside it.
+     */
+    background: {
+      type: "choice",
+      label: "Background",
+      hint: "A soft colour wash behind this section. The details and hours stay the same width.",
+      choices: ["none", "tint"],
+      default: "none",
+    },
+    layout: {
+      type: "choice",
+      label: "Width",
+      hint: "Full stretches this section edge to edge; the background already does, so this is about the details and hours.",
+      choices: ["contained", "full"],
+      default: "contained",
     },
   },
 
@@ -121,12 +146,20 @@ export const ContactHours: SectionDefinition<ContactHoursProps> = {
       (p.hoursHeading ? heading(p.hoursHeading, 3, "yp-contact-hours__panel-heading") : "") + days,
     );
 
-    return group("yp-contact-hours", group("yp-contact-hours__grid", copy + panel), "section");
+    const rootClass = [
+      "yp-contact-hours",
+      p.background === "tint" ? "u-bg--tint" : "",
+      p.layout === "full" ? "u-row--full" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return group(rootClass, group("yp-contact-hours__grid", copy + panel), "section");
   },
 
   fromGutenberg(root) {
     const el = root.querySelector(".yp-contact-hours");
     if (!el) return null;
+    const elClass = el.getAttribute("class") ?? "";
 
     const byLabel = new Map<string, string>();
     for (const row of el.querySelectorAll(".yp-contact-hours__row")) {
@@ -136,6 +169,8 @@ export const ContactHours: SectionDefinition<ContactHoursProps> = {
     }
 
     return {
+      background: elClass.includes("u-bg--tint") ? "tint" : "none",
+      layout: elClass.includes("u-row--full") ? "full" : "contained",
       heading: text(el.querySelector(".yp-contact-hours__heading")),
       body: text(el.querySelector(".yp-contact-hours__body")),
       phone: byLabel.get("phone") ?? "",
